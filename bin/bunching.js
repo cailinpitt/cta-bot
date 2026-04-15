@@ -7,7 +7,7 @@ const argv = require('minimist')(process.argv.slice(2));
 
 const { getVehicles } = require('../src/cta');
 const { names: routeNames, bunching: bunchingRoutes } = require('../src/routes');
-const { detectBunching, TERMINAL_PDIST_FT } = require('../src/bunching');
+const { detectAllBunching, TERMINAL_PDIST_FT } = require('../src/bunching');
 const { loadPattern } = require('../src/patterns');
 const { renderBunchingMap } = require('../src/map');
 const { login, postWithImage } = require('../src/bluesky');
@@ -53,30 +53,44 @@ async function main() {
   const vehicles = await getVehicles(routes);
   console.log(`Got ${vehicles.length} vehicles`);
 
-  const bunch = detectBunching(vehicles);
-  if (!bunch) {
+  const bunches = detectAllBunching(vehicles);
+  if (bunches.length === 0) {
     console.log('No bunching detected');
     return;
   }
 
-  console.log(`Bunching: route ${bunch.route} pid ${bunch.pid} — ${bunch.vehicles.length} buses, span ${bunch.spanFt} ft`);
-  console.log(`  vids: ${bunch.vehicles.map((v) => v.vid).join(', ')}`);
+  console.log(`Found ${bunches.length} candidate bunch(es); picking best available:`);
+  for (const b of bunches) {
+    console.log(`  route ${b.route} pid ${b.pid} — ${b.vehicles.length} buses, span ${b.spanFt} ft, maxGap ${b.maxGapFt} ft`);
+  }
 
-  if (!argv['dry-run'] && isOnCooldown(bunch.pid)) {
-    console.log(`On cooldown for pid ${bunch.pid}, skipping`);
+  // Walk candidates best-first, skipping any that are on cooldown or fail the
+  // end-of-line layover check (which needs the pattern's total length so can
+  // only be evaluated after fetching the pattern).
+  let bunch = null;
+  let pattern = null;
+  for (const candidate of bunches) {
+    if (!argv['dry-run'] && isOnCooldown(candidate.pid)) {
+      console.log(`  skip pid ${candidate.pid}: on cooldown`);
+      continue;
+    }
+    const candidatePattern = await loadPattern(candidate.pid);
+    const lastBus = candidate.vehicles[candidate.vehicles.length - 1];
+    if (candidatePattern.lengthFt - lastBus.pdist < TERMINAL_PDIST_FT) {
+      console.log(`  skip pid ${candidate.pid}: end-of-line layover near pdist ${candidatePattern.lengthFt}`);
+      continue;
+    }
+    bunch = candidate;
+    pattern = candidatePattern;
+    break;
+  }
+
+  if (!bunch) {
+    console.log('All candidates filtered (cooldown or terminal layover), nothing to post');
     return;
   }
 
-  const pattern = await loadPattern(bunch.pid);
-
-  // End-of-line layover filter: symmetric to the start-terminal check in detectBunching,
-  // but requires the pattern's total length so it can only run here. If *any* bus in the
-  // cluster is within TERMINAL_PDIST_FT of the end, the cluster is the end-terminal queue.
-  const lastBus = bunch.vehicles[bunch.vehicles.length - 1];
-  if (pattern.lengthFt - lastBus.pdist < TERMINAL_PDIST_FT) {
-    console.log(`End-of-line layover near pdist ${pattern.lengthFt}, skipping`);
-    return;
-  }
+  console.log(`Posting: route ${bunch.route} pid ${bunch.pid} — ${bunch.vehicles.length} buses, ${bunch.spanFt} ft`);
 
   const midPdist = (bunch.vehicles[0].pdist + bunch.vehicles[bunch.vehicles.length - 1].pdist) / 2;
   const stop = findNearestStop(pattern, midPdist);

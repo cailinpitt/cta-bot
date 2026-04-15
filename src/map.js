@@ -124,4 +124,84 @@ async function renderSpeedmap(pattern, binSpeeds) {
   return sharp(data).jpeg({ quality: 85 }).toBuffer();
 }
 
-module.exports = { renderBunchingMap, renderSpeedmap };
+const SNAPSHOT_WIDTH = 1200;
+const SNAPSHOT_HEIGHT = 1200;
+
+async function renderSnapshot(trains, lineColors, trainLines = null, stations = null) {
+  const overlays = [];
+
+  // Subtle line polylines drawn first so they appear under everything else.
+  if (trainLines) {
+    for (const [line, segments] of Object.entries(trainLines)) {
+      const color = lineColors[line] || 'ffffff';
+      for (const points of segments) {
+        if (!points || points.length < 2) continue;
+        const encoded = encodeURIComponent(encode(points));
+        overlays.push(`path-2+${color}-0.55(${encoded})`);
+      }
+    }
+  }
+
+  // Small white station markers between lines and trains for subtle network context.
+  if (stations) {
+    for (const s of stations) {
+      overlays.push(`pin-s+ffffff(${s.lon.toFixed(4)},${s.lat.toFixed(4)})`);
+    }
+  }
+
+  // Colored pin per train, on top of stations so they're the focal point.
+  for (const t of trains) {
+    const color = lineColors[t.line] || 'ffffff';
+    overlays.push(`pin-s+${color}(${t.lon.toFixed(4)},${t.lat.toFixed(4)})`);
+  }
+
+  const token = process.env.MAPBOX_TOKEN;
+  if (!token) throw new Error('MAPBOX_TOKEN missing');
+
+  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/auto/${SNAPSHOT_WIDTH}x${SNAPSHOT_HEIGHT}@2x?access_token=${token}&padding=60`;
+  const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+  return sharp(data).jpeg({ quality: 85 }).toBuffer();
+}
+
+const TRAIN_BUNCH_CONTEXT_FT = 8000; // ~1.5 mi of line shown on each side of the bunch
+
+async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
+  const overlays = [];
+  const color = lineColors[bunch.line] || 'ffffff';
+
+  // Find pattern points near the bunch center so `auto` framing zooms in tight
+  // instead of fitting the full 20-mi L line.
+  const lineSegments = trainLines?.[bunch.line] || [];
+  for (const seg of lineSegments) {
+    const nearby = seg.filter(([lat, lon]) =>
+      bunch.trains.some((t) => haversineFt({ lat, lon }, t) < TRAIN_BUNCH_CONTEXT_FT)
+    );
+    if (nearby.length < 2) continue;
+    const encoded = encodeURIComponent(encode(nearby));
+    overlays.push(`path-4+${color}-0.7(${encoded})`);
+  }
+
+  // Show stations near the bunch for location context.
+  if (stations) {
+    const nearbyStations = stations.filter((s) =>
+      bunch.trains.some((t) => haversineFt({ lat: s.lat, lon: s.lon }, t) < TRAIN_BUNCH_CONTEXT_FT)
+    );
+    for (const s of nearbyStations) {
+      overlays.push(`pin-s+ffffff(${s.lon.toFixed(4)},${s.lat.toFixed(4)})`);
+    }
+  }
+
+  // Large pins with the rail icon for the bunched pair.
+  for (const t of bunch.trains) {
+    overlays.push(`pin-l-rail-metro+${color}(${t.lon.toFixed(5)},${t.lat.toFixed(5)})`);
+  }
+
+  const token = process.env.MAPBOX_TOKEN;
+  if (!token) throw new Error('MAPBOX_TOKEN missing');
+
+  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/auto/${SNAPSHOT_WIDTH}x${SNAPSHOT_HEIGHT}@2x?access_token=${token}&padding=80`;
+  const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+  return sharp(data).jpeg({ quality: 85 }).toBuffer();
+}
+
+module.exports = { renderBunchingMap, renderSpeedmap, renderSnapshot, renderTrainBunching };

@@ -3,16 +3,18 @@ const STALE_MS = 3 * 60 * 1000; // ignore vehicles that haven't reported in 3 mi
 const TERMINAL_PDIST_FT = 500; // bunches where all buses are within this of the start are layovers, not bunching
 
 /**
- * Detect the worst bunching event across all vehicles.
+ * Detect all bunching events across all vehicles, ranked best-first.
  *
  * Strategy: group vehicles by pid (pattern = route + direction), sort by
  * pdist (distance along route in feet), find consecutive pairs within the
- * threshold, and extend the cluster as long as neighbors are also close.
- * Pick the cluster with the smallest max-gap.
+ * threshold, and extend each cluster as long as neighbors are also close.
+ * Ranks clusters by size desc, then max-gap asc (larger/tighter = more severe).
  *
- * Returns null if no bunching is detected.
+ * Returns an array of bunch events (may be empty). The entry point picks the
+ * first one whose pid isn't on cooldown — so a persistent bunch on route A
+ * doesn't stop us from posting a fresh event on route B in the same run.
  */
-function detectBunching(vehicles, now = new Date()) {
+function detectAllBunching(vehicles, now = new Date()) {
   const fresh = vehicles.filter((v) => now - v.tmstmp < STALE_MS);
 
   const byPid = new Map();
@@ -21,12 +23,11 @@ function detectBunching(vehicles, now = new Date()) {
     byPid.get(v.pid).push(v);
   }
 
-  let best = null;
+  const bunches = [];
   for (const [pid, group] of byPid) {
     if (group.length < 2) continue;
     const sorted = [...group].sort((a, b) => a.pdist - b.pdist);
 
-    // Find all clusters: consecutive runs where each gap <= threshold.
     let i = 0;
     while (i < sorted.length - 1) {
       if (sorted[i + 1].pdist - sorted[i].pdist > BUNCHING_THRESHOLD_FT) {
@@ -40,29 +41,36 @@ function detectBunching(vehicles, now = new Date()) {
         j++;
       }
       const cluster = sorted.slice(i, j + 1);
-      // Skip start-terminal layovers: if *any* bus in the cluster is still
-      // within TERMINAL_PDIST_FT of pdist 0, the whole cluster is the terminal
-      // lineup (including buses that have just pulled out a few hundred feet).
+      // Skip start-terminal layovers: any bus within TERMINAL_PDIST_FT of pdist 0
+      // means the cluster is the terminal lineup shaking out, not real bunching.
       if (cluster[0].pdist < TERMINAL_PDIST_FT) {
         i = j + 1;
         continue;
       }
-      // Prefer larger clusters, then tighter gaps
-      if (!best || cluster.length > best.vehicles.length ||
-          (cluster.length === best.vehicles.length && maxGap < best.maxGapFt)) {
-        best = {
-          pid,
-          route: cluster[0].route,
-          vehicles: cluster,
-          maxGapFt: maxGap,
-          spanFt: cluster[cluster.length - 1].pdist - cluster[0].pdist,
-        };
-      }
+      bunches.push({
+        pid,
+        route: cluster[0].route,
+        vehicles: cluster,
+        maxGapFt: maxGap,
+        spanFt: cluster[cluster.length - 1].pdist - cluster[0].pdist,
+      });
       i = j + 1;
     }
   }
 
-  return best;
+  // Sort best-first: more buses is more severe; tie-break on tighter max gap.
+  bunches.sort((a, b) => {
+    if (a.vehicles.length !== b.vehicles.length) return b.vehicles.length - a.vehicles.length;
+    return a.maxGapFt - b.maxGapFt;
+  });
+
+  return bunches;
 }
 
-module.exports = { detectBunching, BUNCHING_THRESHOLD_FT };
+// Back-compat wrapper for any callers that want just the single best bunch.
+function detectBunching(vehicles, now = new Date()) {
+  const all = detectAllBunching(vehicles, now);
+  return all[0] || null;
+}
+
+module.exports = { detectAllBunching, detectBunching, BUNCHING_THRESHOLD_FT };
