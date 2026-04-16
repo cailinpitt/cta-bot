@@ -87,12 +87,28 @@ async function main() {
       }
     }
     const candidatePattern = await loadPattern(candidate.pid);
-    const midPdist = (candidate.vehicles[0].pdist + candidate.vehicles[candidate.vehicles.length - 1].pdist) / 2;
+    const firstBus = candidate.vehicles[0];
+    const lastBus = candidate.vehicles[candidate.vehicles.length - 1];
+    const midPdist = (firstBus.pdist + lastBus.pdist) / 2;
     const stop = findNearestStop(candidatePattern, midPdist);
     const stops = candidatePattern.points.filter((p) => p.type === 'S' && p.stopName);
-    const isTerminalStop = stop === stops[0] || stop === stops[stops.length - 1];
-    if (isTerminalStop) {
-      console.log(`  skip pid ${candidate.pid}: nearest stop "${stop.stopName}" is a terminal`);
+
+    // Skip if the cluster's labeled nearest stop is the first/last stop, OR if
+    // the cluster is within TERMINAL_ZONE_FT of either pattern endpoint. The
+    // distance check catches terminal approach zones (buses queued a block or
+    // two before the terminal are still terminal behavior).
+    const TERMINAL_ZONE_FT = 1500;
+    const isAtStartTerminalStop = stop === stops[0];
+    const isAtEndTerminalStop = stop === stops[stops.length - 1];
+    const inStartZone = firstBus.pdist < TERMINAL_ZONE_FT;
+    const inEndZone = candidatePattern.lengthFt - lastBus.pdist < TERMINAL_ZONE_FT;
+    if (isAtStartTerminalStop || isAtEndTerminalStop || inStartZone || inEndZone) {
+      const reason = isAtStartTerminalStop || isAtEndTerminalStop
+        ? `nearest stop "${stop.stopName}" is a terminal`
+        : inStartZone
+          ? `within ${TERMINAL_ZONE_FT}ft of start terminal`
+          : `within ${TERMINAL_ZONE_FT}ft of end terminal`;
+      console.log(`  skip pid ${candidate.pid}: ${reason}`);
       continue;
     }
     bunch = candidate;
