@@ -19,6 +19,10 @@ const ROUTE_CORE_STROKE = 4;
 const BUS_COLOR = 'ff2a6d';         // hot pink/red reads well on dark
 const CONTEXT_PAD_FT = 1500;        // feet of route context on each side of the bunch
 
+// Twemoji 🚌 (U+1F68C) paths, 36x36 viewBox. Inlined so sharp/librsvg can render
+// the emoji without needing a color emoji font on the host system.
+const TWEMOJI_BUS_INNER = '<path fill="#808285" d="M0 21v7c0 1.657 1.343 3 3 3h30c1.657 0 3-1.343 3-3v-7H0z"/><path fill="#CCD6DD" d="M36 22v-9c0-1.657-3.343-3-5-3H11c-8 0-11 2.343-11 4v8h36z"/><path fill="#939598" d="M0 22h36v3H0z"/><path fill="#BCBEC0" d="M7 25c-3.063 0-5.586 2.298-5.95 5.263.526.453 1.202.737 1.95.737h10c0-3.313-2.686-6-6-6zm27.95 5.263C34.586 27.298 32.063 25 29 25c-3.313 0-6 2.687-6 6h10c.749 0 1.425-.284 1.95-.737z"/><circle cx="7" cy="31" r="4"/><circle fill="#99AAB5" cx="7" cy="31" r="2"/><circle cx="29" cy="31" r="4"/><circle fill="#99AAB5" cx="29" cy="31" r="2"/><path fill="#F4900C" d="M0 25h1v2H0zm35-2h1v2h-1z"/><path fill="#58595B" d="M1 13h35v10H1z"/><path fill="#292F33" d="M2 13H.342C.11 13.344 0 13.685 0 14v11h2c1.104 0 2-.896 2-2v-8c0-1.104-.896-2-2-2z"/><path fill="#55ACEE" d="M31 20c0 .553-.447 1-1 1H7c-.552 0-1-.447-1-1v-4c0-.552.448-1 1-1h23c.553 0 1 .448 1 1v4z"/><path fill="#FFAC33" d="M35 19h1v2h-1z"/><path fill="#55ACEE" d="M1 15H0v8h1c.552 0 1-.447 1-1v-6c0-.552-.448-1-1-1z"/>';
+
 /**
  * Slice pattern points to a window around the bunched buses' geographic position.
  *
@@ -55,18 +59,19 @@ function slicePatternAroundBunch(pattern, bunch) {
 }
 
 async function renderBunchingMap(bunch, pattern) {
+  // Slice still drives zoom/bbox (so framing is unchanged), but we encode the
+  // full pattern for the drawn polyline. That way the route line extends off
+  // the edges of the image instead of terminating at the slice boundary.
   const slice = slicePatternAroundBunch(pattern, bunch);
-  const polyline = encode(slice.map((p) => [p.lat, p.lon]));
+  const polyline = encode(pattern.points.map((p) => [p.lat, p.lon]));
 
   const overlays = [];
   // Draw halo first, then core, so core renders on top. Pins render on top of both.
   const encoded = encodeURIComponent(polyline);
   overlays.push(`path-${ROUTE_HALO_STROKE}+${ROUTE_HALO_COLOR}(${encoded})`);
   overlays.push(`path-${ROUTE_CORE_STROKE}+${ROUTE_CORE_COLOR}(${encoded})`);
-  // Use the Maki "bus" icon for a clear transit visual on each pin.
-  for (const v of bunch.vehicles) {
-    overlays.push(`pin-m-bus+${BUS_COLOR}(${v.lon.toFixed(6)},${v.lat.toFixed(6)})`);
-  }
+  // Markers are drawn as a custom SVG composite after fetching the base map, so
+  // we can make them larger than Mapbox's pin-l limit.
 
   // Compute explicit center/zoom so we can project bus positions for SVG arrows.
   const allLats = [...slice.map((p) => p.lat), ...bunch.vehicles.map((v) => v.lat)];
@@ -114,20 +119,37 @@ async function renderBunchingMap(bunch, pattern) {
     return diffFwd <= diffRev ? fwd : rev;
   }
 
-  // Single direction arrow for the route, placed above the leading bus.
+  // Custom bus markers: larger than Mapbox pin-l, drawn via SVG composite.
+  // Uses the Twemoji bus glyph (36x36 viewBox) so the emoji renders via librsvg
+  // without relying on system emoji fonts, which sharp's text pipeline doesn't
+  // reliably support across platforms.
+  const BUS_MARKER_RADIUS = 34;
+  const markerElements = bunch.vehicles.map((v) => {
+    const { x, y } = project(v.lat, v.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
+    const iconSize = BUS_MARKER_RADIUS * 1.6;
+    const iconX = x - iconSize / 2;
+    const iconY = y - iconSize / 2;
+    return [
+      `<circle cx="${x}" cy="${y}" r="${BUS_MARKER_RADIUS}" fill="#${BUS_COLOR}" stroke="#fff" stroke-width="4"/>`,
+      `<svg x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 36 36">${TWEMOJI_BUS_INNER}</svg>`,
+    ].join('');
+  });
+
+  // Big direction-of-travel arrow anchored in the top-right corner so it reads
+  // as a route-wide indicator rather than being tied to a specific bus.
   const ARROWS = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
-  const BUS_PIN_BODY_OFFSET_Y = -20; // pin-m is smaller than pin-l
-  // Pick the leading bus (highest pdist) for arrow placement.
   const leadBus = bunch.vehicles.reduce((a, b) => (b.pdist > a.pdist ? b : a), bunch.vehicles[0]);
   const bearingDeg = busTrackBearing(leadBus);
   const idx = Math.round(bearingDeg / 45) % 8;
   const arrow = ARROWS[idx];
-  const { x: ax, y: ay } = project(leadBus.lat, leadBus.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
+  const ARROW_FONT_SIZE = 200;
+  const ARROW_CX = WIDTH - 220;
+  const ARROW_CY = 180;
   const arrowElements = [
-    `<text x="${ax}" y="${ay + BUS_PIN_BODY_OFFSET_Y - 30}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="bold" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${arrow}</text>`,
+    `<text x="${ARROW_CX}" y="${ARROW_CY}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${ARROW_FONT_SIZE}" font-weight="bold" fill="#fff" stroke="#000" stroke-width="10" paint-order="stroke">${arrow}</text>`,
   ];
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${arrowElements.join('\n')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
 
   // Bluesky image limit is 1MB; composite arrows then convert to JPEG.
   return sharp(data)
