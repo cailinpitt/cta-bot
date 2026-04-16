@@ -13,12 +13,17 @@ const HEIGHT = 1200;
 // Direction-of-travel arrow rendered as an SVG path (not a Unicode glyph) so
 // the result is identical across hosts. librsvg's font fallback differs
 // between macOS (Helvetica) and Ubuntu (DejaVu), which warped the arrow shape.
-// Path is an upward arrow centered at the origin; rotate to point any direction.
-const ARROW_PATH_D = 'M 0,-70 L 40,-20 L 15,-20 L 15,70 L -15,70 L -15,-20 L -40,-20 Z';
+// Two strokes — chevron head + straight shaft — to match the Helvetica ↑ look:
+// thin shaft, open chevron, white-on-black outline.
+const ARROW_PATH_D = 'M -40,-30 L 0,-75 L 40,-30 M 0,-75 L 0,75';
 
 function buildDirectionArrow(cx, cy, bearingDeg) {
   const rotation = Math.round(bearingDeg / 45) * 45;
-  return `<path d="${ARROW_PATH_D}" fill="#fff" stroke="#000" stroke-width="10" stroke-linejoin="round" paint-order="stroke" transform="translate(${cx} ${cy}) rotate(${rotation})"/>`;
+  const transform = `translate(${cx} ${cy}) rotate(${rotation})`;
+  return [
+    `<path d="${ARROW_PATH_D}" fill="none" stroke="#000" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" transform="${transform}"/>`,
+    `<path d="${ARROW_PATH_D}" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" transform="${transform}"/>`,
+  ].join('');
 }
 
 // Two-tone route line: dark halo + bright core makes the route pop against the basemap.
