@@ -164,22 +164,43 @@ const SPEEDMAP_HALO_STROKE = 12;
 
 /**
  * Slice pattern points into N ordered groups by cumulative distance along the line.
- * Each slice gets an extra point copied from the next slice's start so adjacent
- * colored segments visually connect without gaps.
+ * Each slice is anchored by interpolated start/end points at exact bin boundaries
+ * so sparse stretches of the polyline still render as a colored segment.
  */
 function slicePatternIntoSegments(pattern, numBins) {
-  const cum = cumulativeDistances(pattern.points);
+  const points = pattern.points;
+  const cum = cumulativeDistances(points);
   const total = cum[cum.length - 1];
   const segLen = total / numBins;
 
-  const slices = Array.from({ length: numBins }, () => []);
-  for (let i = 0; i < pattern.points.length; i++) {
-    const idx = Math.min(numBins - 1, Math.floor(cum[i] / segLen));
-    slices[idx].push(pattern.points[i]);
+  function pointAt(targetDist) {
+    if (targetDist <= cum[0]) return points[0];
+    if (targetDist >= cum[cum.length - 1]) return points[points.length - 1];
+    let lo = 0;
+    let hi = cum.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] <= targetDist) lo = mid;
+      else hi = mid;
+    }
+    const span = cum[hi] - cum[lo];
+    const t = span === 0 ? 0 : (targetDist - cum[lo]) / span;
+    const a = points[lo];
+    const b = points[hi];
+    return { lat: a.lat + t * (b.lat - a.lat), lon: a.lon + t * (b.lon - a.lon) };
   }
-  // Bridge each slice to the next so colored segments don't have visible gaps.
-  for (let i = 0; i < slices.length - 1; i++) {
-    if (slices[i + 1].length > 0) slices[i].push(slices[i + 1][0]);
+
+  const slices = Array.from({ length: numBins }, () => []);
+  for (let i = 0; i < numBins; i++) {
+    const startDist = i * segLen;
+    const endDist = i === numBins - 1 ? total : (i + 1) * segLen;
+    slices[i].push(pointAt(startDist));
+    for (let j = 0; j < points.length; j++) {
+      if (cum[j] > startDist && cum[j] < endDist) {
+        slices[i].push(points[j]);
+      }
+    }
+    slices[i].push(pointAt(endDist));
   }
   return slices;
 }
@@ -508,20 +529,45 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
 
 /**
  * Slice a trainLines polyline (array of [lat, lon]) into N ordered groups by
- * cumulative distance. Same bridging logic as slicePatternIntoSegments but
- * works on [lat, lon] tuples instead of {lat, lon} objects.
+ * cumulative distance. Each slice is anchored by interpolated start/end points
+ * at exact bin boundaries, so even sparse polylines (e.g. the Red Line, with
+ * only 80 vertices across 22 mi) produce a renderable segment per bin instead
+ * of dropping bins where vertices happen to be absent.
  */
 function sliceLineIntoSegments(linePoints, cumDist, numBins) {
   const total = cumDist[cumDist.length - 1];
   const segLen = total / numBins;
 
-  const slices = Array.from({ length: numBins }, () => []);
-  for (let i = 0; i < linePoints.length; i++) {
-    const idx = Math.min(numBins - 1, Math.floor(cumDist[i] / segLen));
-    slices[idx].push(linePoints[i]);
+  // Linearly interpolate a [lat, lon] point at a given cumulative distance
+  // along the polyline.
+  function pointAt(targetDist) {
+    if (targetDist <= cumDist[0]) return linePoints[0];
+    if (targetDist >= cumDist[cumDist.length - 1]) return linePoints[linePoints.length - 1];
+    let lo = 0;
+    let hi = cumDist.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (cumDist[mid] <= targetDist) lo = mid;
+      else hi = mid;
+    }
+    const span = cumDist[hi] - cumDist[lo];
+    const t = span === 0 ? 0 : (targetDist - cumDist[lo]) / span;
+    const a = linePoints[lo];
+    const b = linePoints[hi];
+    return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
   }
-  for (let i = 0; i < slices.length - 1; i++) {
-    if (slices[i + 1].length > 0) slices[i].push(slices[i + 1][0]);
+
+  const slices = Array.from({ length: numBins }, () => []);
+  for (let i = 0; i < numBins; i++) {
+    const startDist = i * segLen;
+    const endDist = i === numBins - 1 ? total : (i + 1) * segLen;
+    slices[i].push(pointAt(startDist));
+    for (let j = 0; j < linePoints.length; j++) {
+      if (cumDist[j] > startDist && cumDist[j] < endDist) {
+        slices[i].push(linePoints[j]);
+      }
+    }
+    slices[i].push(pointAt(endDist));
   }
   return slices;
 }
