@@ -1,45 +1,83 @@
-// One-shot script to pull CTA 'L' line polylines from OpenStreetMap via the
-// Overpass API and save a compact per-line JSON. Run manually when geometries
-// change (very rare — new stations, reroutes).
+// Fetch CTA L line polylines from the authoritative CTA GTFS feed.
+// Run manually when line geometries change (new stations, reroutes).
+//
+// Why GTFS instead of OSM: GTFS ships one ordered polyline per direction
+// (shape_id), so we don't need to chain OSM ways, filter out closed-loop
+// junctions, or dedupe parallel northbound/southbound tracks.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const axios = require('axios');
 const Fs = require('fs-extra');
 const Path = require('path');
+const { exec, spawn } = require('child_process');
+const { promisify } = require('util');
+const readline = require('readline');
 
-const LINE_QUERY = `
-[out:json][timeout:120];
-area[name='Chicago']->.a;
-(
-  relation['route'='subway']['network'='CTA'](area.a);
-);
-out geom;`;
+const execAsync = promisify(exec);
 
-// Stations: CTA L stations in OSM are nodes tagged station=subway or railway=station
-// with operator=Chicago Transit Authority. We query all CTA-operated station nodes
-// in the Chicago area and keep the distinct ones.
-const STATION_QUERY = `
-[out:json][timeout:60];
-area[name='Chicago']->.a;
-(
-  node['railway'='station']['operator'='Chicago Transit Authority'](area.a);
-  node['station'='subway']['operator'='Chicago Transit Authority'](area.a);
-);
-out;`;
+// Stream-read a file from the zip line by line. Used for stop_times.txt which
+// is too large to buffer in memory.
+async function streamFromZip(filename, onLine) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('unzip', ['-p', ZIP_PATH, filename]);
+    const rl = readline.createInterface({ input: proc.stdout });
+    rl.on('line', onLine);
+    rl.on('close', resolve);
+    proc.on('error', reject);
+    proc.stderr.on('data', (d) => process.stderr.write(d));
+  });
+}
+const GTFS_URL = 'https://www.transitchicago.com/downloads/sch_data/google_transit.zip';
+const ZIP_PATH = '/tmp/cta-gtfs.zip';
 
-const REF_KEY_MAP = {
-  Red: 'red',
+// Map CTA's GTFS route_id values to our internal line keys. Discovered by
+// inspecting routes.txt — CTA uses 1-char codes for most lines.
+const ROUTE_ID_MAP = {
+  Red:  'red',
   Blue: 'blue',
-  Brown: 'brn',
-  Green: 'g',
-  Orange: 'org',
-  Purple: 'p',
+  Brn:  'brn',
+  G:    'g',
+  Org:  'org',
+  P:    'p',
   Pink: 'pink',
-  Yellow: 'y',
+  Y:    'y',
 };
 
-// Decimate to approximately targetCount points by keeping every Nth point.
-// Mapbox static URLs have a ~8k char limit and we need room for 8 paths + many pins,
-// so each line's polyline must be short. Subtle visual doesn't need high fidelity.
+async function downloadGtfs() {
+  if (Fs.existsSync(ZIP_PATH)) {
+    const age = Date.now() - Fs.statSync(ZIP_PATH).mtimeMs;
+    if (age < 24 * 60 * 60 * 1000) {
+      console.log(`Using cached GTFS zip (< 1 day old)`);
+      return;
+    }
+  }
+  console.log(`Downloading GTFS from ${GTFS_URL}...`);
+  const resp = await axios.get(GTFS_URL, { responseType: 'arraybuffer', timeout: 120000 });
+  Fs.writeFileSync(ZIP_PATH, resp.data);
+  console.log(`  ${(resp.data.length / 1024 / 1024).toFixed(1)} MB`);
+}
+
+async function readFromZip(filename) {
+  const { stdout } = await execAsync(`unzip -p "${ZIP_PATH}" "${filename}"`, { maxBuffer: 256 * 1024 * 1024 });
+  return stdout;
+}
+
+// Minimal CSV parser. GTFS files are standard RFC 4180 — fields with commas
+// or newlines are quoted. We don't have any quoted newlines to worry about in
+// routes/trips/shapes, so a straightforward split per line works.
+function parseCsv(text) {
+  const lines = text.split('\n').filter((l) => l.length > 0);
+  const header = lines[0].split(',').map((s) => s.replace(/"/g, '').trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',').map((s) => s.replace(/"/g, '').trim());
+    const row = {};
+    for (let j = 0; j < header.length; j++) row[header[j]] = parts[j];
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Decimate to approximately targetCount points. Keeps first and last.
 function decimateTo(points, targetCount) {
   if (points.length <= targetCount) return points;
   const step = Math.ceil(points.length / targetCount);
@@ -49,197 +87,171 @@ function decimateTo(points, targetCount) {
   return out;
 }
 
-// Dedupe consecutive identical points that come from abutting ways within a relation.
-function dedupe(points) {
-  const out = [];
-  for (const p of points) {
-    const prev = out[out.length - 1];
-    if (!prev || prev[0] !== p[0] || prev[1] !== p[1]) out.push(p);
-  }
-  return out;
-}
-
 async function main() {
-  console.log('Querying Overpass API...');
-  async function overpass(query) {
-    const endpoints = [
-      'https://overpass-api.de/api/interpreter',
-      'https://overpass.kumi.systems/api/interpreter',
-    ];
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`  ${endpoint}...`);
-        const resp = await axios.post(
-          endpoint,
-          'data=' + encodeURIComponent(query),
-          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 120000 }
-        );
-        if (typeof resp.data === 'string' && resp.data.includes('rate_limited')) {
-          console.log('    rate-limited, trying next');
-          continue;
-        }
-        return resp.data;
-      } catch (e) {
-        console.log(`    failed: ${e.message}`);
-      }
+  await downloadGtfs();
+
+  console.log('Reading routes.txt...');
+  const routes = parseCsv(await readFromZip('routes.txt'));
+  const lRoutes = routes.filter((r) => ROUTE_ID_MAP[r.route_id]);
+  console.log(`  ${lRoutes.length} L routes:`, lRoutes.map((r) => r.route_id).join(', '));
+
+  console.log('Reading trips.txt...');
+  const trips = parseCsv(await readFromZip('trips.txt'));
+  // Collect unique shape_ids per route, preserving direction distinction.
+  const shapesByLine = new Map();
+  for (const trip of trips) {
+    const lineKey = ROUTE_ID_MAP[trip.route_id];
+    if (!lineKey) continue;
+    if (!shapesByLine.has(lineKey)) shapesByLine.set(lineKey, new Set());
+    shapesByLine.get(lineKey).add(trip.shape_id);
+  }
+  for (const [line, shapes] of shapesByLine) {
+    console.log(`  ${line}: ${shapes.size} distinct shape_ids`);
+  }
+
+  console.log('Reading shapes.txt (this is the big one)...');
+  const shapesText = await readFromZip('shapes.txt');
+  const shapes = parseCsv(shapesText);
+  console.log(`  ${shapes.length} shape points total`);
+
+  // Group shape points by shape_id, ordered by sequence.
+  const pointsByShape = new Map();
+  for (const row of shapes) {
+    const id = row.shape_id;
+    if (!pointsByShape.has(id)) pointsByShape.set(id, []);
+    pointsByShape.get(id).push({
+      seq: parseInt(row.shape_pt_sequence, 10),
+      lat: parseFloat(row.shape_pt_lat),
+      lon: parseFloat(row.shape_pt_lon),
+    });
+  }
+  for (const pts of pointsByShape.values()) pts.sort((a, b) => a.seq - b.seq);
+
+  // Keep only direction_id='0' shapes. GTFS ships separate geometries for
+  // direction 0 (outbound) and direction 1 (inbound); they trace each physical
+  // track with slight offsets, so rendering both creates parallel-line artifacts
+  // at spots where the offsets diverge (e.g. Red Line at Ranch Triangle).
+  //
+  // For single-trunk lines this leaves us with one polyline.
+  // For Green (branched), each branch has its own direction-0 shape, so we
+  // still get both Ashland/63rd and Cottage Grove branches — but only once.
+  const directionByShape = new Map();
+  for (const trip of trips) {
+    if (!directionByShape.has(trip.shape_id)) {
+      directionByShape.set(trip.shape_id, trip.direction_id);
     }
-    throw new Error('All Overpass mirrors failed');
-  }
-
-  console.log('Fetching line geometries...');
-  const data = await overpass(LINE_QUERY);
-
-  const relations = data.elements || [];
-  console.log(`Got ${relations.length} relations`);
-
-  function samePoint(a, b) {
-    return a && b && Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
-  }
-
-  // Chain a relation's member ways into continuous segments. Ways that don't
-  // connect to the current chain start a new segment.
-  function chainRelation(rel) {
-    const segments = [];
-    let currentSegment = null;
-    for (const member of rel.members || []) {
-      if (member.type !== 'way' || !member.geometry) continue;
-      const points = member.geometry.map((g) => [g.lat, g.lon]);
-      if (points.length < 2) continue;
-
-      if (!currentSegment) {
-        currentSegment = [...points];
-        continue;
-      }
-
-      const tail = currentSegment[currentSegment.length - 1];
-      // Only chain when the next way starts where the previous way ended. Reverse-matching
-      // (way's end touches previous way's end) accidentally stitches parallel northbound
-      // and southbound tracks into a narrow loop, producing visible cycles in the render.
-      if (samePoint(tail, points[0])) {
-        currentSegment.push(...points.slice(1));
-      } else {
-        segments.push(currentSegment);
-        currentSegment = [...points];
-      }
-    }
-    if (currentSegment) segments.push(currentSegment);
-    return segments;
-  }
-
-  // Combine segments across all of a line's relations. Each line has 2-4 directional
-  // variants; relations for the reverse direction are usually the same track traversed
-  // backwards. Branched lines (Green especially) need multiple relations to cover
-  // all branches — one relation typically covers trunk + one branch.
-  const segmentsByLine = new Map();
-  for (const rel of relations) {
-    const key = REF_KEY_MAP[rel.tags?.ref];
-    if (!key) continue;
-    if (!segmentsByLine.has(key)) segmentsByLine.set(key, []);
-    segmentsByLine.get(key).push(...chainRelation(rel));
-  }
-
-  // Haversine distance in feet between two [lat, lon] points.
-  function distFt(a, b) {
-    const toRad = (d) => (d * Math.PI) / 180;
-    const dLat = toRad(b[0] - a[0]);
-    const dLon = toRad(b[1] - a[1]);
-    const lat1 = toRad(a[0]);
-    const lat2 = toRad(b[0]);
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-    return 2 * 20902231 * Math.asin(Math.sqrt(h));
-  }
-
-  // Is segA mostly a subset of segB? i.e. does the bulk of segA lie geographically
-  // along segB? This catches the OSM parallel-tracks problem: northbound and
-  // southbound tracks are mapped as separate ways ~5m apart, but after chaining
-  // and decimation their points don't exactly match, so a sort-and-sign dedup
-  // misses them. Here we ask: what fraction of segA's points have a segB point
-  // within NEAR_FT of them? If high, the two segments trace the same physical track.
-  const NEAR_FT = 400;
-  function coverageRatio(segA, segB) {
-    let close = 0;
-    for (const a of segA) {
-      for (const b of segB) {
-        if (distFt(a, b) < NEAR_FT) {
-          close++;
-          break;
-        }
-      }
-    }
-    return close / segA.length;
-  }
-
-  // Greedy dedup: walk segments longest-first, keep each unless it's mostly
-  // subsumed by an already-kept segment.
-  function dedupeSegments(segments) {
-    const sorted = [...segments].sort((a, b) => b.length - a.length);
-    const kept = [];
-    for (const seg of sorted) {
-      const subsumed = kept.some((k) => coverageRatio(seg, k) > 0.8);
-      if (!subsumed) kept.push(seg);
-    }
-    return kept;
-  }
-
-  // Keep only the longest few segments per line. OSM splits tracks at every station
-  // and crossover, producing dozens of tiny ways — the top segments by length cover
-  // the trunk and branches; the rest are short crossovers we can skip.
-  const MAX_SEGMENTS_PER_LINE = 4;
-
-  // Drop closed-loop segments (start ≈ end). These are OSM-mapped service wyes,
-  // crossovers, or junction tracks — not revenue routes, and they render as weird
-  // little circles on the map.
-  function isClosedLoop(seg) {
-    const start = seg[0];
-    const end = seg[seg.length - 1];
-    const latDiff = Math.abs(start[0] - end[0]);
-    const lonDiff = Math.abs(start[1] - end[1]);
-    return latDiff < 0.0002 && lonDiff < 0.0002; // ~20m
   }
 
   const out = {};
-  for (const [line, rawSegments] of segmentsByLine) {
-    const openSegments = rawSegments.filter((s) => !isClosedLoop(s));
-    const unique = dedupeSegments(openSegments);
-    const sortedByLength = [...unique].sort((a, b) => b.length - a.length);
-    const kept = sortedByLength.slice(0, MAX_SEGMENTS_PER_LINE);
-    const decimated = kept
-      .map((s) => dedupe(s))
-      .map((s) => decimateTo(s, 22))
-      .map((s) => s.map(([lat, lon]) => [Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5]))
-      .filter((s) => s.length >= 2);
-    out[line] = decimated;
-    const finalPts = decimated.reduce((a, s) => a + s.length, 0);
-    const loopsDropped = rawSegments.length - openSegments.length;
-    console.log(`  ${line}: ${rawSegments.length} raw (${loopsDropped} loops dropped) → ${unique.length} unique → kept top ${decimated.length} (${finalPts} pts)`);
+  for (const [line, shapeIds] of shapesByLine) {
+    // Pick whichever direction this line uses. Most lines have both directions,
+    // but loop-style lines (Orange, Pink, Purple, Yellow) are modeled only as
+    // direction 1 since their trips start and end at the same terminal.
+    const dir0 = [...shapeIds].filter((id) => directionByShape.get(id) === '0');
+    const dir1 = [...shapeIds].filter((id) => directionByShape.get(id) === '1');
+    const chosenShapes = dir0.length > 0 ? dir0 : dir1;
+
+    // Sort by length desc. Keep shapes whose length is at least 80% of the
+    // longest — that's the heuristic that separates real branches (similar
+    // length to trunk; e.g. Green has two 85%-length shapes for its branches)
+    // from shortturn variants (typically 40-75% of trunk length, e.g. Blue's
+    // Jefferson Park → UIC-Halsted at ~47%).
+    const sortedShapes = chosenShapes
+      .map((id) => ({ id, points: pointsByShape.get(id) || [] }))
+      .filter((s) => s.points.length >= 2)
+      .sort((a, b) => b.points.length - a.points.length);
+    const longestLength = sortedShapes[0]?.points.length || 0;
+    const kept = sortedShapes.filter((s) => s.points.length >= longestLength * 0.8);
+
+    const polylines = kept.map((shape) => {
+      const decimated = decimateTo(shape.points, 80);
+      return decimated.map((p) => [
+        Math.round(p.lat * 1e5) / 1e5,
+        Math.round(p.lon * 1e5) / 1e5,
+      ]);
+    });
+    out[line] = polylines;
+    const totalPts = polylines.reduce((a, s) => a + s.length, 0);
+    const chosenDir = dir0.length > 0 ? '0' : '1';
+    console.log(`  ${line}: ${chosenShapes.length} dir-${chosenDir} shapes → ${polylines.length} kept (${totalPts} pts)`);
   }
 
   const outPath = Path.join(__dirname, '..', 'src', 'data', 'trainLines.json');
   Fs.ensureDirSync(Path.dirname(outPath));
   Fs.writeJsonSync(outPath, out);
-  console.log(`Wrote ${outPath}`);
+  console.log(`Wrote ${outPath} (${(Fs.statSync(outPath).size / 1024).toFixed(1)} KB)`);
 
-  console.log('Fetching stations...');
-  const stationData = await overpass(STATION_QUERY);
-  const stations = [];
+  // Now extract CTA L stations. GTFS stops.txt mixes rail and bus stops; we
+  // trace rail-route trips through stop_times to find only the L stops, then
+  // resolve each to its parent station (stop_id where location_type=1).
+  const lTripIds = new Set(trips.filter((t) => ROUTE_ID_MAP[t.route_id]).map((t) => t.trip_id));
+
+  // Track which line serves each trip so we can annotate stations with their lines.
+  const lineByTrip = new Map();
+  for (const t of trips) {
+    const line = ROUTE_ID_MAP[t.route_id];
+    if (line) lineByTrip.set(t.trip_id, line);
+  }
+
+  console.log('Streaming stop_times.txt to find rail stops...');
+  const linesPerStop = new Map(); // stop_id -> Set of line keys
+  let header = null;
+  let tripIdIdx = -1;
+  let stopIdIdx = -1;
+  await streamFromZip('stop_times.txt', (line) => {
+    if (!header) {
+      header = line.split(',').map((s) => s.replace(/"/g, '').trim());
+      tripIdIdx = header.indexOf('trip_id');
+      stopIdIdx = header.indexOf('stop_id');
+      return;
+    }
+    const parts = line.split(',');
+    const tripId = parts[tripIdIdx];
+    const lineKey = lineByTrip.get(tripId);
+    if (!lineKey) return;
+    const stopId = parts[stopIdIdx];
+    if (!linesPerStop.has(stopId)) linesPerStop.set(stopId, new Set());
+    linesPerStop.get(stopId).add(lineKey);
+  });
+  const railStopIds = new Set(linesPerStop.keys());
+  console.log(`  ${railStopIds.size} unique rail stop_ids`);
+
+  console.log('Reading stops.txt...');
+  const stops = parseCsv(await readFromZip('stops.txt'));
+  const byStopId = new Map(stops.map((s) => [s.stop_id, s]));
+
+  // Platforms have parent_station set; stations have location_type='1'. Collect
+  // each parent and merge the line sets of its child platforms.
+  const stationLineSets = new Map(); // station_id -> Set of line keys
+  for (const sid of railStopIds) {
+    const stop = byStopId.get(sid);
+    if (!stop) continue;
+    const parentId = stop.parent_station || (stop.location_type === '1' ? sid : null);
+    if (!parentId) continue;
+    if (!stationLineSets.has(parentId)) stationLineSets.set(parentId, new Set());
+    for (const l of linesPerStop.get(sid) || []) stationLineSets.get(parentId).add(l);
+  }
+
+  const stationsOut = [];
   const seenNames = new Set();
-  for (const node of stationData.elements || []) {
-    if (node.type !== 'node') continue;
-    const name = node.tags?.name;
-    if (!name || seenNames.has(name)) continue;
-    seenNames.add(name);
-    stations.push({
-      name,
-      lat: Math.round(node.lat * 1e5) / 1e5,
-      lon: Math.round(node.lon * 1e5) / 1e5,
+  for (const [sid, lineSet] of stationLineSets) {
+    const s = byStopId.get(sid);
+    if (!s || !s.stop_name || seenNames.has(s.stop_name)) continue;
+    seenNames.add(s.stop_name);
+    stationsOut.push({
+      name: s.stop_name,
+      lat: Math.round(parseFloat(s.stop_lat) * 1e5) / 1e5,
+      lon: Math.round(parseFloat(s.stop_lon) * 1e5) / 1e5,
+      lines: [...lineSet].sort(),
     });
   }
+
   const stationPath = Path.join(__dirname, '..', 'src', 'data', 'trainStations.json');
-  Fs.writeJsonSync(stationPath, stations);
-  console.log(`Wrote ${stationPath} (${stations.length} stations)`);
+  Fs.writeJsonSync(stationPath, stationsOut);
+  console.log(`Wrote ${stationPath} (${stationsOut.length} stations)`);
 }
 
 main().catch((e) => {
-  console.error(e.response?.data || e.stack || e);
+  console.error(e.stack || e);
   process.exit(1);
 });

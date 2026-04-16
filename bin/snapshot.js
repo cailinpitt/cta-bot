@@ -53,7 +53,10 @@ async function main() {
   console.log(`Got ${trains.length} trains`);
 
   const now = new Date();
-  const image = await renderSnapshot(trains, LINE_COLORS, trainLines, trainStations);
+  // Skip stations on system snapshot — they blow the Mapbox URL limit when
+  // combined with 70+ train pins. Station markers are still used on the
+  // zoomed-in bunching map where only nearby stations are included.
+  const image = await renderSnapshot(trains, LINE_COLORS, trainLines);
   const text = buildPostText(trains, now);
   const alt = buildAltText(trains);
 

@@ -1,6 +1,7 @@
 // Display names keyed by CTA's `rt` value. Shared by both visualizations.
 // Sorted by route number; express (X) variants follow their base number.
 const names = {
+  '6':   'Jackson Park Express',
   '8':   'Halsted',
   '9':   'Ashland',
   'X9':  'Ashland Express',

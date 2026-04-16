@@ -8,7 +8,20 @@ async function get(endpoint, params) {
     timeout: 15000,
   });
   const body = data['bustime-response'];
-  if (body.error) throw new Error(`CTA ${endpoint}: ${JSON.stringify(body.error)}`);
+  if (body.error) {
+    // "No data found" is CTA's way of saying a route has no active vehicles
+    // right now (e.g. express routes off-peak). The response still contains
+    // vehicles from the other routes in the batch, so just log and continue.
+    const errors = Array.isArray(body.error) ? body.error : [body.error];
+    const fatal = errors.filter((e) => !/no data found/i.test(e.msg || ''));
+    const benign = errors.filter((e) => /no data found/i.test(e.msg || ''));
+    if (benign.length > 0) {
+      console.log(`CTA ${endpoint}: no data for ${benign.map((e) => e.rt).join(', ')}`);
+    }
+    if (fatal.length > 0) {
+      throw new Error(`CTA ${endpoint}: ${JSON.stringify(fatal)}`);
+    }
+  }
   return body;
 }
 
