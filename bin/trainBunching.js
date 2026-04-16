@@ -40,7 +40,7 @@ async function main() {
   const trains = await getAllTrainPositions();
   console.log(`Got ${trains.length} trains`);
 
-  const bunch = detectTrainBunching(trains);
+  const bunch = detectTrainBunching(trains, trainLines);
   if (!bunch) {
     console.log('No train bunching detected');
     return;

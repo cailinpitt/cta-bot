@@ -1,7 +1,8 @@
 const axios = require('axios');
 const sharp = require('sharp');
 const { encode } = require('./polyline');
-const { cumulativeDistances, haversineFt } = require('./geo');
+const { cumulativeDistances, haversineFt, bearing } = require('./geo');
+const { buildLinePolyline, snapToLine } = require('./trainSpeedmap');
 const { colorForBusSpeed, colorForTrainSpeed } = require('./speedmap');
 const { fitZoom, project } = require('./projection');
 
@@ -16,7 +17,7 @@ const ROUTE_CORE_COLOR = '00d8ff';
 const ROUTE_CORE_STROKE = 4;
 
 const BUS_COLOR = 'ff2a6d';         // hot pink/red reads well on dark
-const CONTEXT_PAD_FT = 3000;        // feet of route context on each side of the bunch
+const CONTEXT_PAD_FT = 1500;        // feet of route context on each side of the bunch
 
 /**
  * Slice pattern points to a window around the bunched buses' geographic position.
@@ -67,15 +68,73 @@ async function renderBunchingMap(bunch, pattern) {
     overlays.push(`pin-m-bus+${BUS_COLOR}(${v.lon.toFixed(6)},${v.lat.toFixed(6)})`);
   }
 
+  // Compute explicit center/zoom so we can project bus positions for SVG arrows.
+  const allLats = [...slice.map((p) => p.lat), ...bunch.vehicles.map((v) => v.lat)];
+  const allLons = [...slice.map((p) => p.lon), ...bunch.vehicles.map((v) => v.lon)];
+  const bbox = {
+    minLat: Math.min(...allLats),
+    maxLat: Math.max(...allLats),
+    minLon: Math.min(...allLons),
+    maxLon: Math.max(...allLons),
+  };
+  const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+  const centerLon = (bbox.minLon + bbox.maxLon) / 2;
+  const rawZoom = fitZoom(bbox, WIDTH, HEIGHT, 60);
+  const zoom = Math.max(10, Math.min(17, Math.floor(rawZoom)));
+
   const token = process.env.MAPBOX_TOKEN;
   if (!token) throw new Error('MAPBOX_TOKEN missing');
 
-  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/auto/${WIDTH}x${HEIGHT}@2x?access_token=${token}&padding=30`;
+  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/${centerLon.toFixed(5)},${centerLat.toFixed(5)},${zoom.toFixed(2)}/${WIDTH}x${HEIGHT}@2x?access_token=${token}`;
 
   const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
 
-  // Bluesky image limit is 1MB; convert to JPEG to stay under it.
-  return sharp(data).jpeg({ quality: 85 }).toBuffer();
+  // Compute track bearing at each bus using the nearest route segment.
+  const slicePoints = slice.map((p) => ({ lat: p.lat, lon: p.lon }));
+  function busTrackBearing(v) {
+    let bestDist = Infinity;
+    let bestA = null;
+    let bestB = null;
+    for (let i = 0; i < slicePoints.length - 1; i++) {
+      const a = slicePoints[i];
+      const b = slicePoints[i + 1];
+      const dx = b.lon - a.lon;
+      const dy = b.lat - a.lat;
+      const lenSq = dx * dx + dy * dy;
+      let t = 0;
+      if (lenSq > 0) t = Math.max(0, Math.min(1, ((v.lon - a.lon) * dx + (v.lat - a.lat) * dy) / lenSq));
+      const proj = { lat: a.lat + t * dy, lon: a.lon + t * dx };
+      const d = haversineFt(v, proj);
+      if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
+    }
+    const fwd = bearing(bestA, bestB);
+    const rev = (fwd + 180) % 360;
+    const diffFwd = Math.abs(((v.heading - fwd + 540) % 360) - 180);
+    const diffRev = Math.abs(((v.heading - rev + 540) % 360) - 180);
+    return diffFwd <= diffRev ? fwd : rev;
+  }
+
+  // Single direction arrow for the route, placed above the leading bus.
+  const ARROWS = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
+  const BUS_PIN_BODY_OFFSET_Y = -20; // pin-m is smaller than pin-l
+  // Pick the leading bus (highest pdist) for arrow placement.
+  const leadBus = bunch.vehicles.reduce((a, b) => (b.pdist > a.pdist ? b : a), bunch.vehicles[0]);
+  const bearingDeg = busTrackBearing(leadBus);
+  const idx = Math.round(bearingDeg / 45) % 8;
+  const arrow = ARROWS[idx];
+  const { x: ax, y: ay } = project(leadBus.lat, leadBus.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
+  const arrowElements = [
+    `<text x="${ax}" y="${ay + BUS_PIN_BODY_OFFSET_Y - 30}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="bold" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${arrow}</text>`,
+  ];
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${arrowElements.join('\n')}</svg>`;
+
+  // Bluesky image limit is 1MB; composite arrows then convert to JPEG.
+  return sharp(data)
+    .resize(WIDTH, HEIGHT)
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .jpeg({ quality: 85 })
+    .toBuffer();
 }
 
 const SPEEDMAP_SEGMENT_STROKE = 8;
@@ -172,40 +231,105 @@ function xmlEscape(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function buildStationLabelsSvg(stationsWithPixels, widthPx, heightPx) {
+// Pin anchor offset: Mapbox pin-l tip is at the coordinate; the pin body
+// (colored circle) sits ~28px above the tip in the rendered 1200px image.
+const PIN_BODY_OFFSET_Y = -28;
+
+function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, widthPx, heightPx) {
   const fontSize = 18;
-  const elements = stationsWithPixels.map(({ station, x, y }) => {
+  const labelHeight = fontSize + 8;
+  const gap = 4; // minimum vertical gap between labels
+
+  // Compute initial label positions, then nudge overlapping ones apart.
+  const labels = stationsWithPixels.map(({ station, x, y }) => {
     const label = xmlEscape(station.name);
-    // Label centered below the pin with a background for legibility.
     const approxWidth = label.length * 10 + 16;
+    return { label, x, rectY: y + 18, approxWidth };
+  });
+
+  labels.sort((a, b) => a.rectY - b.rectY);
+  for (let i = 1; i < labels.length; i++) {
+    const prev = labels[i - 1];
+    const minY = prev.rectY + labelHeight + gap;
+    if (labels[i].rectY < minY) {
+      labels[i].rectY = minY;
+    }
+  }
+
+  // White ring halos around trains that are at a station.
+  const halos = atStationPixels.map(({ x, y }) => {
+    const cx = x;
+    const cy = y + PIN_BODY_OFFSET_Y;
+    return `<circle cx="${cx}" cy="${cy}" r="26" fill="none" stroke="#fff" stroke-width="3"/>`;
+  });
+
+  // Direction arrows above each train pin using Unicode arrows.
+  const ARROWS = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
+  const arrows = trainPixels.map(({ x, y, bearingDeg }) => {
+    const idx = Math.round(bearingDeg / 45) % 8;
+    const arrow = ARROWS[idx];
+    const cx = x;
+    const cy = y + PIN_BODY_OFFSET_Y - 36;
+    return `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="bold" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${arrow}</text>`;
+  });
+
+  const labelElements = labels.map(({ label, x, rectY, approxWidth }) => {
     const rectX = x - approxWidth / 2;
-    const rectY = y + 18;
     const textX = x;
     const textY = rectY + fontSize + 2;
     return `
-    <rect x="${rectX}" y="${rectY}" width="${approxWidth}" height="${fontSize + 8}" fill="#000" fill-opacity="0.8" rx="3"/>
+    <rect x="${rectX}" y="${rectY}" width="${approxWidth}" height="${labelHeight}" fill="#000" fill-opacity="0.8" rx="3"/>
     <text x="${textX}" y="${textY}" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600">${label}</text>`;
-  }).join('\n');
+  });
 
+  const elements = [...halos, ...arrows, ...labelElements].join('\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${elements}</svg>`;
 }
 
 async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
   const color = lineColors[bunch.line] || 'ffffff';
 
-  // Bunch center for station selection.
-  const bunchLat = bunch.trains.reduce((a, t) => a + t.lat, 0) / bunch.trains.length;
-  const bunchLon = bunch.trains.reduce((a, t) => a + t.lon, 0) / bunch.trains.length;
+  // Use along-track distance to pick stations that bracket the bunch —
+  // one ahead of the leading train and one behind the trailing train.
+  const { points: linePts, cumDist: lineCumDist } = buildLinePolyline(trainLines, bunch.line);
+  const trainTrackDists = bunch.trains.map((t) => snapToLine(t.lat, t.lon, linePts, lineCumDist));
+  const minTrainDist = Math.min(...trainTrackDists);
+  const maxTrainDist = Math.max(...trainTrackDists);
 
-  // Pick the N stations on the bunch's line closest to the bunch — filtering
-  // by line keeps us from labeling nearby stations that belong to other lines
-  // (e.g. Red's Washington vs Brown's Washington/Wells, a block apart downtown).
   const onLineStations = (stations || []).filter((s) => s.lines?.includes(bunch.line));
-  const nearestStations = onLineStations
-    .map((s) => ({ station: s, dist: haversineFt({ lat: bunchLat, lon: bunchLon }, s) }))
-    .sort((a, b) => a.dist - b.dist)
-    .slice(0, TRAIN_BUNCH_NEAREST_STATIONS)
-    .map((x) => x.station);
+  const stationsWithDist = onLineStations.map((s) => ({
+    station: s,
+    trackDist: snapToLine(s.lat, s.lon, linePts, lineCumDist),
+  }));
+
+  // Find the closest station behind the trailing train and ahead of the leading train.
+  const behind = stationsWithDist
+    .filter((s) => s.trackDist < minTrainDist)
+    .sort((a, b) => b.trackDist - a.trackDist);
+  const ahead = stationsWithDist
+    .filter((s) => s.trackDist > maxTrainDist)
+    .sort((a, b) => a.trackDist - b.trackDist);
+  const between = stationsWithDist
+    .filter((s) => s.trackDist >= minTrainDist && s.trackDist <= maxTrainDist)
+    .sort((a, b) => a.trackDist - b.trackDist);
+
+  const nearestStations = [];
+  if (behind.length > 0) nearestStations.push(behind[0].station);
+  if (between.length > 0) nearestStations.push(between[0].station);
+  if (ahead.length > 0) nearestStations.push(ahead[0].station);
+  // If we didn't get 3, fill from the closest by haversine as fallback.
+  if (nearestStations.length < 2) {
+    const bunchLat = bunch.trains.reduce((a, t) => a + t.lat, 0) / bunch.trains.length;
+    const bunchLon = bunch.trains.reduce((a, t) => a + t.lon, 0) / bunch.trains.length;
+    const already = new Set(nearestStations.map((s) => s.name));
+    const fallback = onLineStations
+      .filter((s) => !already.has(s.name))
+      .sort((a, b) => haversineFt({ lat: bunchLat, lon: bunchLon }, a) - haversineFt({ lat: bunchLat, lon: bunchLon }, b));
+    for (const s of fallback) {
+      if (nearestStations.length >= 2) break;
+      nearestStations.push(s);
+    }
+  }
 
   // Build bbox to include the bunched trains AND the chosen stations — that
   // way every pin and label we intend to render is inside the rendered viewport.
@@ -224,24 +348,40 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
   const rawZoom = fitZoom(bbox, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT, 120);
   const zoom = Math.max(10, Math.min(17, Math.floor(rawZoom)));
 
-  // Clip line polylines to the local area so the URL stays short and only the
-  // relevant track is highlighted.
+  // Clip line polylines to the local area. Instead of filtering individual
+  // points (which breaks the line at curves), find the index range of points
+  // near the trains and slice with a buffer to keep the track contiguous.
   const overlays = [];
   const lineSegments = trainLines?.[bunch.line] || [];
   for (const seg of lineSegments) {
-    const nearby = seg.filter(([lat, lon]) =>
-      bunch.trains.some((t) => haversineFt({ lat, lon }, t) < TRAIN_BUNCH_CONTEXT_FT)
-    );
-    if (nearby.length < 2) continue;
-    overlays.push(`path-4+${color}-0.7(${encodeURIComponent(encode(nearby))})`);
+    let minIdx = seg.length;
+    let maxIdx = -1;
+    for (let i = 0; i < seg.length; i++) {
+      const [lat, lon] = seg[i];
+      if (bunch.trains.some((t) => haversineFt({ lat, lon }, t) < TRAIN_BUNCH_CONTEXT_FT)) {
+        if (i < minIdx) minIdx = i;
+        if (i > maxIdx) maxIdx = i;
+      }
+    }
+    if (maxIdx < 0) continue;
+    // Pad the slice by a few points so the track extends smoothly past the trains.
+    const pad = 3;
+    const sliceStart = Math.max(0, minIdx - pad);
+    const sliceEnd = Math.min(seg.length, maxIdx + pad + 1);
+    const slice = seg.slice(sliceStart, sliceEnd);
+    if (slice.length < 2) continue;
+    overlays.push(`path-7+${color}-0.7(${encodeURIComponent(encode(slice))})`);
   }
-  // Skip station pins that sit on top of a train pin (train is at the station).
-  // The larger train pin would completely cover the station pin, leaving an
-  // orphaned label. The label still draws from projected coordinates below.
+  // Track which trains are at a station for the SVG halo layer.
+  const trainAtStation = new Set();
   for (const s of nearestStations) {
-    const coveredByTrain = bunch.trains.some((t) => haversineFt({ lat: s.lat, lon: s.lon }, t) < 200);
+    const coveredByTrain = bunch.trains.some((t) => haversineFt({ lat: s.lat, lon: s.lon }, t) < 500);
     if (!coveredByTrain) {
       overlays.push(`pin-s+ffffff(${s.lon.toFixed(5)},${s.lat.toFixed(5)})`);
+    } else {
+      bunch.trains.forEach((t) => {
+        if (haversineFt({ lat: s.lat, lon: s.lon }, t) < 500) trainAtStation.add(t.rn);
+      });
     }
   }
   for (const t of bunch.trains) {
@@ -254,12 +394,55 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
   const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/${centerLon.toFixed(5)},${centerLat.toFixed(5)},${zoom.toFixed(2)}/${SNAPSHOT_WIDTH}x${SNAPSHOT_HEIGHT}@2x?access_token=${token}`;
   const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
 
-  // Composite station name labels at their projected pixel positions.
+  // Compute track bearing at each train's position by snapping to the polyline.
+  const allSegPoints = lineSegments.flatMap((seg) =>
+    seg.map(([lat, lon]) => ({ lat, lon }))
+  );
+
+  // Find the nearest polyline segment to a point using perpendicular distance.
+  function nearestSegment(pt) {
+    let bestDist = Infinity;
+    let bestA = null;
+    let bestB = null;
+    for (let i = 0; i < allSegPoints.length - 1; i++) {
+      const a = allSegPoints[i];
+      const b = allSegPoints[i + 1];
+      // Project pt onto segment a–b (in lat/lon space, fine for short segments).
+      const dx = b.lon - a.lon;
+      const dy = b.lat - a.lat;
+      const lenSq = dx * dx + dy * dy;
+      let t = 0;
+      if (lenSq > 0) t = Math.max(0, Math.min(1, ((pt.lon - a.lon) * dx + (pt.lat - a.lat) * dy) / lenSq));
+      const proj = { lat: a.lat + t * dy, lon: a.lon + t * dx };
+      const d = haversineFt(pt, proj);
+      if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
+    }
+    return { from: bestA, to: bestB };
+  }
+
+  function trackBearingAt(train) {
+    const { from, to } = nearestSegment(train);
+    const fwd = bearing(from, to);
+    // If the train heading is closer to the reverse direction, flip it.
+    const rev = (fwd + 180) % 360;
+    const diffFwd = Math.abs(((train.heading - fwd + 540) % 360) - 180);
+    const diffRev = Math.abs(((train.heading - rev + 540) % 360) - 180);
+    return diffFwd <= diffRev ? fwd : rev;
+  }
+
+  // Composite station name labels, at-station halos, and direction arrows.
   const stationsWithPixels = nearestStations.map((station) => ({
     station,
     ...project(station.lat, station.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT),
   }));
-  const svg = buildStationLabelsSvg(stationsWithPixels, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT);
+  const atStationPixels = bunch.trains
+    .filter((t) => trainAtStation.has(t.rn))
+    .map((t) => project(t.lat, t.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT));
+  const trainPixels = bunch.trains.map((t) => ({
+    ...project(t.lat, t.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT),
+    bearingDeg: trackBearingAt(t),
+  }));
+  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT);
 
   return sharp(data)
     .resize(SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)

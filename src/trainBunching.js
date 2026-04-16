@@ -1,4 +1,5 @@
 const { haversineFt } = require('./geo');
+const { buildLinePolyline, snapToLine } = require('./trainSpeedmap');
 
 const TRAIN_BUNCHING_FT = 2000; // ~0.38 mi, tighter than normal rush-hour headway
 const MIN_DISTANCE_FT = 200;    // ignore pairs closer than this — likely same station or API glitch
@@ -7,15 +8,13 @@ const MIN_DISTANCE_FT = 200;    // ignore pairs closer than this — likely same
  * Detect the tightest bunched pair of trains on the same line heading the same
  * direction (same `trDr`).
  *
- * Unlike buses, trains don't report a pdist-style distance along the route, so we
- * use straight-line haversine distance. This works because L lines mostly don't
- * branch — the only real branching line is Green, and its branches are far enough
- * apart (Ashland Ave vs. Cottage Grove) that cross-branch false positives aren't
- * realistic for the typical threshold.
+ * Uses along-track distance by snapping each train onto the line's polyline.
+ * This avoids false positives where two trains are geographically close but far
+ * apart along the route (e.g. opposite sides of the Loop).
  *
  * Returns null if no bunch is detected.
  */
-function detectTrainBunching(trains) {
+function detectTrainBunching(trains, trainLines) {
   const groups = new Map();
   for (const t of trains) {
     if (!t.trDr) continue;
@@ -24,19 +23,37 @@ function detectTrainBunching(trains) {
     groups.get(key).push(t);
   }
 
+  // Cache polyline data per line so we don't rebuild it for every pair.
+  const lineCache = new Map();
+  function getLine(line) {
+    if (!lineCache.has(line)) {
+      lineCache.set(line, buildLinePolyline(trainLines, line));
+    }
+    return lineCache.get(line);
+  }
+
   let best = null;
   for (const [key, group] of groups) {
     if (group.length < 2) continue;
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        const dist = haversineFt(group[i], group[j]);
+    const [line, trDr] = key.split('_');
+    const { points, cumDist } = getLine(line);
+    if (points.length < 2) continue;
+
+    // Snap each train onto the polyline once, then compare along-track distances.
+    const snapped = group.map((t) => ({
+      train: t,
+      trackDist: snapToLine(t.lat, t.lon, points, cumDist),
+    }));
+
+    for (let i = 0; i < snapped.length; i++) {
+      for (let j = i + 1; j < snapped.length; j++) {
+        const dist = Math.abs(snapped[i].trackDist - snapped[j].trackDist);
         if (dist < MIN_DISTANCE_FT || dist > TRAIN_BUNCHING_FT) continue;
         if (!best || dist < best.distanceFt) {
-          const [line, trDr] = key.split('_');
           best = {
             line,
             trDr,
-            trains: [group[i], group[j]],
+            trains: [snapped[i].train, snapped[j].train],
             distanceFt: dist,
           };
         }

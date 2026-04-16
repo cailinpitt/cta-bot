@@ -77,14 +77,61 @@ function parseCsv(text) {
   return rows;
 }
 
-// Decimate to approximately targetCount points. Keeps first and last.
+// Perpendicular distance from point p to the line segment a–b, in degrees.
+// Good enough for comparing relative distances within a small geographic area.
+function perpendicularDist(p, a, b) {
+  const dx = b.lon - a.lon;
+  const dy = b.lat - a.lat;
+  if (dx === 0 && dy === 0) {
+    return Math.sqrt((p.lon - a.lon) ** 2 + (p.lat - a.lat) ** 2);
+  }
+  const t = Math.max(0, Math.min(1, ((p.lon - a.lon) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy)));
+  const projLon = a.lon + t * dx;
+  const projLat = a.lat + t * dy;
+  return Math.sqrt((p.lon - projLon) ** 2 + (p.lat - projLat) ** 2);
+}
+
+// Ramer-Douglas-Peucker simplification. Preserves points where the shape
+// changes direction (e.g. Loop corners) while reducing straight segments.
+function rdpSimplify(points, epsilon) {
+  if (points.length <= 2) return points;
+  let maxDist = 0;
+  let maxIdx = 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = perpendicularDist(points[i], first, last);
+    if (d > maxDist) {
+      maxDist = d;
+      maxIdx = i;
+    }
+  }
+  if (maxDist > epsilon) {
+    const left = rdpSimplify(points.slice(0, maxIdx + 1), epsilon);
+    const right = rdpSimplify(points.slice(maxIdx), epsilon);
+    return left.slice(0, -1).concat(right);
+  }
+  return [first, last];
+}
+
+// Simplify a polyline to approximately targetCount points using RDP.
+// Binary-searches for the right epsilon to hit near the target count.
 function decimateTo(points, targetCount) {
   if (points.length <= targetCount) return points;
-  const step = Math.ceil(points.length / targetCount);
-  const out = [];
-  for (let i = 0; i < points.length; i += step) out.push(points[i]);
-  if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
-  return out;
+  let lo = 0;
+  let hi = 0.01; // degrees — wide enough for any CTA line
+  let best = points;
+  for (let iter = 0; iter < 30; iter++) {
+    const mid = (lo + hi) / 2;
+    const result = rdpSimplify(points, mid);
+    best = result;
+    if (result.length > targetCount) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return best;
 }
 
 async function main() {
