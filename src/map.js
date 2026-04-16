@@ -12,9 +12,9 @@ const HEIGHT = 1200;
 
 // Two-tone route line: dark halo + bright core makes the route pop against the basemap.
 const ROUTE_HALO_COLOR = '000';
-const ROUTE_HALO_STROKE = 9;
+const ROUTE_HALO_STROKE = 14;
 const ROUTE_CORE_COLOR = '00d8ff';
-const ROUTE_CORE_STROKE = 4;
+const ROUTE_CORE_STROKE = 8;
 
 const BUS_COLOR = 'ff2a6d';         // hot pink/red reads well on dark
 const CONTEXT_PAD_FT = 1500;        // feet of route context on each side of the bunch
