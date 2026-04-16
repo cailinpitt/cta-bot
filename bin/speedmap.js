@@ -24,11 +24,20 @@ function formatTimeCT(date) {
 }
 
 function buildPostText(route, pattern, summary, startTime, endTime) {
-  const name = `${route} ${routeNames[route] || ''}`.trim();
+  const displayName = routeNames[route];
+  const title = displayName ? `Route ${route} (${displayName})` : `Route ${route}`;
   const dir = pattern.direction;
-  const avg = summary.avg == null ? 'n/a' : `${summary.avg.toFixed(1)} mph`;
+  const avg = summary.avg == null ? 'unavailable' : `${summary.avg.toFixed(1)} mph`;
   const window = `${formatTimeCT(startTime)}–${formatTimeCT(endTime)} CT`;
-  return `🚦 ${name} — ${dir} speedmap\n${window} · avg ${avg}\n\n🟥 <5  🟧 <10  🟨 <15  🟩 15+ mph`;
+  return (
+    `🚦 ${title} — ${dir}\n` +
+    `${window} · average speed ${avg}\n\n` +
+    `Each colored segment of the route shows how fast buses were moving there:\n` +
+    `🟥 under 5 mph — stopped or crawling\n` +
+    `🟧 5–10 mph — slow\n` +
+    `🟨 10–15 mph — moderate\n` +
+    `🟩 15+ mph — moving well`
+  );
 }
 
 function buildAltText(route, pattern, summary) {
