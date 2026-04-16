@@ -10,6 +10,17 @@ const STYLE = 'mapbox/dark-v11';
 const WIDTH = 1200;
 const HEIGHT = 1200;
 
+// Direction-of-travel arrow rendered as an SVG path (not a Unicode glyph) so
+// the result is identical across hosts. librsvg's font fallback differs
+// between macOS (Helvetica) and Ubuntu (DejaVu), which warped the arrow shape.
+// Path is an upward arrow centered at the origin; rotate to point any direction.
+const ARROW_PATH_D = 'M 0,-70 L 40,-20 L 15,-20 L 15,70 L -15,70 L -15,-20 L -40,-20 Z';
+
+function buildDirectionArrow(cx, cy, bearingDeg) {
+  const rotation = Math.round(bearingDeg / 45) * 45;
+  return `<path d="${ARROW_PATH_D}" fill="#fff" stroke="#000" stroke-width="10" stroke-linejoin="round" paint-order="stroke" transform="translate(${cx} ${cy}) rotate(${rotation})"/>`;
+}
+
 // Two-tone route line: dark halo + bright core makes the route pop against the basemap.
 const ROUTE_HALO_COLOR = '000';
 const ROUTE_HALO_STROKE = 14;
@@ -137,17 +148,9 @@ async function renderBunchingMap(bunch, pattern) {
 
   // Big direction-of-travel arrow anchored in the top-right corner so it reads
   // as a route-wide indicator rather than being tied to a specific bus.
-  const ARROWS = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
   const leadBus = bunch.vehicles.reduce((a, b) => (b.pdist > a.pdist ? b : a), bunch.vehicles[0]);
   const bearingDeg = busTrackBearing(leadBus);
-  const idx = Math.round(bearingDeg / 45) % 8;
-  const arrow = ARROWS[idx];
-  const ARROW_FONT_SIZE = 200;
-  const ARROW_CX = WIDTH - 220;
-  const ARROW_CY = 180;
-  const arrowElements = [
-    `<text x="${ARROW_CX}" y="${ARROW_CY}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${ARROW_FONT_SIZE}" font-weight="bold" fill="#fff" stroke="#000" stroke-width="10" paint-order="stroke">${arrow}</text>`,
-  ];
+  const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, bearingDeg)];
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
 
@@ -337,14 +340,9 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
 
   // One big direction-of-travel arrow in the top-right corner, matching the
   // bus bunching map style. Both trains share trDr so any bearing works.
-  const ARROWS = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
   const arrows = [];
   if (trainPixels.length > 0) {
-    const idx = Math.round(trainPixels[0].bearingDeg / 45) % 8;
-    const arrow = ARROWS[idx];
-    const ax = widthPx - 220;
-    const ay = 180;
-    arrows.push(`<text x="${ax}" y="${ay}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="200" font-weight="bold" fill="#fff" stroke="#000" stroke-width="10" paint-order="stroke">${arrow}</text>`);
+    arrows.push(buildDirectionArrow(widthPx - 220, 180, trainPixels[0].bearingDeg));
   }
 
   const labelElements = labels.map(({ label, x, rectY, approxWidth }) => {
