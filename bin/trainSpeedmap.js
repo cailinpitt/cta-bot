@@ -74,9 +74,7 @@ function buildAltText(line, dirSummaries, durationMin) {
 
 async function main() {
   pruneOldAssets();
-  // Yellow line is very short with few trains — exclude by default.
-  const eligibleLines = ALL_LINES.filter((l) => l !== 'y');
-  const line = argv.line || _.sample(eligibleLines);
+  const line = argv.line || _.sample(ALL_LINES);
   const durationMin = argv.duration ? Number(argv.duration) : DEFAULT_DURATION_MIN;
   const durationMs = durationMin * 60 * 1000;
 
@@ -131,6 +129,14 @@ async function main() {
     }
   }
   const finalDirs = Array.from(dedupedByDest.values());
+
+  // If no direction has a valid average speed, the line wasn't running during
+  // the window (common for the non-24/7 lines — Yellow, Purple express, etc.,
+  // overnight gaps). Skip rather than posting an empty speedmap.
+  if (finalDirs.every((d) => d.summary.avg == null)) {
+    console.log(`No train samples for ${LINE_NAMES[line]} Line during the window — not posting`);
+    return;
+  }
 
   const lineColor = LINE_COLORS[line];
   const image = await renderTrainSpeedmap(branchData, lineColor);

@@ -55,15 +55,26 @@ function formatMinSec(totalSec) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+function elapsedMinutesLabel(totalSec) {
+  const m = Math.max(1, Math.round(totalSec / 60));
+  return m === 1 ? '1 minute' : `${m} minutes`;
+}
+
 function buildVideoPostText(result) {
-  const elapsed = formatMinSec(result.elapsedSec);
-  const lines = [`⏱️ Timelapse of the above — ${elapsed} of real time`];
+  const elapsed = elapsedMinutesLabel(result.elapsedSec);
+  let headline;
   if (result.finalSpanFt != null) {
     const delta = result.finalSpanFt - result.initialSpanFt;
-    const trend = delta > 50 ? 'pulling apart' : delta < -50 ? 'tightening' : 'holding';
-    lines.push(`Spread: ${formatDistance(result.initialSpanFt)} → ${formatDistance(result.finalSpanFt)} (${trend})`);
+    if (delta > 50) {
+      headline = `${elapsed} later, the buses were ${formatDistance(delta)} farther apart.`;
+    } else if (delta < -50) {
+      headline = `${elapsed} later, the gap had closed by ${formatDistance(-delta)}.`;
+    } else {
+      headline = `Still bunched ${elapsed} later.`;
+    }
+    return `${headline}\n🎬 ${formatDistance(result.initialSpanFt)} → ${formatDistance(result.finalSpanFt)}`;
   }
-  return lines.join('\n');
+  return `Timelapse of the above — ${elapsed} of real time.`;
 }
 
 function buildVideoAltText(bunch, pattern, stop, result) {

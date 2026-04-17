@@ -430,7 +430,7 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${elements}</svg>`;
 }
 
-async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
+function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extraTrains = []) {
   const color = lineColors[bunch.line] || 'ffffff';
 
   // Use along-track distance to pick stations that bracket the bunch —
@@ -477,8 +477,10 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
 
   // Build bbox to include the bunched trains AND the chosen stations — that
   // way every pin and label we intend to render is inside the rendered viewport.
-  const allLats = [...bunch.trains.map((t) => t.lat), ...nearestStations.map((s) => s.lat)];
-  const allLons = [...bunch.trains.map((t) => t.lon), ...nearestStations.map((s) => s.lon)];
+  // Video captures pass extraTrains so later frames stay in-frame too.
+  const framingTrains = [...bunch.trains, ...extraTrains];
+  const allLats = [...framingTrains.map((t) => t.lat), ...nearestStations.map((s) => s.lat)];
+  const allLons = [...framingTrains.map((t) => t.lon), ...nearestStations.map((s) => s.lon)];
   const bbox = {
     minLat: Math.min(...allLats) - TRAIN_BUNCH_BBOX_PADDING_DEG,
     maxLat: Math.max(...allLats) + TRAIN_BUNCH_BBOX_PADDING_DEG,
@@ -488,11 +490,14 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
   const centerLat = (bbox.minLat + bbox.maxLat) / 2;
   const centerLon = (bbox.minLon + bbox.maxLon) / 2;
   // Use integer zoom. Mapbox may round or snap fractional zooms during render,
-  // which would decouple our projection math from the actual image. Ceil (not
-  // floor) so we zoom in tighter around the bunch — otherwise far-off stations
-  // get pulled in and the label stack gets cluttered.
+  // which would decouple our projection math from the actual image. For a
+  // still image we ceil so the frame sits tighter around the bunch (avoids
+  // pulling in far-off stations and cluttering labels). For a video capture
+  // (extraTrains non-empty) we floor instead — the bbox already covers every
+  // sampled position, so ceil would clip trains at the edges as they travel.
   const rawZoom = fitZoom(bbox, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT, 60);
-  const zoom = Math.max(10, Math.min(17, Math.ceil(rawZoom)));
+  const round = extraTrains.length > 0 ? Math.floor : Math.ceil;
+  const zoom = Math.max(10, Math.min(17, round(rawZoom)));
 
   // Draw the full line segments so the route runs off the edges of the frame
   // instead of terminating just beyond the trains. The bbox/zoom above still
@@ -504,51 +509,25 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
     overlays.push(`path-7+${color}-0.7(${encodeURIComponent(encode(seg))})`);
   }
 
-  // Include every on-line station whose pixel position lands inside the image,
-  // rather than just the stations bracketing the bunch. The bracket list above
-  // still drives the bbox, so framing is unchanged. For stations where a
-  // bunched train is sitting, record that train's projected y so the label
-  // layer can anchor the label below the *train marker*, not the station —
-  // the two can be a few hundred feet apart when the train hasn't quite
-  // reached the platform centroid, and the station-anchored label ends up
-  // overlapping the train pin.
+  // Include every on-line station whose pixel position lands inside the image.
+  // Draw a pin-s for every visible station in the base map; the large train
+  // markers are drawn via SVG composite per frame and cover the pin where a
+  // train is at the station. For video captures this keeps the base map valid
+  // across all frames even as trains enter/leave stations.
   const visibleStations = onLineStations
     .map((s) => {
       const pixels = project(s.lat, s.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT);
-      const nearbyTrain = bunch.trains.find((t) => haversineFt({ lat: s.lat, lon: s.lon }, t) < 500);
-      const trainY = nearbyTrain
-        ? project(nearbyTrain.lat, nearbyTrain.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT).y
-        : null;
-      return { station: s, ...pixels, hasTrain: !!nearbyTrain, trainY };
+      return { station: s, ...pixels };
     })
     .filter(({ x, y }) => x >= 0 && x <= SNAPSHOT_WIDTH && y >= 0 && y <= SNAPSHOT_HEIGHT);
 
-  // Track which trains are at a station for the SVG halo layer.
-  const trainAtStation = new Set();
-  for (const { station: s, hasTrain } of visibleStations) {
-    if (!hasTrain) {
-      overlays.push(`pin-s+ffffff(${s.lon.toFixed(5)},${s.lat.toFixed(5)})`);
-    } else {
-      bunch.trains.forEach((t) => {
-        if (haversineFt({ lat: s.lat, lon: s.lon }, t) < 500) trainAtStation.add(t.rn);
-      });
-    }
+  for (const { station: s } of visibleStations) {
+    overlays.push(`pin-s+ffffff(${s.lon.toFixed(5)},${s.lat.toFixed(5)})`);
   }
-  // Train markers are drawn via SVG composite (see buildTrainOverlaySvg) so
-  // they can be sized larger than Mapbox's pin-l.
 
-  const token = process.env.MAPBOX_TOKEN;
-  if (!token) throw new Error('MAPBOX_TOKEN missing');
-
-  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/${centerLon.toFixed(5)},${centerLat.toFixed(5)},${zoom.toFixed(2)}/${SNAPSHOT_WIDTH}x${SNAPSHOT_HEIGHT}@2x?access_token=${token}`;
-  const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
-
-  // Compute track bearing at each train's position by snapping to the polyline.
-  const allSegPoints = lineSegments.flatMap((seg) =>
-    seg.map(([lat, lon]) => ({ lat, lon }))
-  );
-
-  // Find the nearest polyline segment to a point using perpendicular distance.
+  // Compute the route-wide direction arrow once from the initial bunch, using
+  // the full line polyline. All frames in a video share this arrow.
+  const allSegPoints = lineSegments.flatMap((seg) => seg.map(([lat, lon]) => ({ lat, lon })));
   function nearestSegment(pt) {
     let bestDist = Infinity;
     let bestA = null;
@@ -556,7 +535,6 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
     for (let i = 0; i < allSegPoints.length - 1; i++) {
       const a = allSegPoints[i];
       const b = allSegPoints[i + 1];
-      // Project pt onto segment a–b (in lat/lon space, fine for short segments).
       const dx = b.lon - a.lon;
       const dy = b.lat - a.lat;
       const lenSq = dx * dx + dy * dy;
@@ -568,33 +546,68 @@ async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
     }
     return { from: bestA, to: bestB };
   }
-
-  function trackBearingAt(train) {
-    const { from, to } = nearestSegment(train);
+  const leadTrain = bunch.trains[0];
+  let bearingDeg = leadTrain.heading;
+  if (allSegPoints.length >= 2) {
+    const { from, to } = nearestSegment(leadTrain);
     const fwd = bearing(from, to);
-    // If the train heading is closer to the reverse direction, flip it.
     const rev = (fwd + 180) % 360;
-    const diffFwd = Math.abs(((train.heading - fwd + 540) % 360) - 180);
-    const diffRev = Math.abs(((train.heading - rev + 540) % 360) - 180);
-    return diffFwd <= diffRev ? fwd : rev;
+    const diffFwd = Math.abs(((leadTrain.heading - fwd + 540) % 360) - 180);
+    const diffRev = Math.abs(((leadTrain.heading - rev + 540) % 360) - 180);
+    bearingDeg = diffFwd <= diffRev ? fwd : rev;
   }
 
-  // Composite station name labels, at-station halos, and direction arrows.
-  const stationsWithPixels = visibleStations;
-  const atStationPixels = bunch.trains
-    .filter((t) => trainAtStation.has(t.rn))
-    .map((t) => project(t.lat, t.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT));
-  const trainPixels = bunch.trains.map((t) => ({
-    ...project(t.lat, t.lon, centerLat, centerLon, zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT),
-    bearingDeg: trackBearingAt(t),
-  }));
-  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, color, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT);
+  return {
+    color,
+    overlays,
+    centerLat,
+    centerLon,
+    zoom,
+    visibleStations,
+    bearingDeg,
+  };
+}
 
-  return sharp(data)
+async function fetchTrainBunchingBaseMap(view) {
+  const token = process.env.MAPBOX_TOKEN;
+  if (!token) throw new Error('MAPBOX_TOKEN missing');
+  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${view.overlays.join(',')}/${view.centerLon.toFixed(5)},${view.centerLat.toFixed(5)},${view.zoom.toFixed(2)}/${SNAPSHOT_WIDTH}x${SNAPSHOT_HEIGHT}@2x?access_token=${token}`;
+  const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+  return data;
+}
+
+async function renderTrainBunchingFrame(view, baseMap, trains) {
+  const trainPixels = trains.map((t) => ({
+    ...project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT),
+    bearingDeg: view.bearingDeg,
+  }));
+
+  // Determine which trains are at a station this frame (for the white halo).
+  // Also anchor each visible station's label below the train marker if a train
+  // is sitting at it — otherwise pin the label to the station pixel.
+  const stationsWithPixels = view.visibleStations.map(({ station, x, y }) => {
+    const nearbyTrain = trains.find((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < 500);
+    const trainY = nearbyTrain
+      ? project(nearbyTrain.lat, nearbyTrain.lon, view.centerLat, view.centerLon, view.zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT).y
+      : null;
+    return { station, x, y, hasTrain: !!nearbyTrain, trainY };
+  });
+  const atStationPixels = trains
+    .filter((t) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < 500))
+    .map((t) => project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT));
+
+  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, view.color, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT);
+  return sharp(baseMap)
     .resize(SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
     .jpeg({ quality: 85 })
     .toBuffer();
+}
+
+async function renderTrainBunching(bunch, lineColors, trainLines, stations) {
+  const view = computeTrainBunchingView(bunch, lineColors, trainLines, stations);
+  const baseMap = await fetchTrainBunchingBaseMap(view);
+  return renderTrainBunchingFrame(view, baseMap, bunch.trains);
 }
 
 /**
@@ -698,5 +711,8 @@ module.exports = {
   renderSpeedmap,
   renderSnapshot,
   renderTrainBunching,
+  computeTrainBunchingView,
+  fetchTrainBunchingBaseMap,
+  renderTrainBunchingFrame,
   renderTrainSpeedmap,
 };

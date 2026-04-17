@@ -8,7 +8,8 @@ const argv = require('minimist')(process.argv.slice(2));
 const { getAllTrainPositions, LINE_COLORS, LINE_NAMES } = require('../src/trainApi');
 const { detectTrainBunching } = require('../src/trainBunching');
 const { renderTrainBunching } = require('../src/map');
-const { loginTrain, postWithImage } = require('../src/bluesky');
+const { captureTrainBunchingVideo } = require('../src/trainBunchingVideo');
+const { loginTrain, postWithImage, postWithVideo } = require('../src/bluesky');
 const { isOnCooldown, markPosted } = require('../src/state');
 const { pruneOldAssets } = require('../src/cleanup');
 const trainLines = require('../src/data/trainLines.json');
@@ -31,6 +32,41 @@ function buildAltText(bunch) {
   const dest = bunch.trains[0].destination;
   const station = bunch.trains[0].nextStation;
   return `Map of the ${lineName} Line near ${station} showing 2 trains to ${dest} within ${formatDistance(bunch.distanceFt)} of each other.`;
+}
+
+function formatMinSec(totalSec) {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function elapsedMinutesLabel(totalSec) {
+  const m = Math.max(1, Math.round(totalSec / 60));
+  return m === 1 ? '1 minute' : `${m} minutes`;
+}
+
+function buildVideoPostText(result) {
+  const elapsed = elapsedMinutesLabel(result.elapsedSec);
+  let headline;
+  if (result.finalDistFt != null) {
+    const delta = result.finalDistFt - result.initialDistFt;
+    if (delta > 50) {
+      headline = `${elapsed} later, the trains were ${formatDistance(delta)} farther apart.`;
+    } else if (delta < -50) {
+      headline = `${elapsed} later, the gap had closed by ${formatDistance(-delta)}.`;
+    } else {
+      headline = `Still bunched ${elapsed} later.`;
+    }
+    return `${headline}\n🎬 ${formatDistance(result.initialDistFt)} → ${formatDistance(result.finalDistFt)}`;
+  }
+  return `Timelapse of the above — ${elapsed} of real time.`;
+}
+
+function buildVideoAltText(bunch, result) {
+  const lineName = LINE_NAMES[bunch.line];
+  const dest = bunch.trains[0].destination;
+  const station = bunch.trains[0].nextStation;
+  return `Timelapse map of the ${lineName} Line near ${station} showing 2 trains to ${dest} moving over ${formatMinSec(result.elapsedSec)}.`;
 }
 
 async function main() {
@@ -68,13 +104,48 @@ async function main() {
     Fs.ensureDirSync(Path.dirname(outPath));
     Fs.writeFileSync(outPath, image);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
+    if (argv.video) {
+      const ticks = argv.ticks ? parseInt(argv.ticks, 10) : undefined;
+      const tickMs = argv['tick-ms'] ? parseInt(argv['tick-ms'], 10) : undefined;
+      const interpolate = argv.interpolate ? parseInt(argv.interpolate, 10) : undefined;
+      console.log(`\nCapturing video (ticks=${ticks || 'default'}, tickMs=${tickMs || 'default'}, interpolate=${interpolate || 'default'})...`);
+      const result = await captureTrainBunchingVideo(bunch, LINE_COLORS, trainLines, trainStations, { ticks, tickMs, interpolate });
+      if (!result) {
+        console.log('Video capture produced <2 frames, skipped');
+      } else {
+        const videoPath = Path.join(__dirname, '..', 'assets', `train-bunching-${bunch.line}-${Date.now()}.mp4`);
+        Fs.writeFileSync(videoPath, result.buffer);
+        console.log(`Video: ${videoPath}`);
+        console.log(`  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, gap ${result.initialDistFt}ft → ${result.finalDistFt ?? '?'}ft`);
+      }
+    }
     return;
   }
 
   const agent = await loginTrain();
-  const url = await postWithImage(agent, text, image, alt);
+  const primary = await postWithImage(agent, text, image, alt);
   markPosted(cooldownKey);
-  console.log(`Posted: ${url}`);
+  console.log(`Posted: ${primary.url}`);
+
+  // Capture a timelapse and reply to the primary post. Failures are non-fatal.
+  try {
+    console.log('Capturing train bunching timelapse...');
+    const video = await captureTrainBunchingVideo(bunch, LINE_COLORS, trainLines, trainStations);
+    if (!video) {
+      console.log('Timelapse capture produced <2 frames, skipping reply');
+      return;
+    }
+    const videoText = buildVideoPostText(video);
+    const videoAlt = buildVideoAltText(bunch, video);
+    const replyRef = {
+      root: { uri: primary.uri, cid: primary.cid },
+      parent: { uri: primary.uri, cid: primary.cid },
+    };
+    const reply = await postWithVideo(agent, videoText, video.buffer, videoAlt, replyRef);
+    console.log(`Timelapse reply: ${reply.url}`);
+  } catch (e) {
+    console.warn(`Timelapse reply failed: ${e.message}`);
+  }
 }
 
 main().catch((e) => {
