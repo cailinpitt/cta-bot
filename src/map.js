@@ -2,7 +2,7 @@ const axios = require('axios');
 const sharp = require('sharp');
 const { encode } = require('./polyline');
 const { cumulativeDistances, haversineFt, bearing } = require('./geo');
-const { buildLinePolyline, snapToLine } = require('./trainSpeedmap');
+const { buildLinePolyline, snapToLine, offsetPolyline } = require('./trainSpeedmap');
 const { colorForBusSpeed, colorForTrainSpeed } = require('./speedmap');
 const { fitZoom, project } = require('./projection');
 
@@ -238,7 +238,75 @@ async function renderSpeedmap(pattern, binSpeeds) {
 const SNAPSHOT_WIDTH = 1200;
 const SNAPSHOT_HEIGHT = 1200;
 
-async function renderSnapshot(trains, lineColors, trainLines = null, stations = null) {
+// Chicago Loop elevated tracks bbox (Lake/Van Buren/Wells/Wabash) with a few
+// blocks of padding so surrounding stations fit.
+const LOOP_BBOX = {
+  minLat: 41.874,
+  maxLat: 41.891,
+  minLon: -87.638,
+  maxLon: -87.622,
+};
+const LOOP_INSET_SIZE = 400;
+const LOOP_INSET_MARGIN = 20;
+
+async function renderLoopInset(trains, lineColors, trainLines) {
+  const inBbox = (lat, lon) =>
+    lat >= LOOP_BBOX.minLat && lat <= LOOP_BBOX.maxLat &&
+    lon >= LOOP_BBOX.minLon && lon <= LOOP_BBOX.maxLon;
+  const loopTrains = trains.filter((t) => inBbox(t.lat, t.lon));
+
+  const overlays = [];
+  if (trainLines) {
+    // Brown/Green/Orange/Purple/Pink share the Loop elevated rectangle on the
+    // exact same tracks. Drawn at equal width, the last one wins and the others
+    // vanish. Stack them widest-first so each appears as a concentric band on
+    // the shared segment. Non-sharing lines (blue/red/yellow) stay thin.
+    const RING_ORDER = ['brn', 'g', 'org', 'p', 'pink']; // drawn in this sequence, widest to narrowest
+    const ringIdx = Object.fromEntries(RING_ORDER.map((l, i) => [l, i]));
+    const entries = Object.entries(trainLines)
+      .sort(([a], [b]) => (ringIdx[a] ?? -1) - (ringIdx[b] ?? -1));
+    for (const [line, segments] of entries) {
+      const color = lineColors[line] || 'ffffff';
+      const width = line in ringIdx
+        ? 4 + (RING_ORDER.length - 1 - ringIdx[line]) * 2 // 12, 10, 8, 6, 4
+        : 4;
+      for (const points of segments) {
+        if (!points || points.length < 2) continue;
+        overlays.push(`path-${width}+${color}-0.85(${encodeURIComponent(encode(points))})`);
+      }
+    }
+  }
+  for (const t of loopTrains) {
+    const color = lineColors[t.line] || 'ffffff';
+    overlays.push(`pin-s+${color}(${t.lon.toFixed(4)},${t.lat.toFixed(4)})`);
+  }
+
+  const centerLat = (LOOP_BBOX.minLat + LOOP_BBOX.maxLat) / 2;
+  const centerLon = (LOOP_BBOX.minLon + LOOP_BBOX.maxLon) / 2;
+  const rawZoom = fitZoom(LOOP_BBOX, LOOP_INSET_SIZE, LOOP_INSET_SIZE, 20);
+  const zoom = Math.max(13, Math.min(17, Math.floor(rawZoom)));
+
+  const token = process.env.MAPBOX_TOKEN;
+  if (!token) throw new Error('MAPBOX_TOKEN missing');
+
+  const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/${centerLon.toFixed(5)},${centerLat.toFixed(5)},${zoom.toFixed(2)}/${LOOP_INSET_SIZE}x${LOOP_INSET_SIZE}@2x?access_token=${token}`;
+  const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+
+  // Border around the inset + "The Loop" label so it reads as a separate view.
+  const frameSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${LOOP_INSET_SIZE}" height="${LOOP_INSET_SIZE}">
+    <rect x="2" y="2" width="${LOOP_INSET_SIZE - 4}" height="${LOOP_INSET_SIZE - 4}" fill="none" stroke="#fff" stroke-width="4"/>
+    <rect x="10" y="10" width="104" height="32" fill="#000" fill-opacity="0.8" rx="3"/>
+    <text x="62" y="32" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="600">The Loop</text>
+  </svg>`;
+
+  return sharp(data)
+    .resize(LOOP_INSET_SIZE, LOOP_INSET_SIZE)
+    .composite([{ input: Buffer.from(frameSvg), top: 0, left: 0 }])
+    .png()
+    .toBuffer();
+}
+
+async function renderSnapshot(trains, lineColors, trainLines = null) {
   const overlays = [];
 
   // Subtle line polylines drawn first so they appear under everything else.
@@ -253,14 +321,9 @@ async function renderSnapshot(trains, lineColors, trainLines = null, stations = 
     }
   }
 
-  // Small white station markers between lines and trains for subtle network context.
-  if (stations) {
-    for (const s of stations) {
-      overlays.push(`pin-s+ffffff(${s.lon.toFixed(4)},${s.lat.toFixed(4)})`);
-    }
-  }
-
-  // Colored pin per train, on top of stations so they're the focal point.
+  // Colored pin per train. Stations are intentionally omitted from the main
+  // overlays — at system scale they blow the Mapbox URL limit. The inset below
+  // shows stations zoomed in on the Loop where density matters.
   for (const t of trains) {
     const color = lineColors[t.line] || 'ffffff';
     overlays.push(`pin-s+${color}(${t.lon.toFixed(4)},${t.lat.toFixed(4)})`);
@@ -271,7 +334,22 @@ async function renderSnapshot(trains, lineColors, trainLines = null, stations = 
 
   const url = `https://api.mapbox.com/styles/v1/${STYLE}/static/${overlays.join(',')}/auto/${SNAPSHOT_WIDTH}x${SNAPSHOT_HEIGHT}@2x?access_token=${token}&padding=60`;
   const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
-  return sharp(data).jpeg({ quality: 85 }).toBuffer();
+
+  const composites = [];
+  if (trainLines) {
+    const insetBuf = await renderLoopInset(trains, lineColors, trainLines);
+    composites.push({
+      input: insetBuf,
+      top: SNAPSHOT_HEIGHT - LOOP_INSET_SIZE - LOOP_INSET_MARGIN,
+      left: LOOP_INSET_MARGIN,
+    });
+  }
+
+  return sharp(data)
+    .resize(SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
+    .composite(composites)
+    .jpeg({ quality: 85 })
+    .toBuffer();
 }
 
 const TRAIN_BUNCH_NEAREST_STATIONS = 2; // how many stations to label
@@ -575,18 +653,44 @@ function sliceLineIntoSegments(linePoints, cumDist, numBins) {
   return slices;
 }
 
-async function renderTrainSpeedmap(linePoints, cumDist, binSpeeds, lineColor) {
-  const slices = sliceLineIntoSegments(linePoints, cumDist, binSpeeds.length);
+// Perpendicular offset for each direction's ribbon. At the typical speedmap
+// zoom (~10-25 mi line across 1200px) this is ~3-5px on each side of the
+// centerline — enough for the two ribbons to read as distinct without the
+// rendered path straying far from the physical track.
+const DUAL_DIR_OFFSET_FT = 250;
 
-  // Full-route halo in the line's own color at low opacity, then colored speed segments on top.
-  const fullEncoded = encodeURIComponent(encode(linePoints));
-  const overlays = [`path-${SPEEDMAP_HALO_STROKE}+${ROUTE_HALO_COLOR}(${fullEncoded})`];
+/**
+ * Render a dual-direction speedmap. `branches` is an array of
+ * `{ points, cumDist, binSpeedsByDir }`; each branch is rendered with its own
+ * halo and directional ribbons. Branched lines (Green) pass multiple; all
+ * other lines pass a single-element array.
+ */
+async function renderTrainSpeedmap(branches, lineColor) {
+  const overlays = [];
 
-  for (let i = 0; i < slices.length; i++) {
-    if (slices[i].length < 2) continue;
-    const encoded = encodeURIComponent(encode(slices[i]));
-    const color = colorForTrainSpeed(binSpeeds[i]);
-    overlays.push(`path-${SPEEDMAP_SEGMENT_STROKE}+${color}(${encoded})`);
+  for (const branch of branches) {
+    const { points, cumDist, binSpeedsByDir } = branch;
+    // Halo for this branch so the base line is always visible.
+    overlays.push(`path-${SPEEDMAP_HALO_STROKE}+${ROUTE_HALO_COLOR}(${encodeURIComponent(encode(points))})`);
+
+    const dirs = Object.keys(binSpeedsByDir);
+    const offsetFor = (i) => {
+      if (dirs.length === 1) return 0;
+      return i === 0 ? DUAL_DIR_OFFSET_FT : -DUAL_DIR_OFFSET_FT;
+    };
+
+    dirs.forEach((trDr, i) => {
+      const binSpeeds = binSpeedsByDir[trDr];
+      const offsetFt = offsetFor(i);
+      const ribbon = offsetFt === 0 ? points : offsetPolyline(points, offsetFt);
+      const slices = sliceLineIntoSegments(ribbon, cumDist, binSpeeds.length);
+      for (let b = 0; b < slices.length; b++) {
+        if (slices[b].length < 2) continue;
+        const encoded = encodeURIComponent(encode(slices[b]));
+        const color = colorForTrainSpeed(binSpeeds[b]);
+        overlays.push(`path-${SPEEDMAP_SEGMENT_STROKE}+${color}(${encoded})`);
+      }
+    });
   }
 
   const token = process.env.MAPBOX_TOKEN;
