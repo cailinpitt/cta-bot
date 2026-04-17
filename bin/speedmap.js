@@ -67,7 +67,10 @@ async function main() {
   const tracks = await collect(route, durationMs, POLL_INTERVAL_MS);
   const endTime = new Date();
 
-  const samplesByPid = computeSamples(tracks);
+  const { byPid: samplesByPid, stats: sampleStats } = computeSamples(tracks);
+  if (sampleStats.restarts > 0 || sampleStats.dropped > 0) {
+    console.log(`Sample filter: ${sampleStats.restarts} pattern restart(s), ${sampleStats.dropped} out-of-range pair(s)`);
+  }
   const targetPid = pickTargetPid(samplesByPid);
   if (!targetPid) {
     console.error('No speed samples collected — nothing to render');

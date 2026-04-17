@@ -2,8 +2,18 @@ const { getAllTrainPositions } = require('./trainApi');
 const { haversineFt, cumulativeDistances } = require('./geo');
 
 
-const MAX_DT_MS = 3 * 60 * 1000;
 const FEET_PER_DEG_LAT = 364567;
+
+// Default pair-sampling thresholds for train data. Trains hit 55–65 mph
+// between stops on the Red/Blue lines, so the maxMph cap sits above that
+// cruise speed. maxDtMs matches the bus cadence — a gap >3 min generally
+// means the train vanished from the feed (tunnel, out of service).
+const DEFAULT_TRAIN_SAMPLE_OPTS = {
+  maxDtMs: 3 * 60 * 1000,
+  maxMph: 70,
+  minAlongFt: 10,
+  maxPerpFt: 1000,
+};
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -227,21 +237,21 @@ async function collectTrains(line, durationMs, pollIntervalMs) {
   return { tracks, destByRnDir };
 }
 
-// Reject samples where either endpoint projects onto the polyline from farther
-// than this. Keeps branched-line bins (Green's Ashland vs Cottage Grove) from
-// cross-contaminating: a train on the other branch ends up ~thousands of feet
-// from this polyline and gets dropped.
-const MAX_SNAP_PERP_FT = 1000;
-
 /**
  * Derive per-direction speed samples from collected train tracks by snapping
  * each position onto the line polyline to get a distance-along-route. Also
  * returns which rns contributed to each direction so callers can look up
  * per-direction destinations from raw train data.
+ *
+ * `maxPerpFt` keeps branched-line bins (Green's Ashland vs Cottage Grove) from
+ * cross-contaminating: a train on the other branch projects onto this
+ * polyline from thousands of feet away and gets dropped.
  */
-function computeTrainSamples(tracks, linePoints, cumDist) {
+function computeTrainSamples(tracks, linePoints, cumDist, opts = {}) {
+  const { maxDtMs, maxMph, minAlongFt, maxPerpFt } = { ...DEFAULT_TRAIN_SAMPLE_OPTS, ...opts };
   const byDir = new Map(); // trDr -> [{pdist, mph}, ...]
   const rnsByDir = new Map(); // trDr -> Set<rn>
+  const stats = { offLine: 0, stationary: 0, dropped: 0 };
 
   for (const [rn, byDirForTrain] of tracks) {
     for (const [trDr, positions] of byDirForTrain) {
@@ -250,16 +260,16 @@ function computeTrainSamples(tracks, linePoints, cumDist) {
         const p1 = positions[i - 1];
         const p2 = positions[i];
         const dt = p2.t - p1.t;
-        if (dt <= 0 || dt > MAX_DT_MS) continue;
+        if (dt <= 0 || dt > maxDtMs) { stats.dropped++; continue; }
 
         const s1 = snapToLineWithPerp(p1.lat, p1.lon, linePoints, cumDist);
         const s2 = snapToLineWithPerp(p2.lat, p2.lon, linePoints, cumDist);
-        if (s1.perpDist > MAX_SNAP_PERP_FT || s2.perpDist > MAX_SNAP_PERP_FT) continue;
+        if (s1.perpDist > maxPerpFt || s2.perpDist > maxPerpFt) { stats.offLine++; continue; }
 
         const dft = Math.abs(s2.cumDist - s1.cumDist);
-        if (dft < 10) continue; // stationary or barely moved
+        if (dft < minAlongFt) { stats.stationary++; continue; }
         const mph = (dft / (dt / 1000)) * (3600 / 5280);
-        if (mph > 70) continue; // filter nonsense
+        if (mph > maxMph) { stats.dropped++; continue; }
 
         const midPdist = (s1.cumDist + s2.cumDist) / 2;
         if (!byDir.has(trDr)) byDir.set(trDr, []);
@@ -270,7 +280,7 @@ function computeTrainSamples(tracks, linePoints, cumDist) {
     }
   }
 
-  return { byDir, rnsByDir };
+  return { byDir, rnsByDir, stats };
 }
 
 /**

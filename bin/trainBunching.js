@@ -89,22 +89,30 @@ async function main() {
   console.log(`Bunching: ${bunch.line} trDr=${bunch.trDr} — 2 trains ${Math.round(bunch.distanceFt)}ft apart`);
   console.log(`  rns: ${bunch.trains.map((t) => t.rn).join(', ')}`);
 
-  // Cooldown keyed by line+direction so a persistent bunch on one direction
-  // of one line doesn't post repeatedly while still allowing the opposite
-  // direction to post if it happens to also bunch.
-  const cooldownKey = `train_${bunch.line}_${bunch.trDr}`;
-  if (!argv['dry-run'] && isOnCooldown(cooldownKey)) {
-    console.log(`On cooldown for ${cooldownKey}, skipping`);
-    history.recordBunching({
-      kind: 'train',
-      route: bunch.line,
-      direction: bunch.trDr,
-      vehicleCount: 2,
-      severityFt: bunch.distanceFt,
-      nearStop: bunch.trains[0].nextStation,
-      posted: false,
-    });
-    return;
+  // Two cooldown layers, mirroring the bus bunching model:
+  //   - line+direction: blocks the same direction of the same line from
+  //     reposting for 1hr (same as bus `pid` cooldown — direction-specific).
+  //   - line: blocks ANY direction of the same line for 1hr, so opposite
+  //     directions of the Red Line don't both post back-to-back (same as
+  //     bus `route:X` cooldown — direction-agnostic).
+  const dirCooldownKey = `train_${bunch.line}_${bunch.trDr}`;
+  const lineCooldownKey = `train_line_${bunch.line}`;
+  if (!argv['dry-run']) {
+    const dirCd = isOnCooldown(dirCooldownKey);
+    const lineCd = isOnCooldown(lineCooldownKey);
+    if (dirCd || lineCd) {
+      console.log(`On cooldown (${dirCd ? 'direction' : 'line'}), skipping`);
+      history.recordBunching({
+        kind: 'train',
+        route: bunch.line,
+        direction: bunch.trDr,
+        vehicleCount: 2,
+        severityFt: bunch.distanceFt,
+        nearStop: bunch.trains[0].nextStation,
+        posted: false,
+      });
+      return;
+    }
   }
 
 
@@ -146,7 +154,8 @@ async function main() {
 
   const agent = await loginTrain();
   const primary = await postWithImage(agent, text, image, alt);
-  markPosted(cooldownKey);
+  markPosted(dirCooldownKey);
+  markPosted(lineCooldownKey);
   history.recordBunching({
     kind: 'train',
     route: bunch.line,

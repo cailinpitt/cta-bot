@@ -108,7 +108,10 @@ async function main() {
   const dirSummaries = []; // [{ dest, summary }] — one entry per (branch, direction)
   for (let i = 0; i < branches.length; i++) {
     const { points, cumDist, totalFt } = branches[i];
-    const { byDir, rnsByDir } = computeTrainSamples(tracks, points, cumDist);
+    const { byDir, rnsByDir, stats } = computeTrainSamples(tracks, points, cumDist);
+    if (stats.offLine > 0 || stats.stationary > 0 || stats.dropped > 0) {
+      console.log(`Branch ${i} filter: ${stats.offLine} off-line, ${stats.stationary} stationary, ${stats.dropped} out-of-range`);
+    }
     const binSpeedsByDir = {};
     for (const [trDr, samples] of byDir) {
       binSpeedsByDir[trDr] = binSamples(samples, totalFt, NUM_BINS);

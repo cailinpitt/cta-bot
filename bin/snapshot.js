@@ -63,8 +63,8 @@ async function main() {
   }
 
   const agent = await loginTrain();
-  const url = await postWithImage(agent, text, image, alt);
-  console.log(`Posted: ${url}`);
+  const result = await postWithImage(agent, text, image, alt);
+  console.log(`Posted: ${result.url}`);
 }
 
 main().catch((e) => {

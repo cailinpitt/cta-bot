@@ -1,7 +1,14 @@
 const { getVehicles } = require('./cta');
 
-const MIN_SPEED_MPH = 0;
-const MAX_DT_MS = 3 * 60 * 1000; // Ignore vehicle tick pairs > 3 min apart (likely a pattern change)
+// Default pair-sampling thresholds tuned for bus data. Callers can override.
+// Bus max mph sits well above the ~35 mph ceiling observed on CTA bus routes;
+// a full 70 (train-class) would risk letting a GPS jump past a whole block
+// through as a sample.
+const DEFAULT_BUS_SAMPLE_OPTS = {
+  maxDtMs: 3 * 60 * 1000, // Ignore vehicle tick pairs > 3 min apart (likely a pattern change)
+  minMph: 0,
+  maxMph: 60,
+};
 
 /**
  * Speed color ramp. Returns a 3/6-char hex (no leading #) for Mapbox path overlays.
@@ -62,12 +69,24 @@ async function collect(route, durationMs, pollIntervalMs) {
 
 /**
  * Derive per-pid speed samples from the collected tracks.
+ *
  * A sample is a speed in mph measured between two consecutive pdist observations
  * for the same vehicle on the same pid, tagged with the midpoint pdist so we can
  * attribute it to a segment of the route.
+ *
+ * Returns { byPid, stats } where stats carries counters useful for operator
+ * logging (`restarts` = pairs where the vehicle crossed a pattern boundary,
+ * `dropped` = pairs rejected as too-long-dt or out-of-range mph).
+ *
+ * On a pattern restart (vehicle completed the route and pdist reset near 0)
+ * the boundary pair is skipped — we can't interpolate across the reset. The
+ * next pair (p2→p3) is valid on its own, so this costs at most one sample per
+ * restart.
  */
-function computeSamples(tracks) {
+function computeSamples(tracks, opts = {}) {
+  const { maxDtMs, minMph, maxMph } = { ...DEFAULT_BUS_SAMPLE_OPTS, ...opts };
   const byPid = new Map(); // pid -> [{pdist, mph}, ...]
+  const stats = { restarts: 0, dropped: 0 };
 
   for (const byPidForVid of tracks.values()) {
     for (const [pid, points] of byPidForVid) {
@@ -76,11 +95,11 @@ function computeSamples(tracks) {
         const p1 = points[i - 1];
         const p2 = points[i];
         const dt = p2.t - p1.t;
-        if (dt <= 0 || dt > MAX_DT_MS) continue;
+        if (dt <= 0 || dt > maxDtMs) { stats.dropped++; continue; }
         const dft = p2.pdist - p1.pdist;
-        if (dft < 0) continue; // pattern restart or bad data
+        if (dft < 0) { stats.restarts++; continue; } // vehicle completed a loop and restarted the pattern
         const mph = (dft / (dt / 1000)) * (3600 / 5280);
-        if (mph < MIN_SPEED_MPH || mph > 60) continue; // filter obvious nonsense
+        if (mph < minMph || mph > maxMph) { stats.dropped++; continue; }
         const midPdist = (p1.pdist + p2.pdist) / 2;
 
         if (!byPid.has(pid)) byPid.set(pid, []);
@@ -89,7 +108,7 @@ function computeSamples(tracks) {
     }
   }
 
-  return byPid;
+  return { byPid, stats };
 }
 
 /**

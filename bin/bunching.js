@@ -125,20 +125,21 @@ async function main() {
     const stops = candidatePattern.points.filter((p) => p.type === 'S' && p.stopName);
 
     // Skip if the cluster's labeled nearest stop is the first/last stop, OR if
-    // the cluster is within TERMINAL_ZONE_FT of either pattern endpoint. The
-    // distance check catches terminal approach zones (buses queued a block or
-    // two before the terminal are still terminal behavior).
-    const TERMINAL_ZONE_FT = 1500;
+    // the cluster is within the terminal zone of either pattern endpoint. The
+    // zone scales with route length (capped at 1500 ft) so short routes don't
+    // get a zone that swallows most of the line — e.g. a 2-mi route gets
+    // ~1056 ft instead of a fixed 1500 ft that would cover ~28% of it.
+    const terminalZoneFt = Math.min(1500, candidatePattern.lengthFt * 0.1);
     const isAtStartTerminalStop = stop === stops[0];
     const isAtEndTerminalStop = stop === stops[stops.length - 1];
-    const inStartZone = firstBus.pdist < TERMINAL_ZONE_FT;
-    const inEndZone = candidatePattern.lengthFt - lastBus.pdist < TERMINAL_ZONE_FT;
+    const inStartZone = firstBus.pdist < terminalZoneFt;
+    const inEndZone = candidatePattern.lengthFt - lastBus.pdist < terminalZoneFt;
     if (isAtStartTerminalStop || isAtEndTerminalStop || inStartZone || inEndZone) {
       const reason = isAtStartTerminalStop || isAtEndTerminalStop
         ? `nearest stop "${stop.stopName}" is a terminal`
         : inStartZone
-          ? `within ${TERMINAL_ZONE_FT}ft of start terminal`
-          : `within ${TERMINAL_ZONE_FT}ft of end terminal`;
+          ? `within ${Math.round(terminalZoneFt)}ft of start terminal`
+          : `within ${Math.round(terminalZoneFt)}ft of end terminal`;
       console.log(`  skip pid ${candidate.pid}: ${reason}`);
       continue;
     }

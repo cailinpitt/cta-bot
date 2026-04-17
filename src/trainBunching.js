@@ -3,7 +3,7 @@ const { buildLinePolyline, snapToLine } = require('./trainSpeedmap');
 
 const TRAIN_BUNCHING_FT = 2000; // ~0.38 mi, tighter than normal rush-hour headway
 const MIN_DISTANCE_FT = 200;    // ignore pairs closer than this — likely same station or API glitch
-const TERMINAL_ZONE_FT = 1500;  // trains within this of either end are treated as terminal layovers
+const TERMINAL_ZONE_CAP_FT = 1500; // cap for the terminal zone; shorter lines scale down by 10% of length
 
 /**
  * Detect the tightest bunched pair of trains on the same line heading the same
@@ -47,6 +47,10 @@ function detectTrainBunching(trains, trainLines) {
       trackDist: snapToLine(t.lat, t.lon, points, cumDist),
     }));
 
+    // Scale terminal zone with line length so short loops (Pink, Yellow) don't
+    // get a fixed zone that covers a meaningful fraction of the line.
+    const terminalZoneFt = Math.min(TERMINAL_ZONE_CAP_FT, totalFt * 0.1);
+
     for (let i = 0; i < snapped.length; i++) {
       for (let j = i + 1; j < snapped.length; j++) {
         const di = snapped[i].trackDist;
@@ -56,8 +60,8 @@ function detectTrainBunching(trains, trainLines) {
         // Skip terminal layovers: if either train sits in the start/end zone,
         // the cluster is a terminal queue (trains about to depart or going out
         // of service) rather than real bunching mid-route.
-        if (Math.min(di, dj) < TERMINAL_ZONE_FT) continue;
-        if (totalFt - Math.max(di, dj) < TERMINAL_ZONE_FT) continue;
+        if (Math.min(di, dj) < terminalZoneFt) continue;
+        if (totalFt - Math.max(di, dj) < terminalZoneFt) continue;
         if (!best || dist < best.distanceFt) {
           best = {
             line,
