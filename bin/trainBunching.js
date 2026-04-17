@@ -12,6 +12,7 @@ const { captureTrainBunchingVideo } = require('../src/trainBunchingVideo');
 const { loginTrain, postWithImage, postWithVideo } = require('../src/bluesky');
 const { isOnCooldown, markPosted } = require('../src/state');
 const { pruneOldAssets } = require('../src/cleanup');
+const history = require('../src/history');
 const trainLines = require('../src/data/trainLines.json');
 const trainStations = require('../src/data/trainStations.json');
 
@@ -20,11 +21,13 @@ function formatDistance(ft) {
   return `${(ft / 5280).toFixed(2)} mi`;
 }
 
-function buildPostText(bunch) {
+function buildPostText(bunch, callouts = []) {
   const lineName = LINE_NAMES[bunch.line];
   const dest = bunch.trains[0].destination;
   const station = bunch.trains[0].nextStation;
-  return `🚆 ${lineName} Line — to ${dest}\n2 trains within ${formatDistance(bunch.distanceFt)} near ${station}`;
+  const base = `🚆 ${lineName} Line — to ${dest}\n2 trains within ${formatDistance(bunch.distanceFt)} near ${station}`;
+  const tail = history.formatCallouts(callouts);
+  return tail ? `${base}\n${tail}` : base;
 }
 
 function buildAltText(bunch) {
@@ -71,6 +74,7 @@ function buildVideoAltText(bunch, result) {
 
 async function main() {
   pruneOldAssets();
+  history.rolloffOld();
 
   console.log('Fetching train positions...');
   const trains = await getAllTrainPositions();
@@ -91,12 +95,30 @@ async function main() {
   const cooldownKey = `train_${bunch.line}_${bunch.trDr}`;
   if (!argv['dry-run'] && isOnCooldown(cooldownKey)) {
     console.log(`On cooldown for ${cooldownKey}, skipping`);
+    history.recordBunching({
+      kind: 'train',
+      route: bunch.line,
+      direction: bunch.trDr,
+      vehicleCount: 2,
+      severityFt: bunch.distanceFt,
+      nearStop: bunch.trains[0].nextStation,
+      posted: false,
+    });
     return;
   }
 
+
+  const callouts = history.bunchingCallouts({
+    kind: 'train',
+    route: bunch.line,
+    vehicleCount: 2,
+    severityFt: bunch.distanceFt,
+  });
+  if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
+
   console.log('Rendering map...');
   const image = await renderTrainBunching(bunch, LINE_COLORS, trainLines, trainStations);
-  const text = buildPostText(bunch);
+  const text = buildPostText(bunch, callouts);
   const alt = buildAltText(bunch);
 
   if (argv['dry-run']) {
@@ -125,6 +147,16 @@ async function main() {
   const agent = await loginTrain();
   const primary = await postWithImage(agent, text, image, alt);
   markPosted(cooldownKey);
+  history.recordBunching({
+    kind: 'train',
+    route: bunch.line,
+    direction: bunch.trDr,
+    vehicleCount: 2,
+    severityFt: bunch.distanceFt,
+    nearStop: bunch.trains[0].nextStation,
+    posted: true,
+    postUri: primary.uri,
+  });
   console.log(`Posted: ${primary.url}`);
 
   // Capture a timelapse and reply to the primary post. Failures are non-fatal.

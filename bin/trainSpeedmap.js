@@ -12,6 +12,7 @@ const { binSamples, summarize, TRAIN_THRESHOLDS } = require('../src/speedmap');
 const { renderTrainSpeedmap } = require('../src/map');
 const { loginTrain, postWithImage } = require('../src/bluesky');
 const { pruneOldAssets } = require('../src/cleanup');
+const history = require('../src/history');
 const trainLines = require('../src/data/trainLines.json');
 
 const NUM_BINS = 40;
@@ -50,15 +51,16 @@ function dirLabel(dest) {
   return dest ? `Toward ${dest}` : 'Unknown direction';
 }
 
-function buildPostText(line, dirSummaries, startTime, endTime) {
+function buildPostText(line, dirSummaries, startTime, endTime, callouts = []) {
   const lineName = LINE_NAMES[line];
   const window = `${formatTimeCT(startTime)}–${formatTimeCT(endTime)} CT`;
   const dirLines = dirSummaries
     .map(({ dest, summary }) => `${dirLabel(dest)}: ${formatAvg(summary)}`)
     .join(' · ');
+  const head = `🚦 ${lineName} Line speedmap\n${window}\n${dirLines}`;
+  const tail = history.formatCallouts(callouts);
   return (
-    `🚦 ${lineName} Line speedmap\n` +
-    `${window}\n${dirLines}\n\n` +
+    (tail ? `${head}\n${tail}\n\n` : `${head}\n\n`) +
     `Two parallel ribbons = the two travel directions.\n` +
     `🟥 under 10 mph · 🟧 10–25 · 🟨 25–40 · 🟩 40+`
   );
@@ -74,6 +76,7 @@ function buildAltText(line, dirSummaries, durationMin) {
 
 async function main() {
   pruneOldAssets();
+  history.rolloffOld();
   const line = argv.line || _.sample(ALL_LINES);
   const durationMin = argv.duration ? Number(argv.duration) : DEFAULT_DURATION_MIN;
   const durationMs = durationMin * 60 * 1000;
@@ -135,12 +138,35 @@ async function main() {
   // overnight gaps). Skip rather than posting an empty speedmap.
   if (finalDirs.every((d) => d.summary.avg == null)) {
     console.log(`No train samples for ${LINE_NAMES[line]} Line during the window — not posting`);
+    if (!argv['dry-run']) {
+      history.recordSpeedmap({
+        kind: 'train',
+        route: line,
+        direction: null,
+        avgMph: null,
+        pctRed: 0, pctOrange: 0, pctYellow: 0, pctGreen: 0,
+        binSpeeds: [],
+        posted: false,
+      });
+    }
     return;
   }
 
+  // Line-level avg across directions (simple mean of per-direction averages)
+  // drives the severity callout. Using an average keeps the semantic "this
+  // line was slow today" rather than attributing it to one direction.
+  const dirAvgs = finalDirs.map((d) => d.summary.avg).filter((v) => v != null);
+  const lineAvgMph = dirAvgs.length > 0 ? dirAvgs.reduce((a, v) => a + v, 0) / dirAvgs.length : null;
+  const callouts = history.speedmapCallouts({
+    kind: 'train',
+    route: line,
+    avgMph: lineAvgMph,
+  });
+  if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
+
   const lineColor = LINE_COLORS[line];
   const image = await renderTrainSpeedmap(branchData, lineColor);
-  const text = buildPostText(line, finalDirs, startTime, endTime);
+  const text = buildPostText(line, finalDirs, startTime, endTime, callouts);
   const alt = buildAltText(line, finalDirs, durationMin);
 
   if (argv['dry-run']) {
@@ -152,8 +178,31 @@ async function main() {
   }
 
   const agent = await loginTrain();
-  const url = await postWithImage(agent, text, image, alt);
-  console.log(`Posted: ${url}`);
+  const result = await postWithImage(agent, text, image, alt);
+  // One row per run (line-level aggregation) so callout MIN/MAX is
+  // apples-to-apples with the line avg we compute on each run.
+  const totals = finalDirs.reduce((acc, { summary }) => {
+    acc.red += summary.red;
+    acc.orange += summary.orange;
+    acc.yellow += summary.yellow;
+    acc.green += summary.green;
+    return acc;
+  }, { red: 0, orange: 0, yellow: 0, green: 0 });
+  const totalValid = totals.red + totals.orange + totals.yellow + totals.green;
+  history.recordSpeedmap({
+    kind: 'train',
+    route: line,
+    direction: null,
+    avgMph: lineAvgMph,
+    pctRed: totalValid ? totals.red / totalValid : 0,
+    pctOrange: totalValid ? totals.orange / totalValid : 0,
+    pctYellow: totalValid ? totals.yellow / totalValid : 0,
+    pctGreen: totalValid ? totals.green / totalValid : 0,
+    binSpeeds: [],
+    posted: true,
+    postUri: result.uri,
+  });
+  console.log(`Posted: ${result.url}`);
 }
 
 main().catch((e) => {

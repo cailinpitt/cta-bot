@@ -14,6 +14,7 @@ const { captureBunchingVideo } = require('../src/bunchingVideo');
 const { loginBus, postWithImage, postWithVideo } = require('../src/bluesky');
 const { isOnCooldown, markPosted } = require('../src/state');
 const { pruneOldAssets } = require('../src/cleanup');
+const history = require('../src/history');
 
 function findNearestStop(pattern, pdist) {
   const stops = pattern.points.filter((p) => p.type === 'S' && p.stopName);
@@ -34,13 +35,15 @@ function formatDistance(ft) {
   return `${(ft / 5280).toFixed(2)} mi`;
 }
 
-function buildPostText(bunch, pattern, stop) {
+function buildPostText(bunch, pattern, stop, callouts = []) {
   const routeName = routeNames[bunch.route];
   const title = routeName ? `Route ${bunch.route} (${routeName})` : `Route ${bunch.route}`;
   const count = bunch.vehicles.length;
   const dir = pattern.direction;
   const gap = formatDistance(bunch.spanFt);
-  return `🚌 ${title} — ${dir}\n${count} buses within ${gap} near ${stop.stopName}`;
+  const base = `🚌 ${title} — ${dir}\n${count} buses within ${gap} near ${stop.stopName}`;
+  const tail = history.formatCallouts(callouts);
+  return tail ? `${base}\n${tail}` : base;
 }
 
 function buildAltText(bunch, pattern, stop) {
@@ -85,6 +88,7 @@ function buildVideoAltText(bunch, pattern, stop, result) {
 
 async function main() {
   pruneOldAssets();
+  history.rolloffOld();
   const routes = bunchingRoutes;
   console.log(`Fetching vehicles for ${routes.length} routes...`);
   const vehicles = await getVehicles(routes);
@@ -109,20 +113,10 @@ async function main() {
   let pattern = null;
   let chosenStop = null;
   for (const candidate of bunches) {
-    // Check both pid-level and route-level cooldown. The route cooldown prevents
-    // the same route from posting in opposite directions minutes apart, which
-    // feels spammy even though they're technically different pids.
-    const routeKey = `route:${candidate.route}`;
-    if (!argv['dry-run']) {
-      if (isOnCooldown(candidate.pid)) {
-        console.log(`  skip pid ${candidate.pid} (route ${candidate.route}): on cooldown`);
-        continue;
-      }
-      if (isOnCooldown(routeKey)) {
-        console.log(`  skip pid ${candidate.pid}: route ${candidate.route} is on cooldown`);
-        continue;
-      }
-    }
+    // Terminal filter first (requires pattern): terminal layovers aren't real
+    // bunches and shouldn't be logged as detections at all. After that, a
+    // cooldown skip means a real bunch we're suppressing — log it with
+    // posted=0 so the analytics capture it.
     const candidatePattern = await loadPattern(candidate.pid);
     const firstBus = candidate.vehicles[0];
     const lastBus = candidate.vehicles[candidate.vehicles.length - 1];
@@ -148,6 +142,28 @@ async function main() {
       console.log(`  skip pid ${candidate.pid}: ${reason}`);
       continue;
     }
+
+    // Check both pid-level and route-level cooldown. The route cooldown prevents
+    // the same route from posting in opposite directions minutes apart, which
+    // feels spammy even though they're technically different pids.
+    const routeKey = `route:${candidate.route}`;
+    if (!argv['dry-run']) {
+      const pidCd = isOnCooldown(candidate.pid);
+      const routeCd = isOnCooldown(routeKey);
+      if (pidCd || routeCd) {
+        console.log(`  skip pid ${candidate.pid}: ${pidCd ? 'pid' : 'route'} on cooldown`);
+        history.recordBunching({
+          kind: 'bus',
+          route: candidate.route,
+          direction: candidate.pid,
+          vehicleCount: candidate.vehicles.length,
+          severityFt: candidate.spanFt,
+          nearStop: stop.stopName,
+          posted: false,
+        });
+        continue;
+      }
+    }
     bunch = candidate;
     pattern = candidatePattern;
     chosenStop = stop;
@@ -163,10 +179,19 @@ async function main() {
 
   const stop = chosenStop;
 
+  // Compute callouts BEFORE recording this event so we don't compare against ourselves.
+  const callouts = history.bunchingCallouts({
+    kind: 'bus',
+    route: bunch.route,
+    vehicleCount: bunch.vehicles.length,
+    severityFt: bunch.spanFt,
+  });
+  if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
+
   console.log('Rendering map...');
   const image = await renderBunchingMap(bunch, pattern);
 
-  const text = buildPostText(bunch, pattern, stop);
+  const text = buildPostText(bunch, pattern, stop, callouts);
   const alt = buildAltText(bunch, pattern, stop);
 
   if (argv['dry-run']) {
@@ -196,6 +221,16 @@ async function main() {
   const primary = await postWithImage(agent, text, image, alt);
   markPosted(bunch.pid);
   markPosted(`route:${bunch.route}`);
+  history.recordBunching({
+    kind: 'bus',
+    route: bunch.route,
+    direction: bunch.pid,
+    vehicleCount: bunch.vehicles.length,
+    severityFt: bunch.spanFt,
+    nearStop: stop.stopName,
+    posted: true,
+    postUri: primary.uri,
+  });
   console.log(`Posted: ${primary.url}`);
 
   // Capture a timelapse of the bunch over the next few minutes and reply to

@@ -12,6 +12,7 @@ const { loadPattern } = require('../src/patterns');
 const { renderSpeedmap } = require('../src/map');
 const { loginBus, postWithImage } = require('../src/bluesky');
 const { pruneOldAssets } = require('../src/cleanup');
+const history = require('../src/history');
 
 const NUM_BINS = 40;
 const POLL_INTERVAL_MS = 30 * 1000;
@@ -23,15 +24,16 @@ function formatTimeCT(date) {
   });
 }
 
-function buildPostText(route, pattern, summary, startTime, endTime) {
+function buildPostText(route, pattern, summary, startTime, endTime, callouts = []) {
   const displayName = routeNames[route];
   const title = displayName ? `Route ${route} (${displayName})` : `Route ${route}`;
   const dir = pattern.direction;
   const avg = summary.avg == null ? 'unavailable' : `${summary.avg.toFixed(1)} mph`;
   const window = `${formatTimeCT(startTime)}–${formatTimeCT(endTime)} CT`;
+  const head = `🚦 ${title} — ${dir}\n${window} · average speed ${avg}`;
+  const tail = history.formatCallouts(callouts);
   return (
-    `🚦 ${title} — ${dir}\n` +
-    `${window} · average speed ${avg}\n\n` +
+    (tail ? `${head}\n${tail}\n\n` : `${head}\n\n`) +
     `Each colored segment of the route shows how fast buses were moving there:\n` +
     `🟥 under 5 mph — stopped or crawling\n` +
     `🟧 5–10 mph — slow\n` +
@@ -49,6 +51,7 @@ function buildAltText(route, pattern, summary) {
 
 async function main() {
   pruneOldAssets();
+  history.rolloffOld();
   const route = argv.route ? String(argv.route) : _.sample(speedmapRoutes);
   const durationMin = argv.duration ? Number(argv.duration) : DEFAULT_DURATION_MIN;
   const durationMs = durationMin * 60 * 1000;
@@ -68,6 +71,17 @@ async function main() {
   const targetPid = pickTargetPid(samplesByPid);
   if (!targetPid) {
     console.error('No speed samples collected — nothing to render');
+    if (!argv['dry-run']) {
+      history.recordSpeedmap({
+        kind: 'bus',
+        route,
+        direction: null,
+        avgMph: null,
+        pctRed: 0, pctOrange: 0, pctYellow: 0, pctGreen: 0,
+        binSpeeds: [],
+        posted: false,
+      });
+    }
     process.exit(1);
   }
 
@@ -80,8 +94,15 @@ async function main() {
 
   console.log(`Avg ${summary.avg?.toFixed(1)} mph · red=${summary.red} orange=${summary.orange} yellow=${summary.yellow} green=${summary.green}`);
 
+  const callouts = history.speedmapCallouts({
+    kind: 'bus',
+    route,
+    avgMph: summary.avg,
+  });
+  if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
+
   const image = await renderSpeedmap(pattern, binSpeeds);
-  const text = buildPostText(route, pattern, summary, startTime, endTime);
+  const text = buildPostText(route, pattern, summary, startTime, endTime, callouts);
   const alt = buildAltText(route, pattern, summary);
 
   if (argv['dry-run']) {
@@ -93,8 +114,22 @@ async function main() {
   }
 
   const agent = await loginBus();
-  const url = await postWithImage(agent, text, image, alt);
-  console.log(`Posted: ${url}`);
+  const result = await postWithImage(agent, text, image, alt);
+  const totalValid = summary.red + summary.orange + summary.yellow + summary.green;
+  history.recordSpeedmap({
+    kind: 'bus',
+    route,
+    direction: targetPid,
+    avgMph: summary.avg,
+    pctRed: totalValid ? summary.red / totalValid : 0,
+    pctOrange: totalValid ? summary.orange / totalValid : 0,
+    pctYellow: totalValid ? summary.yellow / totalValid : 0,
+    pctGreen: totalValid ? summary.green / totalValid : 0,
+    binSpeeds,
+    posted: true,
+    postUri: result.uri,
+  });
+  console.log(`Posted: ${result.url}`);
 }
 
 main().catch((e) => {
