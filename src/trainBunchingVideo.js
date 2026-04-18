@@ -16,7 +16,7 @@ const { buildLinePolyline, snapToLine, pointAlongLine } = require('./trainSpeedm
 const execP = promisify(exec);
 
 const DEFAULT_TICK_MS = 15_000;
-const DEFAULT_TICKS = 36; // 36 × 15s = 9 min of real time
+const DEFAULT_TICKS = 40; // 40 × 15s = 10 min of real time
 const DEFAULT_INTERPOLATE = 4;
 const DEFAULT_FRAMERATE = 16;
 

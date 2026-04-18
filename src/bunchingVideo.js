@@ -12,7 +12,7 @@ const { snapToLine, pointAlongLine } = require('./trainSpeedmap');
 const execP = promisify(exec);
 
 const DEFAULT_TICK_MS = 15_000;
-const DEFAULT_TICKS = 36; // 36 × 15s = 9 min of real time
+const DEFAULT_TICKS = 40; // 40 × 15s = 10 min of real time
 // Interpolate this many output frames between each pair of real samples. 4×
 // turns 16 real samples into 61 frames of smooth motion instead of jumps.
 const DEFAULT_INTERPOLATE = 4;

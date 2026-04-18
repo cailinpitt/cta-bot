@@ -7,7 +7,7 @@ Bluesky bots that post visualizations generated from CTA train and bus tracker A
 
 ## Features
 
-- **Bus bunching** — detects clusters of buses on the same route/direction, posts an annotated map, then replies with a ~9-minute timelapse of the cluster
+- **Bus bunching** — detects clusters of buses on the same route/direction, posts an annotated map, then replies with a ~10-minute timelapse of the cluster
 - **Train bunching** — detects pairs of L trains running too close together, same map + timelapse reply flow
 - **Bus speedmap** — color-codes a bus route by actual vehicle speed over an hour
 - **Train speedmap** — color-codes an L line by actual train speed over an hour, with separate ribbons per direction

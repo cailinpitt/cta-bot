@@ -46,8 +46,17 @@ function db() {
     );
     CREATE INDEX IF NOT EXISTS idx_speedmap_kind_route_ts
       ON speedmap_runs(kind, route, ts);
+
+    CREATE TABLE IF NOT EXISTS cooldowns (
+      key TEXT PRIMARY KEY,
+      ts INTEGER NOT NULL
+    );
   `);
   return _db;
+}
+
+function getDb() {
+  return db();
 }
 
 function rolloffOld(now = Date.now()) {
@@ -210,4 +219,5 @@ module.exports = {
   bunchingCallouts,
   speedmapCallouts,
   formatCallouts,
+  getDb,
 };

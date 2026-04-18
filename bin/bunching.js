@@ -12,7 +12,7 @@ const { loadPattern } = require('../src/patterns');
 const { renderBunchingMap } = require('../src/map');
 const { captureBunchingVideo } = require('../src/bunchingVideo');
 const { loginBus, postWithImage, postWithVideo } = require('../src/bluesky');
-const { isOnCooldown, markPosted } = require('../src/state');
+const { isOnCooldown, acquireCooldown } = require('../src/state');
 const { pruneOldAssets } = require('../src/cleanup');
 const history = require('../src/history');
 
@@ -219,10 +219,25 @@ async function main() {
     return;
   }
 
+  // Final atomic cooldown acquire right before posting — closes the race
+  // where two overlapping bot instances both pass the candidate-loop check
+  // and would otherwise both post the same bunch.
+  if (!acquireCooldown([bunch.pid, `route:${bunch.route}`])) {
+    console.log('Lost cooldown race to another instance, skipping post');
+    history.recordBunching({
+      kind: 'bus',
+      route: bunch.route,
+      direction: bunch.pid,
+      vehicleCount: bunch.vehicles.length,
+      severityFt: bunch.spanFt,
+      nearStop: stop.stopName,
+      posted: false,
+    });
+    return;
+  }
+
   const agent = await loginBus();
   const primary = await postWithImage(agent, text, image, alt);
-  markPosted(bunch.pid);
-  markPosted(`route:${bunch.route}`);
   history.recordBunching({
     kind: 'bus',
     route: bunch.route,
