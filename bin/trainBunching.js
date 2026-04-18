@@ -119,6 +119,7 @@ async function main() {
   const callouts = history.bunchingCallouts({
     kind: 'train',
     route: bunch.line,
+    routeLabel: `${LINE_NAMES[bunch.line]} Line`,
     vehicleCount: 2,
     severityFt: bunch.distanceFt,
   });

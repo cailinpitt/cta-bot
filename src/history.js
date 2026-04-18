@@ -105,9 +105,9 @@ function recordSpeedmap({
  * Callouts for a bunching detection about to post. Returns an array of short
  * human strings (zero or more) to prepend to the post body.
  *
- * #1 (frequency): "Nth bunch on <route> today" — counts today's detections on
- *   the same kind+route (posted or cooldown-suppressed, both count toward
- *   "today").
+ * #1 (frequency): "Nth <route> bunch reported today" — counts today's posted
+ *   events on the same kind+route (cooldown-suppressed rows don't count, so
+ *   the number matches what the bot actually posted).
  * #2 (severity): "tightest bunch on this <line> in N days" (train) or
  *   "largest bunch on this route in N days" (bus), emitted when the current
  *   event is more severe than every prior posted event in the window.
@@ -119,18 +119,19 @@ function recordSpeedmap({
  * Uses the DB as it stood BEFORE recording this event, so callers must
  * compute callouts before calling recordBunching.
  */
-function bunchingCallouts({ kind, route, vehicleCount, severityFt }, now = Date.now()) {
+function bunchingCallouts({ kind, route, routeLabel, vehicleCount, severityFt }, now = Date.now()) {
   const out = [];
   const startOfDay = chicagoStartOfDay(now);
   const todayCount = db().prepare(`
     SELECT COUNT(*) AS c FROM bunching_events
-    WHERE kind = ? AND route = ? AND ts >= ?
+    WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
   `).get(kind, route, startOfDay).c;
   // todayCount is PRIOR events today. The event we're about to post is the
   // (todayCount + 1)th.
   const nth = todayCount + 1;
   if (nth >= 2) {
-    out.push(`${ordinal(nth)} bunch today`);
+    const label = routeLabel ? `${routeLabel} bunch` : 'bunch';
+    out.push(`${ordinal(nth)} ${label} reported today`);
   }
 
   // Severity — compare against posted events in the last 30 days (excluding
@@ -147,7 +148,7 @@ function bunchingCallouts({ kind, route, vehicleCount, severityFt }, now = Date.
       const beatsCount = vehicleCount > row.maxVc;
       const tiesCountBeatsSpan = vehicleCount === row.maxVc && severityFt > row.maxSpan;
       if (beatsCount || tiesCountBeatsSpan) {
-        out.push(`worst bunch on this route in ${windowDays} days`);
+        out.push(`worst reported on this route in ${windowDays} days`);
       }
     }
   } else if (kind === 'train') {
@@ -157,7 +158,7 @@ function bunchingCallouts({ kind, route, vehicleCount, severityFt }, now = Date.
       WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ? AND ts < ?
     `).get(kind, route, windowStart, startOfDay);
     if (row.c >= 3 && severityFt < row.minDist) {
-      out.push(`tightest bunch on this line in ${windowDays} days`);
+      out.push(`tightest reported on this line in ${windowDays} days`);
     }
   }
 
@@ -184,9 +185,9 @@ function speedmapCallouts({ kind, route, avgMph }, now = Date.now()) {
   `).get(kind, route, windowStart);
   if (row.c < 3) return out;
   if (avgMph < row.minAvg) {
-    out.push(`slowest in ${windowDays} days`);
+    out.push(`slowest reported in ${windowDays} days`);
   } else if (avgMph > row.maxAvg) {
-    out.push(`fastest in ${windowDays} days`);
+    out.push(`fastest reported in ${windowDays} days`);
   }
   return out;
 }
