@@ -13,14 +13,16 @@ function headingDiff(a, b) {
 }
 
 /**
- * Detect the tightest bunched pair of trains on the same line heading the same
- * direction (same `trDr`).
+ * Detect the most severe bunched cluster of trains on the same line heading
+ * the same direction (same `trDr`).
  *
  * Uses along-track distance by snapping each train onto the line's polyline.
- * This avoids false positives where two trains are geographically close but far
+ * This avoids false positives where trains are geographically close but far
  * apart along the route (e.g. opposite sides of the Loop).
  *
- * Returns null if no bunch is detected.
+ * Clusters are extended as long as consecutive along-track gaps stay within
+ * TRAIN_BUNCHING_FT, then ranked size-desc / tighter-max-gap first — same
+ * model as bus bunching. Returns null if no bunch is detected.
  */
 function detectTrainBunching(trains, trainLines) {
   const groups = new Map();
@@ -40,7 +42,7 @@ function detectTrainBunching(trains, trainLines) {
     return lineCache.get(line);
   }
 
-  let best = null;
+  const bunches = [];
   for (const [key, group] of groups) {
     if (group.length < 2) continue;
     const [line, trDr] = key.split('_');
@@ -48,49 +50,87 @@ function detectTrainBunching(trains, trainLines) {
     if (points.length < 2) continue;
     const totalFt = cumDist[cumDist.length - 1];
 
-    // Snap each train onto the polyline once, then compare along-track distances.
-    const snapped = group.map((t) => ({
-      train: t,
-      trackDist: snapToLine(t.lat, t.lon, points, cumDist),
-    }));
+    // Snap each train onto the polyline once, sort by along-track distance.
+    const snapped = group
+      .map((t) => ({ train: t, trackDist: snapToLine(t.lat, t.lon, points, cumDist) }))
+      .sort((a, b) => a.trackDist - b.trackDist);
+
+    // Dedupe near-coincident snaps: two rns reporting within MIN_DISTANCE_FT
+    // along-track are almost certainly the same train (station stop, API
+    // glitch) — keep the first and drop the rest so they don't masquerade as
+    // a tight cluster.
+    const deduped = [];
+    for (const s of snapped) {
+      if (deduped.length === 0 || s.trackDist - deduped[deduped.length - 1].trackDist >= MIN_DISTANCE_FT) {
+        deduped.push(s);
+      }
+    }
+    if (deduped.length < 2) continue;
 
     // Scale terminal zone with line length so short loops (Pink, Yellow) don't
     // get a fixed zone that covers a meaningful fraction of the line.
     const terminalZoneFt = Math.min(TERMINAL_ZONE_CAP_FT, totalFt * 0.1);
 
-    for (let i = 0; i < snapped.length; i++) {
-      for (let j = i + 1; j < snapped.length; j++) {
-        const di = snapped[i].trackDist;
-        const dj = snapped[j].trackDist;
-        const dist = Math.abs(di - dj);
-        if (dist < MIN_DISTANCE_FT || dist > TRAIN_BUNCHING_FT) continue;
-        // Skip terminal layovers: if either train sits in the start/end zone,
-        // the cluster is a terminal queue (trains about to depart or going out
-        // of service) rather than real bunching mid-route.
-        if (Math.min(di, dj) < terminalZoneFt) continue;
-        if (totalFt - Math.max(di, dj) < terminalZoneFt) continue;
-        // Heading gate: on loop lines (Orange/Brown/Pink/Purple) every train
-        // shares trDr regardless of whether it's outbound or inbound, and the
-        // line polyline is undirected — so two trains on parallel outbound and
-        // inbound tracks can snap to the same trackDist while moving in
-        // opposite directions. Require the pair's compass headings to agree.
-        const ti = snapped[i].train;
-        const tj = snapped[j].train;
-        if (Number.isFinite(ti.heading) && Number.isFinite(tj.heading)
-            && headingDiff(ti.heading, tj.heading) > MAX_HEADING_DIFF_DEG) continue;
-        if (!best || dist < best.distanceFt) {
-          best = {
-            line,
-            trDr,
-            trains: [snapped[i].train, snapped[j].train],
-            distanceFt: dist,
-          };
+    let i = 0;
+    while (i < deduped.length - 1) {
+      const gap0 = deduped[i + 1].trackDist - deduped[i].trackDist;
+      if (gap0 > TRAIN_BUNCHING_FT) { i++; continue; }
+
+      let j = i + 1;
+      let maxGap = gap0;
+      while (j + 1 < deduped.length) {
+        const nextGap = deduped[j + 1].trackDist - deduped[j].trackDist;
+        if (nextGap > TRAIN_BUNCHING_FT) break;
+        if (nextGap > maxGap) maxGap = nextGap;
+        j++;
+      }
+
+      const cluster = deduped.slice(i, j + 1);
+      const lo = cluster[0].trackDist;
+      const hi = cluster[cluster.length - 1].trackDist;
+
+      // Skip terminal layovers: any train within the start/end zone means the
+      // cluster is a terminal queue rather than real bunching mid-route.
+      if (lo < terminalZoneFt || totalFt - hi < terminalZoneFt) {
+        i = j + 1;
+        continue;
+      }
+
+      // Heading gate: on loop lines (Orange/Brown/Pink/Purple) every train
+      // shares trDr regardless of whether it's outbound or inbound, and the
+      // line polyline is undirected — so trains on parallel outbound and
+      // inbound tracks can snap to similar trackDists while moving in
+      // opposite directions. Require every adjacent pair's compass heading
+      // to agree.
+      let headingOk = true;
+      for (let k = 0; k + 1 < cluster.length; k++) {
+        const ha = cluster[k].train.heading;
+        const hb = cluster[k + 1].train.heading;
+        if (Number.isFinite(ha) && Number.isFinite(hb) && headingDiff(ha, hb) > MAX_HEADING_DIFF_DEG) {
+          headingOk = false;
+          break;
         }
       }
+      if (!headingOk) { i = j + 1; continue; }
+
+      bunches.push({
+        line,
+        trDr,
+        trains: cluster.map((c) => c.train),
+        spanFt: hi - lo,
+        maxGapFt: maxGap,
+      });
+      i = j + 1;
     }
   }
 
-  return best;
+  if (bunches.length === 0) return null;
+  // Rank: more trains first; tie-break on tighter max gap (same as buses).
+  bunches.sort((a, b) => {
+    if (a.trains.length !== b.trains.length) return b.trains.length - a.trains.length;
+    return a.maxGapFt - b.maxGapFt;
+  });
+  return bunches[0];
 }
 
 module.exports = { detectTrainBunching, TRAIN_BUNCHING_FT, MIN_DISTANCE_FT };

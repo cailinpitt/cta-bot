@@ -38,9 +38,10 @@ const bunching = ['6', '8', '9', 'X9', '20', '22', '26', '29', '36', '49', 'X49'
 // enough active buses to fill most segments with real data during a one-hour window.
 const speedmap = ['8', '9', 'X9', '22', '26', '36', '49', 'X49', '53', '66', '72', '73', '76', '77', '79', '80', '95', '151'];
 
-// Routes polled for gap detection. Same list as bunching — a route where
-// "two buses close together" is meaningful is also one where "no bus for a
-// long stretch" is meaningful.
-const gaps = bunching;
+// Routes polled for gap detection. Starts aligned with `bunching` — any route
+// where "two buses close together" is meaningful is also one where "no bus for
+// a long stretch" is meaningful — but kept as its own list so the two can
+// diverge as we tune each feature independently.
+const gaps = ['6', '8', '9', 'X9', '20', '22', '26', '29', '36', '49', 'X49', '55', '60', '62', '66', '72', '76', '77', '79', '80', '82', '95', '146', '147', '151'];
 
 module.exports = { names, bunching, speedmap, gaps };

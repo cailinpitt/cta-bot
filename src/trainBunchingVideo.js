@@ -22,9 +22,21 @@ const DEFAULT_FRAMERATE = 16;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function trainsDistanceFt(trains) {
+function trainsSpanFt(trains, linePts, lineCum) {
   if (trains.length < 2) return null;
-  return Math.round(haversineFt(trains[0], trains[1]));
+  if (linePts && linePts.length >= 2) {
+    const dists = trains.map((t) => snapToLine(t.lat, t.lon, linePts, lineCum));
+    return Math.round(Math.max(...dists) - Math.min(...dists));
+  }
+  // Fallback when we don't have a polyline: use farthest haversine pair.
+  let max = 0;
+  for (let i = 0; i < trains.length; i++) {
+    for (let j = i + 1; j < trains.length; j++) {
+      const d = haversineFt(trains[i], trains[j]);
+      if (d > max) max = d;
+    }
+  }
+  return Math.round(max);
 }
 
 /**
@@ -144,8 +156,8 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
     await execP(cmd, { timeout: 60_000 });
     const buffer = await Fs.readFile(outPath);
 
-    const initialDistFt = Math.round(bunch.distanceFt);
-    const finalDistFt = trainsDistanceFt(snapshots[snapshots.length - 1].trains);
+    const initialDistFt = Math.round(bunch.spanFt);
+    const finalDistFt = trainsSpanFt(snapshots[snapshots.length - 1].trains, linePts, lineCum);
     const elapsedSec = Math.round((snapshots[snapshots.length - 1].ts - snapshots[0].ts) / 1000);
 
     return { buffer, ticksCaptured: snapshots.length, elapsedSec, initialDistFt, finalDistFt };

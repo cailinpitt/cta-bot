@@ -25,7 +25,8 @@ function buildPostText(bunch, callouts = []) {
   const lineName = LINE_NAMES[bunch.line];
   const dest = bunch.trains[0].destination;
   const station = bunch.trains[0].nextStation;
-  const base = `🚆 ${lineName} Line — to ${dest}\n2 trains within ${formatDistance(bunch.distanceFt)} near ${station}`;
+  const count = bunch.trains.length;
+  const base = `🚆 ${lineName} Line — to ${dest}\n${count} trains within ${formatDistance(bunch.spanFt)} near ${station}`;
   const tail = history.formatCallouts(callouts);
   return tail ? `${base}\n${tail}` : base;
 }
@@ -34,7 +35,8 @@ function buildAltText(bunch) {
   const lineName = LINE_NAMES[bunch.line];
   const dest = bunch.trains[0].destination;
   const station = bunch.trains[0].nextStation;
-  return `Map of the ${lineName} Line near ${station} showing 2 trains to ${dest} within ${formatDistance(bunch.distanceFt)} of each other.`;
+  const count = bunch.trains.length;
+  return `Map of the ${lineName} Line near ${station} showing ${count} trains to ${dest} within ${formatDistance(bunch.spanFt)} of each other.`;
 }
 
 function formatMinSec(totalSec) {
@@ -69,7 +71,8 @@ function buildVideoAltText(bunch, result) {
   const lineName = LINE_NAMES[bunch.line];
   const dest = bunch.trains[0].destination;
   const station = bunch.trains[0].nextStation;
-  return `Timelapse map of the ${lineName} Line near ${station} showing 2 trains to ${dest} moving over ${formatMinSec(result.elapsedSec)}.`;
+  const count = bunch.trains.length;
+  return `Timelapse map of the ${lineName} Line near ${station} showing ${count} trains to ${dest} moving over ${formatMinSec(result.elapsedSec)}.`;
 }
 
 async function main() {
@@ -86,7 +89,7 @@ async function main() {
     return;
   }
 
-  console.log(`Bunching: ${LINE_NAMES[bunch.line]} Line toward ${bunch.trains[0].destination} — 2 trains ${Math.round(bunch.distanceFt)}ft apart`);
+  console.log(`Bunching: ${LINE_NAMES[bunch.line]} Line toward ${bunch.trains[0].destination} — ${bunch.trains.length} trains span ${Math.round(bunch.spanFt)}ft, maxGap ${Math.round(bunch.maxGapFt)}ft`);
   console.log(`  rns: ${bunch.trains.map((t) => t.rn).join(', ')}`);
 
   // Two cooldown layers, mirroring the bus bunching model:
@@ -106,8 +109,8 @@ async function main() {
         kind: 'train',
         route: bunch.line,
         direction: bunch.trDr,
-        vehicleCount: 2,
-        severityFt: bunch.distanceFt,
+        vehicleCount: bunch.trains.length,
+        severityFt: bunch.spanFt,
         nearStop: bunch.trains[0].nextStation,
         posted: false,
       });
@@ -120,8 +123,8 @@ async function main() {
     kind: 'train',
     route: bunch.line,
     routeLabel: `${LINE_NAMES[bunch.line]} Line`,
-    vehicleCount: 2,
-    severityFt: bunch.distanceFt,
+    vehicleCount: bunch.trains.length,
+    severityFt: bunch.spanFt,
   });
   if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
 
@@ -162,8 +165,8 @@ async function main() {
       kind: 'train',
       route: bunch.line,
       direction: bunch.trDr,
-      vehicleCount: 2,
-      severityFt: bunch.distanceFt,
+      vehicleCount: bunch.trains.length,
+      severityFt: bunch.spanFt,
       nearStop: bunch.trains[0].nextStation,
       posted: false,
     });
@@ -176,8 +179,8 @@ async function main() {
     kind: 'train',
     route: bunch.line,
     direction: bunch.trDr,
-    vehicleCount: 2,
-    severityFt: bunch.distanceFt,
+    vehicleCount: bunch.trains.length,
+    severityFt: bunch.spanFt,
     nearStop: bunch.trains[0].nextStation,
     posted: true,
     postUri: primary.uri,
