@@ -44,4 +44,10 @@ const speedmap = ['8', '9', 'X9', '22', '26', '36', '49', 'X49', '53', '66', '72
 // diverge as we tune each feature independently.
 const gaps = ['6', '8', '9', 'X9', '20', '22', '26', '29', '36', '49', 'X49', '55', '60', '62', '66', '72', '76', '77', '79', '80', '82', '95', '146', '147', '151'];
 
-module.exports = { names, bunching, speedmap, gaps };
+// Routes polled for ghost-bus detection. Independent of bunching/gaps: a
+// dedicated observer cron (scripts/observeGhosts.js) fetches positions for
+// these routes on a fixed cadence so the hourly rollup has consistent coverage
+// regardless of what other jobs sampled.
+const ghosts = ['6', '8', '9', 'X9', '20', '22', '26', '29', '36', '49', 'X49', '55', '60', '62', '66', '72', '76', '77', '79', '80', '82', '95', '146', '147', '151'];
+
+module.exports = { names, bunching, speedmap, gaps, ghosts };

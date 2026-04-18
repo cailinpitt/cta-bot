@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { recordBusObservations } = require('./observations');
 
 const BUS_BASE = 'http://www.ctabustracker.com/bustime/api/v3';
 
@@ -58,6 +59,10 @@ async function getVehicles(routes) {
     const body = await get('getvehicles', { rt: chunk.join(','), tmres: 's' });
     for (const v of body.vehicle || []) results.push(parseVehicle(v));
   }
+  // Log observations so ghost detection sees every vehicle fetched by any job.
+  // Uses its own `now` rather than per-vehicle `tmstmp` so a single fetch is
+  // bucketed as one polling snapshot.
+  recordBusObservations(results);
   return results;
 }
 

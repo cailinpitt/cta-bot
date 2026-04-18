@@ -161,12 +161,14 @@ async function main() {
   const firstStopId = new Map();   // trip_id → stop_id (origin terminal)
   const firstSeq = new Map();
   const lastStopId = new Map();    // trip_id → stop_id
+  const lastArrival = new Map();   // trip_id → seconds (last-stop arrival)
   const lastSeq = new Map();
 
   let header = null;
   let tripIdIdx = -1;
   let stopIdIdx = -1;
   let depIdx = -1;
+  let arrIdx = -1;
   let seqIdx = -1;
   await streamFromZip('stop_times.txt', (line) => {
     if (!header) {
@@ -174,6 +176,7 @@ async function main() {
       tripIdIdx = header.indexOf('trip_id');
       stopIdIdx = header.indexOf('stop_id');
       depIdx = header.indexOf('departure_time');
+      arrIdx = header.indexOf('arrival_time');
       seqIdx = header.indexOf('stop_sequence');
       return;
     }
@@ -191,6 +194,7 @@ async function main() {
     if (prevLast === undefined || seq > prevLast) {
       lastSeq.set(tripId, seq);
       lastStopId.set(tripId, parts[stopIdIdx]);
+      lastArrival.set(tripId, parseGtfsTime(parts[arrIdx]));
     }
   });
   console.log(`  first/last stop times captured for ${firstDeparture.size} trips`);
@@ -242,6 +246,10 @@ async function main() {
   }
 
   const buckets = new Map();
+  // Parallel bucket keyed the same way as `buckets`, storing per-trip durations
+  // (minutes) so ghost detection can compare observed active vehicle counts to
+  // `duration / headway`.
+  const durationBuckets = new Map();
   function bucketKey(route, dir, dayType, hour) {
     return `${route}|${dir}|${dayType}|${hour}`;
   }
@@ -258,6 +266,13 @@ async function main() {
     const key = bucketKey(meta.route, meta.dir, meta.dayType, hour);
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(dep);
+
+    const arr = lastArrival.get(tripId);
+    if (arr != null && arr > dep) {
+      const durMin = (arr - dep) / 60;
+      if (!durationBuckets.has(key)) durationBuckets.set(key, []);
+      durationBuckets.get(key).push(durMin);
+    }
 
     const rdKey = `${meta.route}|${meta.dir}`;
     if (!lastStopSample.has(rdKey)) {
@@ -302,6 +317,16 @@ async function main() {
     }
     if (!bucket[route][dir].headways[dayType]) bucket[route][dir].headways[dayType] = {};
     bucket[route][dir].headways[dayType][hour] = Math.round(medMin * 10) / 10;
+
+    const durations = durationBuckets.get(key);
+    if (durations && durations.length > 0) {
+      const medDur = median(durations);
+      if (medDur != null) {
+        if (!bucket[route][dir].durations) bucket[route][dir].durations = {};
+        if (!bucket[route][dir].durations[dayType]) bucket[route][dir].durations[dayType] = {};
+        bucket[route][dir].durations[dayType][hour] = Math.round(medDur * 10) / 10;
+      }
+    }
   }
 
   Fs.ensureDirSync(Path.dirname(OUT_PATH));

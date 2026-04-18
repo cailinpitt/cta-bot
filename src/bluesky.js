@@ -114,4 +114,12 @@ async function postWithVideo(agent, text, videoBuffer, altText, replyRef = null)
   return { url: postUrl(result), uri: result.uri, cid: result.cid };
 }
 
-module.exports = { loginBus, loginTrain, postWithImage, postWithVideo };
+async function postText(agent, text, replyRef = null) {
+  const result = await agent.post({
+    text,
+    ...(replyRef && { reply: replyRef }),
+  });
+  return { url: postUrl(result), uri: result.uri, cid: result.cid };
+}
+
+module.exports = { loginBus, loginTrain, postWithImage, postWithVideo, postText };

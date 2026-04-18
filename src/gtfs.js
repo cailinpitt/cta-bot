@@ -161,4 +161,80 @@ function expectedTrainHeadwayMin(line, destination, now = new Date()) {
   return null;
 }
 
-module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, resolveDirection, dayTypeFor, chicagoHour };
+/**
+ * Expected trip duration (minutes) for a route+pattern at a given instant.
+ * Used by ghost detection: `duration / headway` ≈ number of buses that should
+ * be simultaneously active on the route+direction, which is what distinct
+ * vehicle counts over an hour actually measure. Same dayType/hour fallback as
+ * `expectedHeadwayMin`.
+ */
+function expectedTripMinutes(route, pattern, now = new Date()) {
+  const index = loadIndex();
+  const byDir = index.routes[route];
+  if (!byDir) return null;
+  const dir = resolveDirection({ ...pattern, route });
+  if (!dir) return null;
+  const dirInfo = byDir[dir];
+  if (!dirInfo || !dirInfo.durations) return null;
+  const dayType = dayTypeFor(now);
+  const candidates = [dayType, dayType === 'saturday' || dayType === 'sunday' ? 'weekend' : null].filter(Boolean);
+  for (const dt of candidates) {
+    const dur = dirInfo.durations[dt];
+    if (!dur) continue;
+    const hour = chicagoHour(now);
+    if (dur[hour] != null) return dur[hour];
+    let bestDelta = 25;
+    let bestVal = null;
+    for (const [h, v] of Object.entries(dur)) {
+      const delta = Math.min(Math.abs(parseInt(h, 10) - hour), 24 - Math.abs(parseInt(h, 10) - hour));
+      if (delta < bestDelta) { bestDelta = delta; bestVal = v; }
+    }
+    if (bestVal != null) return bestVal;
+  }
+  return null;
+}
+
+/**
+ * Train equivalent of `expectedTripMinutes`. Direction is picked by destination
+ * coordinate (same logic as `expectedTrainHeadwayMin`).
+ */
+function expectedTrainTripMinutes(line, destination, now = new Date()) {
+  const index = loadIndex();
+  const gtfsId = TRAIN_LINE_TO_GTFS[line];
+  if (!gtfsId) return null;
+  const byDir = index.lines && index.lines[gtfsId];
+  if (!byDir) return null;
+
+  let dirInfo = null;
+  const dirs = Object.values(byDir);
+  if (dirs.length === 1) {
+    dirInfo = dirs[0];
+  } else if (destination && destination.lat != null) {
+    let bestDist = Infinity;
+    for (const info of dirs) {
+      if (info.terminalLat == null) continue;
+      const d = haversineFt({ lat: info.terminalLat, lon: info.terminalLon }, destination);
+      if (d < bestDist) { bestDist = d; dirInfo = info; }
+    }
+  }
+  if (!dirInfo || !dirInfo.durations) return null;
+
+  const dayType = dayTypeFor(now);
+  const candidates = [dayType, dayType === 'saturday' || dayType === 'sunday' ? 'weekend' : null].filter(Boolean);
+  for (const dt of candidates) {
+    const dur = dirInfo.durations[dt];
+    if (!dur) continue;
+    const hour = chicagoHour(now);
+    if (dur[hour] != null) return dur[hour];
+    let bestDelta = 25;
+    let bestVal = null;
+    for (const [h, v] of Object.entries(dur)) {
+      const delta = Math.min(Math.abs(parseInt(h, 10) - hour), 24 - Math.abs(parseInt(h, 10) - hour));
+      if (delta < bestDelta) { bestDelta = delta; bestVal = v; }
+    }
+    if (bestVal != null) return bestVal;
+  }
+  return null;
+}
+
+module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, expectedTripMinutes, expectedTrainTripMinutes, resolveDirection, dayTypeFor, chicagoHour };

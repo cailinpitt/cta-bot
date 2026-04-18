@@ -30,6 +30,11 @@
     "train-gaps:dry": "node bin/trainGaps.js --dry-run",
     "train-speedmap": "node bin/trainSpeedmap.js",
     "train-speedmap:dry": "node bin/trainSpeedmap.js --dry-run",
+    "observe-ghosts": "node scripts/observeGhosts.js",
+    "ghosts": "node bin/ghosts.js",
+    "ghosts:dry": "node bin/ghosts.js --dry-run",
+    "train-ghosts": "node bin/trainGhosts.js",
+    "train-ghosts:dry": "node bin/trainGhosts.js --dry-run",
     "test": "node --test test/*.test.js"
   },
   "author": "Cailin Pitt <cailinpitt1@gmail.com> (https://cailinpitt.com)",

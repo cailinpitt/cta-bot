@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { recordTrainObservations } = require('./observations');
 
 const BASE = 'http://lapi.transitchicago.com/api/1.0';
 const ALL_LINES = ['red', 'blue', 'brn', 'g', 'org', 'p', 'pink', 'y'];
@@ -66,6 +67,7 @@ async function getAllTrainPositions(lines = ALL_LINES) {
     }
   }
   if (filtered > 0) console.log(`Filtered ${filtered} train(s) with out-of-bounds coordinates`);
+  recordTrainObservations(trains);
   return trains;
 }
 

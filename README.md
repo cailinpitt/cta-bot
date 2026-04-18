@@ -14,6 +14,7 @@ Bluesky bots that post visualizations generated from CTA train and bus tracker A
 - **Bus speedmap** — color-codes a bus route by actual vehicle speed over an hour
 - **Train speedmap** — color-codes an L line by actual train speed over an hour, with separate ribbons per direction
 - **L system snapshot** — map of all active trains system-wide, with a zoomed inset of the Loop
+- **Ghost buses / trains** — hourly rollup post listing route+direction pairs where observed active vehicle count is materially below what the scheduled headway + trip duration imply
 - **Historical callouts** — posts are annotated with frequency and severity context from prior posts (e.g. "3rd Route 66 bunch reported today", "tightest reported on this line in 30 days")
 
 The bus bot tracks a subset of CTA routes — see `src/routes.js` for the list. The train bot covers all 8 L lines.
@@ -68,6 +69,11 @@ The bus bot tracks a subset of CTA routes — see `src/routes.js` for the list. 
 | `npm run train-speedmap:dry` | Dry run |
 | `npm run snapshot` | Post L system snapshot |
 | `npm run snapshot:dry` | Dry run |
+| `npm run observe-ghosts` | Bus observer for ghost detection — fetches `routes.ghosts` and logs positions (no posting). Run on a ~5-minute cron. |
+| `npm run ghosts` | Post the hourly ghost-bus rollup |
+| `npm run ghosts:dry` | Dry run |
+| `npm run train-ghosts` | Post the hourly ghost-train rollup |
+| `npm run train-ghosts:dry` | Dry run |
 | `npm test` | Run the test suite |
 
 ## State
@@ -81,4 +87,21 @@ The DB uses WAL mode — if you inspect `history.sqlite` with a CLI while the bo
 
 ## GTFS
 
-Gap detection (bus and train) compares observed spacing against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → median headway` lookup covering tracked bus routes and all 8 L lines. Run it weekly — headways don't change often, but scheduled service pickups/cuts do. Requires `unzip` on PATH.
+Gap and ghost detection (bus and train) compare observed service against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → { median headway, median trip duration }` lookup covering tracked bus routes and all 8 L lines. Run it weekly — headways don't change often, but scheduled service pickups/cuts do. Requires `unzip` on PATH.
+
+## Ghost detection
+
+Ghosts = buses/trains missing from the road versus what the schedule implies. The model is `trip_duration / headway` = expected active vehicles per direction, compared against the median distinct-vehicle count per polling snapshot over the past hour. A ghost event requires the gap to be ≥25% of expected **and** ≥3 vehicles in absolute terms.
+
+Observations are written to the `observations` table in `history.sqlite` from inside `getVehicles` and `getAllTrainPositions`, so every API call made by any job contributes. To guarantee consistent bus coverage for routes not touched by bunching/gaps, a dedicated observer cron (`npm run observe-ghosts`) fetches `routes.ghosts` on a fixed ~5-minute cadence. Trains need no dedicated observer — the train API returns all 8 lines in one call, which bunching/gaps jobs already make regularly.
+
+Recommended crontab additions:
+
+```
+# Ghost bus observer — feeds the hourly rollup with consistent coverage
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node scripts/observeGhosts.js >> cron/observe-ghosts-cron.log 2>&1
+
+# Hourly ghost rollups (offset from other jobs to avoid stomping)
+7 * * * * cd /path/to/cta-bot && /usr/bin/node bin/ghosts.js >> cron/ghosts-cron.log 2>&1
+8 * * * * cd /path/to/cta-bot && /usr/bin/node bin/trainGhosts.js >> cron/train-ghosts-cron.log 2>&1
+```
