@@ -11,6 +11,9 @@ const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
+  'https://overpass.osm.jp/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
 const BBOX = { minLat: 41.60, maxLat: 42.10, minLon: -87.95, maxLon: -87.50 };
