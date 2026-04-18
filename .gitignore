@@ -5,3 +5,4 @@ assets/
 /state/
 *.log
 .DS_Store
+.claude/
