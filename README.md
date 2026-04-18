@@ -18,6 +18,17 @@ Bluesky bots that post visualizations generated from CTA train and bus tracker A
 
 The bus bot tracks a subset of CTA routes — see `src/routes.js` for the list. The train bot covers all 8 L lines.
 
+## Examples
+
+### Bus bunching
+![Bus bunching example — 3 buses on Route 151 within 889 ft near Michigan & Erie](docs/images/bus-bunching.jpg)
+
+### Bus gap
+![Bus gap example — 35 min gap on Route 147 near Foster & Marine Drive](docs/images/bus-gap.jpg)
+
+### L system snapshot
+![L system snapshot — live positions of all active CTA L trains](docs/images/snapshot.jpg)
+
 ## Setup
 
 1. `cp .env.example .env` and fill in CTA API keys, Bluesky credentials, and a Mapbox token.
