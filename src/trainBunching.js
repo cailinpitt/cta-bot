@@ -4,6 +4,13 @@ const { buildLinePolyline, snapToLine } = require('./trainSpeedmap');
 const TRAIN_BUNCHING_FT = 2000; // ~0.38 mi, tighter than normal rush-hour headway
 const MIN_DISTANCE_FT = 200;    // ignore pairs closer than this — likely same station or API glitch
 const TERMINAL_ZONE_CAP_FT = 1500; // cap for the terminal zone; shorter lines scale down by 10% of length
+const MAX_HEADING_DIFF_DEG = 60;   // pair must be moving geographically the same way
+
+// Smallest angular difference between two compass headings (0–180).
+function headingDiff(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
 
 /**
  * Detect the tightest bunched pair of trains on the same line heading the same
@@ -62,6 +69,15 @@ function detectTrainBunching(trains, trainLines) {
         // of service) rather than real bunching mid-route.
         if (Math.min(di, dj) < terminalZoneFt) continue;
         if (totalFt - Math.max(di, dj) < terminalZoneFt) continue;
+        // Heading gate: on loop lines (Orange/Brown/Pink/Purple) every train
+        // shares trDr regardless of whether it's outbound or inbound, and the
+        // line polyline is undirected — so two trains on parallel outbound and
+        // inbound tracks can snap to the same trackDist while moving in
+        // opposite directions. Require the pair's compass headings to agree.
+        const ti = snapped[i].train;
+        const tj = snapped[j].train;
+        if (Number.isFinite(ti.heading) && Number.isFinite(tj.heading)
+            && headingDiff(ti.heading, tj.heading) > MAX_HEADING_DIFF_DEG) continue;
         if (!best || dist < best.distanceFt) {
           best = {
             line,
