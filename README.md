@@ -9,11 +9,14 @@ Bluesky bots that post visualizations generated from CTA train and bus tracker A
 
 - **Bus bunching** — detects clusters of buses on the same route/direction, posts an annotated map, then replies with a ~10-minute timelapse of the cluster
 - **Bus gaps** — inverse of bunching: flags long stretches with no bus service, comparing observed spacing against the CTA's published GTFS schedule
-- **Train bunching** — detects pairs of L trains running too close together, same map + timelapse reply flow
+- **Train bunching** — detects clusters (2+) of L trains running too close together, same map + timelapse reply flow
+- **Train gaps** — flags long stretches with no L service on a given line/direction, using the GTFS rail schedule for expected headways
 - **Bus speedmap** — color-codes a bus route by actual vehicle speed over an hour
 - **Train speedmap** — color-codes an L line by actual train speed over an hour, with separate ribbons per direction
 - **L system snapshot** — map of all active trains system-wide, with a zoomed inset of the Loop
 - **Historical callouts** — posts are annotated with frequency and severity context from prior posts (e.g. "3rd Route 66 bunch reported today", "tightest reported on this line in 30 days")
+
+The bus bot tracks a subset of CTA routes — see `src/routes.js` for the list. The train bot covers all 8 L lines.
 
 ## Setup
 
@@ -34,10 +37,13 @@ Bluesky bots that post visualizations generated from CTA train and bus tracker A
 | `npm run speedmap:dry` | Dry run |
 | `npm run train-bunching` | Run train bunching detection and post |
 | `npm run train-bunching:dry` | Dry run |
+| `npm run train-gaps` | Run train gap detection and post |
+| `npm run train-gaps:dry` | Dry run |
 | `npm run train-speedmap` | Run train speedmap collection and post |
 | `npm run train-speedmap:dry` | Dry run |
 | `npm run snapshot` | Post L system snapshot |
 | `npm run snapshot:dry` | Dry run |
+| `npm test` | Run the test suite |
 
 ## State
 
@@ -50,4 +56,4 @@ The DB uses WAL mode — if you inspect `history.sqlite` with a CLI while the bo
 
 ## GTFS
 
-Gap detection compares observed bus spacing against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route, direction, day_type, hour) → median headway` lookup. Run it weekly — headways don't change often, but scheduled service pickups/cuts do. Requires `unzip` on PATH.
+Gap detection (bus and train) compares observed spacing against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → median headway` lookup covering tracked bus routes and all 8 L lines. Run it weekly — headways don't change often, but scheduled service pickups/cuts do. Requires `unzip` on PATH.
