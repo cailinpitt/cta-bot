@@ -28,7 +28,8 @@
     "train-gaps": "node bin/trainGaps.js",
     "train-gaps:dry": "node bin/trainGaps.js --dry-run",
     "train-speedmap": "node bin/trainSpeedmap.js",
-    "train-speedmap:dry": "node bin/trainSpeedmap.js --dry-run"
+    "train-speedmap:dry": "node bin/trainSpeedmap.js --dry-run",
+    "test": "node --test test/*.test.js"
   },
   "author": "Cailin Pitt <cailinpitt1@gmail.com> (https://cailinpitt.com)",
   "license": "ISC"

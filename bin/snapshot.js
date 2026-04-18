@@ -5,38 +5,12 @@ const Fs = require('fs-extra');
 const Path = require('path');
 const argv = require('minimist')(process.argv.slice(2));
 
-const { getAllTrainPositions, LINE_COLORS, LINE_NAMES, ALL_LINES } = require('../src/trainApi');
+const { getAllTrainPositions, LINE_COLORS } = require('../src/trainApi');
 const { renderSnapshot } = require('../src/map');
 const trainLines = require('../src/data/trainLines.json');
 const { loginTrain, postWithImage } = require('../src/bluesky');
 const { pruneOldAssets } = require('../src/cleanup');
-
-function formatTimeCT(date) {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Chicago',
-  });
-}
-
-function buildPostText(trains, now) {
-  const total = trains.length;
-  const byLine = new Map();
-  for (const t of trains) byLine.set(t.line, (byLine.get(t.line) || 0) + 1);
-
-  // Break down by line in canonical order, showing 0 for inactive lines.
-  const parts = ALL_LINES
-    .map((l) => `${LINE_NAMES[l]} ${byLine.get(l) || 0}`);
-
-  return `🚆 CTA L right now\n${formatTimeCT(now)} CT · ${total} trains system-wide\n\n${parts.join(' · ')}`;
-}
-
-function buildAltText(trains) {
-  const byLine = new Map();
-  for (const t of trains) byLine.set(t.line, (byLine.get(t.line) || 0) + 1);
-  const summary = ALL_LINES
-    .map((l) => `${byLine.get(l) || 0} ${LINE_NAMES[l]}`)
-    .join(', ');
-  return `Map of Chicago showing live positions of ${trains.length} CTA L trains currently in service, colored by line: ${summary}.`;
-}
+const { buildPostText, buildAltText } = require('../src/snapshot');
 
 async function main() {
   pruneOldAssets();
