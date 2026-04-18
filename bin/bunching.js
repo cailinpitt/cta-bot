@@ -192,11 +192,20 @@ async function main() {
   if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
 
   console.log('Rendering map...');
-  const view = computeBunchingView(bunch, pattern);
-  const bboxSignals = await fetchSignalsInBbox(view.bbox);
+  // Scope the signal fetch to the full pattern bbox, not the tight still-image
+  // bbox. The video reframes to cover buses as they move, so a narrow fetch
+  // leaves intersections blank once the viewport drifts past them. Off-screen
+  // signals are cheap to carry — renderBunchingFrame clips them at project time.
+  const patternBbox = {
+    minLat: Math.min(...pattern.points.map((p) => p.lat)),
+    maxLat: Math.max(...pattern.points.map((p) => p.lat)),
+    minLon: Math.min(...pattern.points.map((p) => p.lon)),
+    maxLon: Math.max(...pattern.points.map((p) => p.lon)),
+  };
+  const bboxSignals = await fetchSignalsInBbox(patternBbox);
   const onRoute = filterSignalsOnRoute(bboxSignals, pattern.points);
   const signals = dedupeNearbySignals(onRoute);
-  console.log(`Signals: ${bboxSignals.length} in bbox → ${onRoute.length} on route → ${signals.length} after dedupe`);
+  console.log(`Signals: ${bboxSignals.length} in pattern bbox → ${onRoute.length} on route → ${signals.length} after dedupe`);
   const image = await renderBunchingMap(bunch, pattern, signals);
 
   const text = buildPostText(bunch, pattern, stop, callouts);
