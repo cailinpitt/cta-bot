@@ -40,7 +40,7 @@ function fmtMin(m) {
 function buildPostText(gap, pattern, stop, callouts = []) {
   const routeName = routeNames[gap.route];
   const title = routeName ? `Route ${gap.route} (${routeName})` : `Route ${gap.route}`;
-  const base = `🕳️ ${title} — ${pattern.direction}\n${fmtMin(gap.gapMin)} gap near ${stop.stopName} — scheduled every ${fmtMin(gap.expectedMin)}`;
+  const base = `🕳️ ${title} — ${pattern.direction}\n${fmtMin(gap.gapMin)} gap near ${stop.stopName} — typically every ${fmtMin(gap.expectedMin)}`;
   const tail = history.formatCallouts(callouts);
   return tail ? `${base}\n${tail}` : base;
 }

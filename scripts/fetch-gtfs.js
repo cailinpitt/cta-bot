@@ -148,6 +148,7 @@ async function main() {
   // Per trip, track first-stop departure time (stop_sequence === min) and
   // last-stop id (stop_sequence === max).
   const firstDeparture = new Map(); // trip_id → seconds
+  const firstStopId = new Map();   // trip_id → stop_id (origin terminal)
   const firstSeq = new Map();
   const lastStopId = new Map();    // trip_id → stop_id
   const lastSeq = new Map();
@@ -174,6 +175,7 @@ async function main() {
     if (prevFirst === undefined || seq < prevFirst) {
       firstSeq.set(tripId, seq);
       firstDeparture.set(tripId, parseGtfsTime(parts[depIdx]));
+      firstStopId.set(tripId, parts[stopIdIdx]);
     }
     const prevLast = lastSeq.get(tripId);
     if (prevLast === undefined || seq > prevLast) {
@@ -206,6 +208,29 @@ async function main() {
     if (!prev || c > prev.count) dominantService.set(rdt, { serviceId, count: c });
   }
 
+  // A single route+direction can have trips starting at multiple origins:
+  // the main terminal (where the rider-facing PDF schedule starts) and garage
+  // pullouts or short-turn origins. Mixing them overstates frequency at the
+  // main terminal. Pick the dominant first-stop per (route, dir, dayType) —
+  // the origin with the most trips — matching what the CTA's published
+  // schedule shows.
+  const originCounts = new Map(); // key: route|dir|dayType|stopId → count
+  for (const [tripId, meta] of tripMeta) {
+    const dominant = dominantService.get(`${meta.route}|${meta.dir}|${meta.dayType}`);
+    if (!dominant || dominant.serviceId !== meta.serviceId) continue;
+    const origin = firstStopId.get(tripId);
+    if (!origin) continue;
+    const k = `${meta.route}|${meta.dir}|${meta.dayType}|${origin}`;
+    originCounts.set(k, (originCounts.get(k) || 0) + 1);
+  }
+  const dominantOrigin = new Map(); // key: route|dir|dayType → stopId
+  for (const [k, c] of originCounts) {
+    const [route, dir, dayType, stopId] = k.split('|');
+    const rdt = `${route}|${dir}|${dayType}`;
+    const prev = dominantOrigin.get(rdt);
+    if (!prev || c > prev.count) dominantOrigin.set(rdt, { stopId, count: c });
+  }
+
   const buckets = new Map();
   function bucketKey(route, dir, dayType, hour) {
     return `${route}|${dir}|${dayType}|${hour}`;
@@ -215,6 +240,8 @@ async function main() {
   for (const [tripId, meta] of tripMeta) {
     const dominant = dominantService.get(`${meta.route}|${meta.dir}|${meta.dayType}`);
     if (!dominant || dominant.serviceId !== meta.serviceId) continue;
+    const origin = dominantOrigin.get(`${meta.route}|${meta.dir}|${meta.dayType}`);
+    if (!origin || firstStopId.get(tripId) !== origin.stopId) continue;
     const dep = firstDeparture.get(tripId);
     if (dep == null) continue;
     const hour = Math.floor(dep / 3600) % 24;
