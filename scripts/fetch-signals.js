@@ -35,7 +35,13 @@ async function main() {
         timeout: 180000,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
+      if (data.remark) throw new Error(`Overpass remark: ${data.remark}`);
       const signals = (data.elements || []).map((el) => ({ lat: el.lat, lon: el.lon }));
+      // Chicago has thousands of signals — a near-empty response means the
+      // mirror returned a partial or empty result (e.g. silent rate limit).
+      // Treat as a failure and try the next mirror rather than clobbering
+      // a good cache with garbage.
+      if (signals.length < 1000) throw new Error(`Suspiciously low count: ${signals.length}`);
       Fs.ensureDirSync(Path.dirname(OUT_PATH));
       Fs.writeJsonSync(OUT_PATH, signals);
       console.log(`Wrote ${signals.length} signals to ${OUT_PATH}`);
