@@ -88,7 +88,7 @@ function computeBunchingView(bunch, pattern, extraVehicles = []) {
     bearingDeg = diffFwd <= diffRev ? fwd : rev;
   }
 
-  return { overlays, centerLat, centerLon, zoom, bearingDeg };
+  return { overlays, centerLat, centerLon, zoom, bearingDeg, bbox };
 }
 
 async function fetchBunchingBaseMap(view) {
@@ -97,9 +97,27 @@ async function fetchBunchingBaseMap(view) {
   return fetchMapboxStatic(url, 20000);
 }
 
-// Composite bus markers and the direction arrow onto a pre-fetched base map.
-// The base map and arrow are static across a video; only marker positions vary.
-async function renderBunchingFrame(view, baseMap, vehicles) {
+// Composite bus markers, traffic-signal dots, and the direction arrow onto a
+// pre-fetched base map. The base map, signals, and arrow are static across a
+// video; only marker positions vary.
+async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
+  // Signals render below buses — small horizontal-traffic-light glyphs that
+  // read clearly without competing with the primary markers. Drawn inline
+  // (not via Unicode) so librsvg renders the same shape on every host.
+  const SIGNAL_W = 36;
+  const SIGNAL_H = 16;
+  const signalElements = signals.map((s) => {
+    const { x, y } = project(s.lat, s.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) return '';
+    const left = x - SIGNAL_W / 2;
+    const top = y - SIGNAL_H / 2;
+    return [
+      `<rect x="${left}" y="${top}" width="${SIGNAL_W}" height="${SIGNAL_H}" rx="4" ry="4" fill="#1c1c1c" stroke="#fff" stroke-width="1.5"/>`,
+      `<circle cx="${left + 7}" cy="${y}" r="4" fill="#e53935"/>`,
+      `<circle cx="${left + 18}" cy="${y}" r="4" fill="#fdd835"/>`,
+      `<circle cx="${left + 29}" cy="${y}" r="4" fill="#43a047"/>`,
+    ].join('');
+  });
   const markerElements = vehicles.map((v) => {
     const { x, y } = project(v.lat, v.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
     const iconSize = BUS_MARKER_RADIUS * 1.6;
@@ -111,7 +129,7 @@ async function renderBunchingFrame(view, baseMap, vehicles) {
     ].join('');
   });
   const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, view.bearingDeg)];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
@@ -119,10 +137,10 @@ async function renderBunchingFrame(view, baseMap, vehicles) {
     .toBuffer();
 }
 
-async function renderBunchingMap(bunch, pattern) {
+async function renderBunchingMap(bunch, pattern, signals = []) {
   const view = computeBunchingView(bunch, pattern);
   const baseMap = await fetchBunchingBaseMap(view);
-  return renderBunchingFrame(view, baseMap, bunch.vehicles);
+  return renderBunchingFrame(view, baseMap, bunch.vehicles, signals);
 }
 
 module.exports = {

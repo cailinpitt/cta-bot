@@ -19,6 +19,7 @@
     "gaps": "node bin/gaps.js",
     "gaps:dry": "node bin/gaps.js --dry-run",
     "fetch-gtfs": "node scripts/fetch-gtfs.js",
+    "fetch-signals": "node scripts/fetch-signals.js",
     "speedmap": "node bin/speedmap.js",
     "speedmap:dry": "node bin/speedmap.js --dry-run",
     "snapshot": "node bin/snapshot.js",

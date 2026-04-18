@@ -37,6 +37,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
   const ticks = opts.ticks || DEFAULT_TICKS;
   const framerate = opts.framerate || DEFAULT_FRAMERATE;
   const interpolate = Math.max(1, opts.interpolate || DEFAULT_INTERPOLATE);
+  const signals = opts.signals || [];
 
   const bunchVids = new Set(bunch.vehicles.map((v) => v.vid));
   const snapshots = [{ ts: Date.now(), vehicles: bunch.vehicles }];
@@ -119,7 +120,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
   const tmpDir = await Fs.mkdtemp(Path.join(Os.tmpdir(), 'cta-bunch-video-'));
   try {
     for (let i = 0; i < vehicleFrames.length; i++) {
-      const buf = await renderBunchingFrame(view, baseMap, vehicleFrames[i]);
+      const buf = await renderBunchingFrame(view, baseMap, vehicleFrames[i], signals);
       const framePath = Path.join(tmpDir, `frame_${String(i).padStart(3, '0')}.jpg`);
       await Fs.writeFile(framePath, buf);
     }

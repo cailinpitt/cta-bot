@@ -9,7 +9,8 @@ const { getVehicles } = require('../src/cta');
 const { names: routeNames, bunching: bunchingRoutes } = require('../src/routes');
 const { detectAllBunching, TERMINAL_PDIST_FT } = require('../src/bunching');
 const { loadPattern } = require('../src/patterns');
-const { renderBunchingMap } = require('../src/map');
+const { renderBunchingMap, computeBunchingView } = require('../src/map');
+const { fetchSignalsInBbox, filterSignalsOnRoute, dedupeNearbySignals } = require('../src/trafficSignals');
 const { captureBunchingVideo } = require('../src/bunchingVideo');
 const { loginBus, postWithImage, postWithVideo } = require('../src/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../src/state');
@@ -191,7 +192,12 @@ async function main() {
   if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
 
   console.log('Rendering map...');
-  const image = await renderBunchingMap(bunch, pattern);
+  const view = computeBunchingView(bunch, pattern);
+  const bboxSignals = await fetchSignalsInBbox(view.bbox);
+  const onRoute = filterSignalsOnRoute(bboxSignals, pattern.points);
+  const signals = dedupeNearbySignals(onRoute);
+  console.log(`Signals: ${bboxSignals.length} in bbox → ${onRoute.length} on route → ${signals.length} after dedupe`);
+  const image = await renderBunchingMap(bunch, pattern, signals);
 
   const text = buildPostText(bunch, pattern, stop, callouts);
   const alt = buildAltText(bunch, pattern, stop);
@@ -206,7 +212,7 @@ async function main() {
       const tickMs = argv['tick-ms'] ? parseInt(argv['tick-ms'], 10) : undefined;
       const interpolate = argv.interpolate ? parseInt(argv.interpolate, 10) : undefined;
       console.log(`\nCapturing video (ticks=${ticks || 'default'}, tickMs=${tickMs || 'default'}, interpolate=${interpolate || 'default'})...`);
-      const result = await captureBunchingVideo(bunch, pattern, { ticks, tickMs, interpolate });
+      const result = await captureBunchingVideo(bunch, pattern, { ticks, tickMs, interpolate, signals });
       if (!result) {
         console.log('Video capture produced <2 frames, skipped');
       } else {
@@ -255,7 +261,7 @@ async function main() {
   // already went out, so we log and move on.
   try {
     console.log('Capturing bunching timelapse...');
-    const video = await captureBunchingVideo(bunch, pattern);
+    const video = await captureBunchingVideo(bunch, pattern, { signals });
     if (!video) {
       console.log('Timelapse capture produced <2 frames, skipping reply');
       return;

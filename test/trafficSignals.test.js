@@ -1,0 +1,45 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { filterSignalsOnRoute, dedupeNearbySignals } = require('../src/trafficSignals');
+const { pointAtFt } = require('./helpers');
+
+// A straight N-S route: 10 points along lon=-87.65, spanning 10000 ft.
+const route = [];
+for (let i = 0; i <= 10; i++) route.push(pointAtFt(10000, i * 1000));
+
+test('filterSignalsOnRoute keeps signals on the line and drops far ones', () => {
+  const onLine = pointAtFt(10000, 3000);
+  const near = { lat: onLine.lat, lon: onLine.lon + 0.0001 }; // ~27 ft east
+  const far = { lat: onLine.lat, lon: onLine.lon + 0.003 };  // ~810 ft east
+  const kept = filterSignalsOnRoute([onLine, near, far], route, 120);
+  assert.equal(kept.length, 2);
+  assert.ok(!kept.includes(far));
+});
+
+test('filterSignalsOnRoute threshold is configurable', () => {
+  const p = pointAtFt(10000, 5000);
+  const offset = { lat: p.lat, lon: p.lon + 0.0008 }; // ~220 ft east
+  assert.equal(filterSignalsOnRoute([offset], route, 120).length, 0);
+  assert.equal(filterSignalsOnRoute([offset], route, 300).length, 1);
+});
+
+test('dedupeNearbySignals collapses clusters within minFt to one', () => {
+  // 4 signals within a ~40 ft box — one intersection tagged at all 4 corners.
+  const base = pointAtFt(10000, 5000);
+  const cluster = [
+    base,
+    { lat: base.lat + 0.00005, lon: base.lon },
+    { lat: base.lat, lon: base.lon + 0.00005 },
+    { lat: base.lat + 0.00005, lon: base.lon + 0.00005 },
+  ];
+  const kept = dedupeNearbySignals(cluster, 150);
+  assert.equal(kept.length, 1);
+});
+
+test('dedupeNearbySignals preserves signals beyond minFt', () => {
+  const a = pointAtFt(10000, 2000);
+  const b = pointAtFt(10000, 4000); // 2000 ft away
+  const c = pointAtFt(10000, 6000); // 2000 ft further
+  const kept = dedupeNearbySignals([a, b, c], 150);
+  assert.equal(kept.length, 3);
+});
