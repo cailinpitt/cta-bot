@@ -30,7 +30,7 @@ The bus bot tracks a subset of CTA routes — see `src/routes.js` for the list. 
 ### Bus gap
 
 > 🕳️ Route 147 (Outer Lake Shore Express) — Southbound
-> 35 min gap near Foster & Marine Drive — scheduled every 9 min
+> 35 min gap near Foster & Marine Drive — currently scheduled every 9 min
 
 ![Bus gap example — 35 min gap on Route 147 near Foster & Marine Drive](docs/images/bus-gap.jpg)
 

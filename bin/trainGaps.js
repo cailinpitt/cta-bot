@@ -49,7 +49,7 @@ function buildPostText(gap, callouts = []) {
   const dest = gap.leading.destination;
   const where = gap.nearStation?.name || gap.leading.nextStation;
   const whereClause = where ? ` near ${where}` : '';
-  const base = `🕳️ ${lineName} Line — to ${dest}\n${fmtMin(gap.gapMin)} gap${whereClause} — scheduled every ${fmtMin(gap.expectedMin)}`;
+  const base = `🕳️ ${lineName} Line — to ${dest}\n${fmtMin(gap.gapMin)} gap${whereClause} — currently scheduled every ${fmtMin(gap.expectedMin)}`;
   const tail = history.formatCallouts(callouts);
   return tail ? `${base}\n${tail}` : base;
 }
