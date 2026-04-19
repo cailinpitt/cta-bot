@@ -68,7 +68,8 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
   // non-decreasing. Same fix as the train video — see trainBunchingVideo.js.
   const linePts = pattern.points.map((p) => [p.lat, p.lon]);
   const lineCum = cumulativeDistances(pattern.points);
-  if (linePts.length >= 2) {
+  const hasPolyline = linePts.length >= 2;
+  if (hasPolyline) {
     const maxTrackByVid = new Map();
     for (const snap of snapshots) {
       for (const v of snap.vehicles) {
@@ -76,6 +77,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
         const prev = maxTrackByVid.get(v.vid);
         const clamped = prev == null ? raw : Math.max(prev, raw);
         maxTrackByVid.set(v.vid, clamped);
+        v.track = clamped;
         const snapped = pointAlongLine(linePts, lineCum, clamped);
         if (snapped) { v.lat = snapped.lat; v.lon = snapped.lon; }
       }
@@ -103,10 +105,24 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
         const vb = b.get(vid);
         const from = va || vb;
         const to = vb || va;
+        // Interpolate along the pattern polyline when we have track distances
+        // on both endpoints — otherwise straight-line lerp cuts diagonally
+        // across turns. Fall back to Cartesian if the polyline is missing or a
+        // vehicle hasn't been snapped (e.g. it was off-pattern).
+        let lat, lon;
+        if (hasPolyline && from.track != null && to.track != null) {
+          const track = from.track + (to.track - from.track) * t;
+          const p = pointAlongLine(linePts, lineCum, track);
+          if (p) { lat = p.lat; lon = p.lon; }
+        }
+        if (lat == null) {
+          lat = from.lat + (to.lat - from.lat) * t;
+          lon = from.lon + (to.lon - from.lon) * t;
+        }
         vehicles.push({
           vid,
-          lat: from.lat + (to.lat - from.lat) * t,
-          lon: from.lon + (to.lon - from.lon) * t,
+          lat,
+          lon,
           heading: from.heading,
           pdist: from.pdist,
         });

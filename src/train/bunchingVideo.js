@@ -81,7 +81,8 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
   // clamping the along-track distance per rn to be monotonically non-decreasing.
   // Render positions are reconstructed from the clamped along-track value.
   const { points: linePts, cumDist: lineCum } = buildLinePolyline(trainLines, bunch.line);
-  if (linePts.length >= 2) {
+  const hasPolyline = linePts.length >= 2;
+  if (hasPolyline) {
     const maxTrackByRn = new Map();
     for (const snap of snapshots) {
       for (const t of snap.trains) {
@@ -89,6 +90,7 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
         const prev = maxTrackByRn.get(t.rn);
         const clamped = prev == null ? raw : Math.max(prev, raw);
         maxTrackByRn.set(t.rn, clamped);
+        t.track = clamped;
         const snapped = pointAlongLine(linePts, lineCum, clamped);
         if (snapped) { t.lat = snapped.lat; t.lon = snapped.lon; }
       }
@@ -113,11 +115,23 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
         const tb = b.get(rn);
         const from = ta || tb;
         const to = tb || ta;
+        // Interpolate along the line polyline when both endpoints have track
+        // distances — Cartesian lerp cuts diagonally across curves otherwise.
+        let lat, lon;
+        if (hasPolyline && from.track != null && to.track != null) {
+          const track = from.track + (to.track - from.track) * t;
+          const p = pointAlongLine(linePts, lineCum, track);
+          if (p) { lat = p.lat; lon = p.lon; }
+        }
+        if (lat == null) {
+          lat = from.lat + (to.lat - from.lat) * t;
+          lon = from.lon + (to.lon - from.lon) * t;
+        }
         frame.push({
           rn,
           line: from.line,
-          lat: from.lat + (to.lat - from.lat) * t,
-          lon: from.lon + (to.lon - from.lon) * t,
+          lat,
+          lon,
           heading: from.heading,
           destination: from.destination,
           nextStation: from.nextStation,
