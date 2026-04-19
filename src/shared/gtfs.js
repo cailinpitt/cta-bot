@@ -2,7 +2,7 @@ const Path = require('path');
 const Fs = require('fs-extra');
 const { haversineFt } = require('./geo');
 
-const INDEX_PATH = Path.join(__dirname, '..', 'data', 'gtfs', 'index.json');
+const INDEX_PATH = Path.join(__dirname, '..', '..', 'data', 'gtfs', 'index.json');
 const STALE_MS = 30 * 24 * 60 * 60 * 1000; // warn-only: index older than 30d is probably out of date
 
 let _index = null;

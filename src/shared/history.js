@@ -2,7 +2,7 @@ const Path = require('path');
 const Fs = require('fs-extra');
 const Database = require('better-sqlite3');
 
-const DB_PATH = Path.join(__dirname, '..', 'state', 'history.sqlite');
+const DB_PATH = Path.join(__dirname, '..', '..', 'state', 'history.sqlite');
 const ROLLOFF_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
