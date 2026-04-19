@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
 const argv = require('minimist')(process.argv.slice(2));
 
 const { names: routeNames, ghosts: ghostRoutes } = require('../../src/bus/routes');
-const { detectBusGhosts, buildRollupPost } = require('../../src/bus/ghosts');
+const { detectBusGhosts } = require('../../src/bus/ghosts');
+const { buildRollupPost } = require('../../src/shared/post');
 const { loadPattern } = require('../../src/bus/patterns');
 const { expectedHeadwayMin, expectedTripMinutes } = require('../../src/shared/gtfs');
 const { getBusObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginBus, postText } = require('../../src/bus/bluesky');
+const { runBin } = require('../../src/shared/runBin');
 
 const WINDOW_MS = 60 * 60 * 1000;
 
@@ -75,7 +77,4 @@ async function main() {
   console.log(`Posted: ${result.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

@@ -1,19 +1,17 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { getAllTrainPositions, LINE_COLORS } = require('../../src/train/api');
 const { renderSnapshot } = require('../../src/map');
 const trainLines = require('../../src/train/data/trainLines.json');
 const { loginTrain, postWithImage } = require('../../src/train/bluesky');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { buildPostText, buildAltText } = require('../../src/train/snapshot');
 
 async function main() {
-  pruneOldAssets();
+  setup();
 
   console.log('Fetching train positions for all 8 lines...');
   const trains = await getAllTrainPositions();
@@ -29,9 +27,7 @@ async function main() {
   const alt = buildAltText(trains);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `snapshot-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `snapshot-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -41,7 +37,4 @@ async function main() {
   console.log(`Posted: ${result.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

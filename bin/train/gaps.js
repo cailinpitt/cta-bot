@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { getAllTrainPositions, LINE_COLORS, LINE_NAMES } = require('../../src/train/api');
@@ -10,9 +8,10 @@ const { detectAllTrainGaps } = require('../../src/train/gaps');
 const { renderTrainGap } = require('../../src/map');
 const { loginTrain, postWithImage } = require('../../src/train/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
 const { expectedTrainHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
+const { buildPostText, buildAltText } = require('../../src/train/gapPost');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
 
@@ -40,31 +39,8 @@ function findStationByDestination(line, destination) {
   return null;
 }
 
-function fmtMin(m) {
-  return `${Math.round(m)} min`;
-}
-
-function buildPostText(gap, callouts = []) {
-  const lineName = LINE_NAMES[gap.line];
-  const dest = gap.leading.destination;
-  const where = gap.nearStation?.name || gap.leading.nextStation;
-  const whereClause = where ? ` near ${where}` : '';
-  const base = `🕳️ ${lineName} Line — to ${dest}\n${fmtMin(gap.gapMin)} gap${whereClause} — currently scheduled every ${fmtMin(gap.expectedMin)}`;
-  const tail = history.formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
-}
-
-function buildAltText(gap) {
-  const lineName = LINE_NAMES[gap.line];
-  const dest = gap.leading.destination;
-  const where = gap.nearStation?.name;
-  const whereClause = where ? ` near ${where}` : '';
-  return `Map of the ${lineName} Line toward ${dest} showing a ${fmtMin(gap.gapMin)} gap between trains${whereClause}.`;
-}
-
 async function main() {
-  pruneOldAssets();
-  history.rolloffOld();
+  setup();
 
   console.log('Fetching train positions...');
   const trains = await getAllTrainPositions();
@@ -136,9 +112,7 @@ async function main() {
   const alt = buildAltText(gap);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `train-gap-${LINE_NAMES[gap.line].toLowerCase()}-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `train-gap-${LINE_NAMES[gap.line].toLowerCase()}-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -178,7 +152,4 @@ async function main() {
   console.log(`Posted: ${primary.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

@@ -1,10 +1,5 @@
 const { LINE_NAMES, ALL_LINES } = require('./api');
-
-function formatTimeCT(date) {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Chicago',
-  });
-}
+const { formatTimeCT } = require('../shared/format');
 
 function countByLine(trains) {
   const byLine = new Map();

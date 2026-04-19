@@ -1,95 +1,23 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { getVehicles } = require('../../src/bus/api');
-const { names: routeNames, bunching: bunchingRoutes } = require('../../src/bus/routes');
-const { detectAllBunching, TERMINAL_PDIST_FT } = require('../../src/bus/bunching');
-const { loadPattern } = require('../../src/bus/patterns');
-const { renderBunchingMap, computeBunchingView } = require('../../src/map');
+const { bunching: bunchingRoutes } = require('../../src/bus/routes');
+const { detectAllBunching } = require('../../src/bus/bunching');
+const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
+const { renderBunchingMap } = require('../../src/map');
 const { fetchSignalsInBbox, filterSignalsOnRoute, dedupeNearbySignals, annotateSignalOrientations } = require('../../src/bus/trafficSignals');
 const { captureBunchingVideo } = require('../../src/bus/bunchingVideo');
 const { loginBus, postWithImage, postWithVideo } = require('../../src/bus/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
 const history = require('../../src/shared/history');
-
-function findNearestStop(pattern, pdist) {
-  const stops = pattern.points.filter((p) => p.type === 'S' && p.stopName);
-  let best = stops[0];
-  let bestDelta = Math.abs(stops[0].pdist - pdist);
-  for (const s of stops) {
-    const delta = Math.abs(s.pdist - pdist);
-    if (delta < bestDelta) {
-      best = s;
-      bestDelta = delta;
-    }
-  }
-  return best;
-}
-
-function formatDistance(ft) {
-  if (ft < 1000) return `${ft} ft`;
-  return `${(ft / 5280).toFixed(2)} mi`;
-}
-
-function buildPostText(bunch, pattern, stop, callouts = []) {
-  const routeName = routeNames[bunch.route];
-  const title = routeName ? `Route ${bunch.route} (${routeName})` : `Route ${bunch.route}`;
-  const count = bunch.vehicles.length;
-  const dir = pattern.direction;
-  const gap = formatDistance(bunch.spanFt);
-  const base = `🚌 ${title} — ${dir}\n${count} buses within ${gap} near ${stop.stopName}`;
-  const tail = history.formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
-}
-
-function buildAltText(bunch, pattern, stop) {
-  const routeName = routeNames[bunch.route];
-  const title = routeName ? `Route ${bunch.route} (${routeName})` : `Route ${bunch.route}`;
-  return `Map of ${title} near ${stop.stopName} showing ${bunch.vehicles.length} ${pattern.direction.toLowerCase()} buses within ${formatDistance(bunch.spanFt)} of each other.`;
-}
-
-function formatMinSec(totalSec) {
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-function elapsedMinutesLabel(totalSec) {
-  const m = Math.max(1, Math.round(totalSec / 60));
-  return m === 1 ? '1 minute' : `${m} minutes`;
-}
-
-function buildVideoPostText(result) {
-  const elapsed = elapsedMinutesLabel(result.elapsedSec);
-  let headline;
-  if (result.finalSpanFt != null) {
-    const delta = result.finalSpanFt - result.initialSpanFt;
-    if (delta > 50) {
-      headline = `${elapsed} later, the buses were ${formatDistance(delta)} farther apart.`;
-    } else if (delta < -50) {
-      headline = `${elapsed} later, the gap had closed by ${formatDistance(-delta)}.`;
-    } else {
-      headline = `Still bunched ${elapsed} later.`;
-    }
-    return `${headline}\n🎬 ${formatDistance(result.initialSpanFt)} → ${formatDistance(result.finalSpanFt)}`;
-  }
-  return `Timelapse of the above — ${elapsed} of real time.`;
-}
-
-function buildVideoAltText(bunch, pattern, stop, result) {
-  const routeName = routeNames[bunch.route];
-  const title = routeName ? `Route ${bunch.route} (${routeName})` : `Route ${bunch.route}`;
-  return `Timelapse map of ${title} near ${stop.stopName} showing ${bunch.vehicles.length} ${pattern.direction.toLowerCase()} buses moving over ${formatMinSec(result.elapsedSec)}.`;
-}
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
+const { buildPostText, buildAltText, buildVideoPostText, buildVideoAltText } = require('../../src/bus/bunchingPost');
 
 async function main() {
-  pruneOldAssets();
-  history.rolloffOld();
+  setup();
   const routes = bunchingRoutes;
   console.log(`Fetching vehicles for ${routes.length} routes...`);
   const vehicles = await getVehicles(routes);
@@ -212,9 +140,7 @@ async function main() {
   const alt = buildAltText(bunch, pattern, stop);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     if (argv.video) {
       const ticks = argv.ticks ? parseInt(argv.ticks, 10) : undefined;
@@ -225,8 +151,7 @@ async function main() {
       if (!result) {
         console.log('Video capture produced <2 frames, skipped');
       } else {
-        const videoPath = Path.join(__dirname, '..', 'assets', `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.mp4`);
-        Fs.writeFileSync(videoPath, result.buffer);
+        const videoPath = writeDryRunAsset(result.buffer, `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.mp4`);
         console.log(`Video: ${videoPath}`);
         console.log(`  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, span ${result.initialSpanFt}ft → ${result.finalSpanFt ?? '?'}ft`);
       }
@@ -288,7 +213,4 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

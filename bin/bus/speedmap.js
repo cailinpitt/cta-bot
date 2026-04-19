@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const _ = require('lodash');
 const argv = require('minimist')(process.argv.slice(2));
 
@@ -11,18 +9,13 @@ const { collect, computeSamples, pickTargetPid, binSamples, summarize } = requir
 const { loadPattern } = require('../../src/bus/patterns');
 const { renderSpeedmap } = require('../../src/map');
 const { loginBus, postWithImage } = require('../../src/bus/bluesky');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
 const history = require('../../src/shared/history');
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
+const { formatTimeCT } = require('../../src/shared/format');
 
 const NUM_BINS = 40;
 const POLL_INTERVAL_MS = 30 * 1000;
 const DEFAULT_DURATION_MIN = 60;
-
-function formatTimeCT(date) {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Chicago',
-  });
-}
 
 function buildPostText(route, pattern, summary, startTime, endTime, callouts = []) {
   const displayName = routeNames[route];
@@ -50,8 +43,7 @@ function buildAltText(route, pattern, summary) {
 }
 
 async function main() {
-  pruneOldAssets();
-  history.rolloffOld();
+  setup();
   const route = argv.route ? String(argv.route) : _.sample(speedmapRoutes);
   const durationMin = argv.duration ? Number(argv.duration) : DEFAULT_DURATION_MIN;
   const durationMs = durationMin * 60 * 1000;
@@ -109,9 +101,7 @@ async function main() {
   const alt = buildAltText(route, pattern, summary);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `speedmap-${route}-${pattern.direction.toLowerCase()}-${targetPid}-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `speedmap-${route}-${pattern.direction.toLowerCase()}-${targetPid}-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -135,7 +125,4 @@ async function main() {
   console.log(`Posted: ${result.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

@@ -1,59 +1,22 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { getVehicles, getPredictions } = require('../../src/bus/api');
-const { names: routeNames, gaps: gapRoutes } = require('../../src/bus/routes');
+const { gaps: gapRoutes } = require('../../src/bus/routes');
 const { detectAllGaps } = require('../../src/bus/gaps');
-const { loadPattern } = require('../../src/bus/patterns');
+const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
 const { renderGapMap } = require('../../src/map');
 const { loginBus, postWithImage } = require('../../src/bus/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
 const { expectedHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
-
-function findNearestStop(pattern, pdist) {
-  const stops = pattern.points.filter((p) => p.type === 'S' && p.stopName);
-  let best = stops[0];
-  let bestDelta = Math.abs(stops[0].pdist - pdist);
-  for (const s of stops) {
-    const delta = Math.abs(s.pdist - pdist);
-    if (delta < bestDelta) { best = s; bestDelta = delta; }
-  }
-  return best;
-}
-
-function formatDistance(ft) {
-  if (ft < 1000) return `${ft} ft`;
-  return `${(ft / 5280).toFixed(2)} mi`;
-}
-
-function fmtMin(m) {
-  const rounded = Math.round(m);
-  return `${rounded} min`;
-}
-
-function buildPostText(gap, pattern, stop, callouts = []) {
-  const routeName = routeNames[gap.route];
-  const title = routeName ? `Route ${gap.route} (${routeName})` : `Route ${gap.route}`;
-  const base = `🕳️ ${title} — ${pattern.direction}\n${fmtMin(gap.gapMin)} gap near ${stop.stopName} — currently scheduled every ${fmtMin(gap.expectedMin)}`;
-  const tail = history.formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
-}
-
-function buildAltText(gap, pattern, stop) {
-  const routeName = routeNames[gap.route];
-  const title = routeName ? `Route ${gap.route} (${routeName})` : `Route ${gap.route}`;
-  return `Map of ${title} ${pattern.direction.toLowerCase()} showing a ${fmtMin(gap.gapMin)} gap between buses near ${stop.stopName}.`;
-}
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
+const { buildPostText, buildAltText } = require('../../src/bus/gapPost');
 
 async function main() {
-  pruneOldAssets();
-  history.rolloffOld();
+  setup();
 
   const routes = gapRoutes;
   console.log(`Fetching vehicles for ${routes.length} routes...`);
@@ -210,9 +173,7 @@ async function main() {
   const alt = buildAltText(gap, pattern, chosenStop);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `gap-${gap.route}-${pattern.direction.toLowerCase()}-${gap.pid}-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `gap-${gap.route}-${pattern.direction.toLowerCase()}-${gap.pid}-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -250,7 +211,4 @@ async function main() {
   console.log(`Posted: ${primary.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

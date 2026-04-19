@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
 const argv = require('minimist')(process.argv.slice(2));
 
 const { LINE_NAMES, LINE_EMOJI, ALL_LINES } = require('../../src/train/api');
 const { detectTrainGhosts } = require('../../src/train/ghosts');
-const { buildRollupPost } = require('../../src/bus/ghosts');
+const { buildRollupPost } = require('../../src/shared/post');
 const { expectedTrainHeadwayMin, expectedTrainTripMinutes, isTrainLoopLine } = require('../../src/shared/gtfs');
 const { getTrainObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginTrain, postText } = require('../../src/train/bluesky');
+const { runBin } = require('../../src/shared/runBin');
 const trainStations = require('../../src/train/data/trainStations.json');
 
 const WINDOW_MS = 60 * 60 * 1000;
@@ -90,7 +91,4 @@ async function main() {
   console.log(`Posted: ${result.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

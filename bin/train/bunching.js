@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { getAllTrainPositions, LINE_COLORS, LINE_NAMES } = require('../../src/train/api');
@@ -11,73 +9,14 @@ const { renderTrainBunching } = require('../../src/map');
 const { captureTrainBunchingVideo } = require('../../src/train/bunchingVideo');
 const { loginTrain, postWithImage, postWithVideo } = require('../../src/train/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
 const history = require('../../src/shared/history');
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
+const { buildPostText, buildAltText, buildVideoPostText, buildVideoAltText } = require('../../src/train/bunchingPost');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
 
-function formatDistance(ft) {
-  if (ft < 1000) return `${Math.round(ft)} ft`;
-  return `${(ft / 5280).toFixed(2)} mi`;
-}
-
-function buildPostText(bunch, callouts = []) {
-  const lineName = LINE_NAMES[bunch.line];
-  const dest = bunch.trains[0].destination;
-  const station = bunch.trains[0].nextStation;
-  const count = bunch.trains.length;
-  const base = `🚆 ${lineName} Line — to ${dest}\n${count} trains within ${formatDistance(bunch.spanFt)} near ${station}`;
-  const tail = history.formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
-}
-
-function buildAltText(bunch) {
-  const lineName = LINE_NAMES[bunch.line];
-  const dest = bunch.trains[0].destination;
-  const station = bunch.trains[0].nextStation;
-  const count = bunch.trains.length;
-  return `Map of the ${lineName} Line near ${station} showing ${count} trains to ${dest} within ${formatDistance(bunch.spanFt)} of each other.`;
-}
-
-function formatMinSec(totalSec) {
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-function elapsedMinutesLabel(totalSec) {
-  const m = Math.max(1, Math.round(totalSec / 60));
-  return m === 1 ? '1 minute' : `${m} minutes`;
-}
-
-function buildVideoPostText(result) {
-  const elapsed = elapsedMinutesLabel(result.elapsedSec);
-  let headline;
-  if (result.finalDistFt != null) {
-    const delta = result.finalDistFt - result.initialDistFt;
-    if (delta > 50) {
-      headline = `${elapsed} later, the trains were ${formatDistance(delta)} farther apart.`;
-    } else if (delta < -50) {
-      headline = `${elapsed} later, the gap had closed by ${formatDistance(-delta)}.`;
-    } else {
-      headline = `Still bunched ${elapsed} later.`;
-    }
-    return `${headline}\n🎬 ${formatDistance(result.initialDistFt)} → ${formatDistance(result.finalDistFt)}`;
-  }
-  return `Timelapse of the above — ${elapsed} of real time.`;
-}
-
-function buildVideoAltText(bunch, result) {
-  const lineName = LINE_NAMES[bunch.line];
-  const dest = bunch.trains[0].destination;
-  const station = bunch.trains[0].nextStation;
-  const count = bunch.trains.length;
-  return `Timelapse map of the ${lineName} Line near ${station} showing ${count} trains to ${dest} moving over ${formatMinSec(result.elapsedSec)}.`;
-}
-
 async function main() {
-  pruneOldAssets();
-  history.rolloffOld();
+  setup();
 
   console.log('Fetching train positions...');
   const trains = await getAllTrainPositions();
@@ -134,9 +73,7 @@ async function main() {
   const alt = buildAltText(bunch);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     if (argv.video) {
       const ticks = argv.ticks ? parseInt(argv.ticks, 10) : undefined;
@@ -147,8 +84,7 @@ async function main() {
       if (!result) {
         console.log('Video capture produced <2 frames, skipped');
       } else {
-        const videoPath = Path.join(__dirname, '..', 'assets', `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.mp4`);
-        Fs.writeFileSync(videoPath, result.buffer);
+        const videoPath = writeDryRunAsset(result.buffer, `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.mp4`);
         console.log(`Video: ${videoPath}`);
         console.log(`  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, gap ${result.initialDistFt}ft → ${result.finalDistFt ?? '?'}ft`);
       }
@@ -208,7 +144,4 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

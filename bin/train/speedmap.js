@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
+require('../../src/shared/env');
 
-const Fs = require('fs-extra');
-const Path = require('path');
 const _ = require('lodash');
 const argv = require('minimist')(process.argv.slice(2));
 
@@ -11,19 +9,14 @@ const { collectTrains, computeTrainSamples, buildLineBranches } = require('../..
 const { binSamples, summarize, TRAIN_THRESHOLDS } = require('../../src/bus/speedmap');
 const { renderTrainSpeedmap } = require('../../src/map');
 const { loginTrain, postWithImage } = require('../../src/train/bluesky');
-const { pruneOldAssets } = require('../../src/shared/cleanup');
 const history = require('../../src/shared/history');
+const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
+const { formatTimeCT } = require('../../src/shared/format');
 const trainLines = require('../../src/train/data/trainLines.json');
 
 const NUM_BINS = 40;
 const POLL_INTERVAL_MS = 30 * 1000;
 const DEFAULT_DURATION_MIN = 60;
-
-function formatTimeCT(date) {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Chicago',
-  });
-}
 
 function formatAvg(summary) {
   return summary.avg == null ? 'n/a' : `${summary.avg.toFixed(1)} mph`;
@@ -75,8 +68,7 @@ function buildAltText(line, dirSummaries, durationMin) {
 }
 
 async function main() {
-  pruneOldAssets();
-  history.rolloffOld();
+  setup();
   const line = argv.line || _.sample(ALL_LINES);
   const durationMin = argv.duration ? Number(argv.duration) : DEFAULT_DURATION_MIN;
   const durationMs = durationMin * 60 * 1000;
@@ -173,9 +165,7 @@ async function main() {
   const alt = buildAltText(line, finalDirs, durationMin);
 
   if (argv['dry-run']) {
-    const outPath = Path.join(__dirname, '..', 'assets', `train-speedmap-${LINE_NAMES[line].toLowerCase()}-${Date.now()}.jpg`);
-    Fs.ensureDirSync(Path.dirname(outPath));
-    Fs.writeFileSync(outPath, image);
+    const outPath = writeDryRunAsset(image, `train-speedmap-${LINE_NAMES[line].toLowerCase()}-${Date.now()}.jpg`);
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -208,7 +198,4 @@ async function main() {
   console.log(`Posted: ${result.url}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+runBin(main);

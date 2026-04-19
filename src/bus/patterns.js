@@ -17,4 +17,18 @@ async function loadPattern(pid) {
   return pattern;
 }
 
-module.exports = { loadPattern };
+// Nearest on-pattern stop to a given pdist. Used by bunching/gap post builders
+// so the "near X" label comes from the pattern's stop list rather than the
+// raw bus position.
+function findNearestStop(pattern, pdist) {
+  const stops = pattern.points.filter((p) => p.type === 'S' && p.stopName);
+  let best = stops[0];
+  let bestDelta = Math.abs(stops[0].pdist - pdist);
+  for (const s of stops) {
+    const delta = Math.abs(s.pdist - pdist);
+    if (delta < bestDelta) { best = s; bestDelta = delta; }
+  }
+  return best;
+}
+
+module.exports = { loadPattern, findNearestStop };
