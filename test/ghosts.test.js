@@ -126,7 +126,7 @@ test('skips routes where headway or duration is null', async () => {
 test('buildRollupPost keeps all lines when they fit under the limit', () => {
   const lines = ['a', 'b', 'c'];
   const text = buildRollupPost('head', lines, 100);
-  assert.equal(text, 'head\na\nb\nc');
+  assert.equal(text, 'head\n\na\nb\nc');
 });
 
 test('buildRollupPost appends "…and N more routes" when truncating', () => {

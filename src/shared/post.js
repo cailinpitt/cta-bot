@@ -12,12 +12,12 @@ function buildRollupPost(header, lines, maxChars = POST_MAX_CHARS) {
   if (lines.length === 0) return null;
   const moreTail = (n) => `\n…and ${n} more route${n === 1 ? '' : 's'}`;
 
-  const full = `${header}\n${lines.join('\n')}`;
+  const full = `${header}\n\n${lines.join('\n')}`;
   if (full.length <= maxChars) return full;
 
   for (let k = lines.length - 1; k >= 1; k--) {
     const dropped = lines.length - k;
-    const text = `${header}\n${lines.slice(0, k).join('\n')}${moreTail(dropped)}`;
+    const text = `${header}\n\n${lines.slice(0, k).join('\n')}${moreTail(dropped)}`;
     if (text.length <= maxChars) return text;
   }
   return null;
