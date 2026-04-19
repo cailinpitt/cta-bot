@@ -5,7 +5,7 @@ const { fitZoom, project } = require('../../shared/projection');
 const {
   STYLE, WIDTH, HEIGHT,
   ROUTE_HALO_COLOR, ROUTE_HALO_STROKE, ROUTE_CORE_COLOR, ROUTE_CORE_STROKE,
-  TWEMOJI_BUS_INNER,
+  TWEMOJI_BUS_INNER, TWEMOJI_HOUSE_INNER,
   buildDirectionArrow, requireMapboxToken, fetchMapboxStatic,
 } = require('../common');
 
@@ -15,6 +15,7 @@ const GAP_SEGMENT_COLOR = 'ff2a00';
 const GAP_SEGMENT_STROKE = 10;
 const BUS_COLOR = 'ff2a6d';
 const BUS_MARKER_RADIUS = 34;
+const TERMINAL_MARKER_RADIUS = BUS_MARKER_RADIUS;
 const CONTEXT_PAD_FT = 1500;
 
 // Walk the pattern in seq order, building cumulative distance, then return
@@ -80,7 +81,13 @@ function computeGapView(gap, pattern) {
     bearingDeg = diffFwd <= diffRev ? fwd : rev;
   }
 
-  return { overlays, centerLat, centerLon, zoom, bearingDeg };
+  // End-of-line terminal — same semantics as bus bunching. Last pattern point
+  // is the terminal in service-direction order. Rendered only if it falls in
+  // the viewport; for most gaps mid-route it won't, and that's fine.
+  const terminalPoint = pattern.points[pattern.points.length - 1];
+  const terminal = terminalPoint ? { lat: terminalPoint.lat, lon: terminalPoint.lon } : null;
+
+  return { overlays, centerLat, centerLon, zoom, bearingDeg, terminal };
 }
 
 async function fetchGapBaseMap(view) {
@@ -104,7 +111,23 @@ async function renderGapMap(gap, pattern) {
     ].join('');
   });
   const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, view.bearingDeg)];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
+
+  const terminalElements = [];
+  if (view.terminal) {
+    const { x, y } = project(view.terminal.lat, view.terminal.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    if (x >= 0 && x <= WIDTH && y >= 0 && y <= HEIGHT) {
+      const iconSize = TERMINAL_MARKER_RADIUS * 1.6;
+      const iconX = x - iconSize / 2;
+      const iconY = y - iconSize / 2;
+      terminalElements.push(
+        `<circle cx="${x}" cy="${y}" r="${TERMINAL_MARKER_RADIUS}" fill="#7cb342"/>`,
+        `<svg x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 36 36">${TWEMOJI_HOUSE_INNER}</svg>`,
+        `<circle cx="${x}" cy="${y}" r="${TERMINAL_MARKER_RADIUS}" fill="none" stroke="#fff" stroke-width="4"/>`,
+      );
+    }
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])

@@ -163,8 +163,9 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
       const iconX = x - iconSize / 2;
       const iconY = y - iconSize / 2;
       terminalElements.push(
-        `<circle cx="${x}" cy="${y}" r="${TERMINAL_MARKER_RADIUS}" fill="#7cb342" stroke="#fff" stroke-width="4"/>`,
+        `<circle cx="${x}" cy="${y}" r="${TERMINAL_MARKER_RADIUS}" fill="#7cb342"/>`,
         `<svg x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 36 36">${TWEMOJI_HOUSE_INNER}</svg>`,
+        `<circle cx="${x}" cy="${y}" r="${TERMINAL_MARKER_RADIUS}" fill="none" stroke="#fff" stroke-width="4"/>`,
       );
     }
   }
