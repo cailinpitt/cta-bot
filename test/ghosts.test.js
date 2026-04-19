@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { detectBusGhosts, buildRollupPost, MIN_SNAPSHOTS } = require('../src/ghosts');
+const { detectTrainGhosts } = require('../src/trainGhosts');
 
 // Build a synthetic observation stream: `snapshots` polling timestamps, and at
 // each one, `vidsPerSnapshot` distinct vids sharing `pid`. Used to shape
@@ -149,6 +150,76 @@ test('buildRollupPost uses singular "route" when exactly 1 is dropped', () => {
   const text = buildRollupPost('H', lines, 120);
   assert.ok(text.endsWith('…and 1 more route'), `got: ${text}`);
   assert.ok(!text.endsWith('routes'));
+});
+
+// Synthetic train observations: N snapshots, with a configurable number of
+// distinct vehicles on each of two Train Tracker directions (trDr=1, trDr=5).
+function buildTrainObs({ snapshots, vidsTrDr1, vidsTrDr5, destination = 'Loop', startTs = 1_700_000_000_000, intervalMs = 5 * 60 * 1000 }) {
+  const rows = [];
+  for (let i = 0; i < snapshots; i++) {
+    const ts = startTs + i * intervalMs;
+    for (let v = 0; v < vidsTrDr1; v++) rows.push({ ts, direction: '1', vehicle_id: `a${v}`, destination });
+    for (let v = 0; v < vidsTrDr5; v++) rows.push({ ts, direction: '5', vehicle_id: `b${v}`, destination: '54th/Cermak' });
+  }
+  return rows;
+}
+
+test('loop lines aggregate across trDrs instead of splitting', async () => {
+  // Expected line-wide: 62 / 10 = 6.2 trains active on the entire Pink Line.
+  // Observed: 2 trDr=1 + 1 trDr=5 = 3 distinct vehicles per snapshot.
+  // Missing: 3.2 — passes the 3.0 abs threshold and >50% pct threshold.
+  // Without the loop-aware path, grouping by trDr would compare 2 vs 6.2 and 1
+  // vs 6.2 separately, wildly overstating missing.
+  const obs = buildTrainObs({ snapshots: 12, vidsTrDr1: 2, vidsTrDr5: 1 });
+  const events = await detectTrainGhosts({
+    lines: ['pink'],
+    getObservations: () => obs,
+    findStation: () => null,
+    expectedHeadway: () => 10,
+    expectedDuration: () => 62,
+    isLoopLine: () => true,
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].line, 'pink');
+  assert.equal(events[0].trDr, null);
+  assert.equal(events[0].destination, null);
+  assert.equal(events[0].observedActive, 3);
+  assert.ok(Math.abs(events[0].expectedActive - 6.2) < 1e-9);
+});
+
+test('loop lines suppress false positives that per-trDr grouping would fire', async () => {
+  // Pink Loop at healthy service: ~6 trains line-wide, split 3 trDr=1 + 3 trDr=5.
+  // Line-wide observed=6 matches expected=6.2 — no ghost.
+  // Under the old per-trDr logic, this would fire two ghost events (3 vs 6.2 each).
+  const obs = buildTrainObs({ snapshots: 12, vidsTrDr1: 3, vidsTrDr5: 3 });
+  const events = await detectTrainGhosts({
+    lines: ['pink'],
+    getObservations: () => obs,
+    findStation: () => null,
+    expectedHeadway: () => 10,
+    expectedDuration: () => 62,
+    isLoopLine: () => true,
+  });
+  assert.equal(events.length, 0);
+});
+
+test('bi-directional lines still split by trDr', async () => {
+  // Blue Line Forest Park: expected 14, observed 9 → missing 5 on just the
+  // trDr=5 side. isLoopLine returns false, so the existing per-trDr grouping
+  // runs and fires a ghost for one direction while the other passes.
+  const obs = buildTrainObs({ snapshots: 12, vidsTrDr1: 14, vidsTrDr5: 9, destination: 'Forest Park' });
+  const events = await detectTrainGhosts({
+    lines: ['blue'],
+    getObservations: () => obs,
+    findStation: () => ({ lat: 41.87, lon: -87.81 }),
+    expectedHeadway: () => 6,
+    expectedDuration: () => 84,
+    isLoopLine: () => false,
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].trDr, '5');
+  assert.equal(events[0].observedActive, 9);
+  assert.equal(events[0].expectedActive, 14);
 });
 
 test('sorts events by missing count descending', async () => {

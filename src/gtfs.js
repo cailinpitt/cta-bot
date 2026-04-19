@@ -237,4 +237,17 @@ function expectedTrainTripMinutes(line, destination, now = new Date()) {
   return null;
 }
 
-module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, expectedTripMinutes, expectedTrainTripMinutes, resolveDirection, dayTypeFor, chicagoHour };
+// Loop lines (Brown/Orange/Pink/Purple/Yellow) ship a single GTFS direction_id
+// covering the full Midway→Loop→Midway round trip. Bi-directional lines
+// (Red/Blue/Green) have two. Ghost detection uses this to decide whether to
+// split observations by Train Tracker direction or aggregate line-wide.
+function isTrainLoopLine(line) {
+  const index = loadIndex();
+  const gtfsId = TRAIN_LINE_TO_GTFS[line];
+  if (!gtfsId) return false;
+  const byDir = index.lines && index.lines[gtfsId];
+  if (!byDir) return false;
+  return Object.keys(byDir).length === 1;
+}
+
+module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, expectedTripMinutes, expectedTrainTripMinutes, isTrainLoopLine, resolveDirection, dayTypeFor, chicagoHour };

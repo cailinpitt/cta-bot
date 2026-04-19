@@ -19,6 +19,11 @@ function median(arr) {
  *   - `findStation(line, destinationName)` → { lat, lon, name } | null
  *   - `expectedHeadway(line, destinationStation)` → minutes or null
  *   - `expectedDuration(line, destinationStation)` → minutes or null
+ *   - `isLoopLine(line)` → true for lines whose GTFS ships a single
+ *     direction_id covering the full round trip (Brown/Orange/Pink/Purple/
+ *     Yellow). Optional; defaults to false. Loop lines can't be split by
+ *     trDr without halving the expected count — it's simpler to compare the
+ *     line-wide observed vehicle count against the line-wide expected.
  */
 async function detectTrainGhosts({
   lines,
@@ -26,6 +31,7 @@ async function detectTrainGhosts({
   findStation,
   expectedHeadway,
   expectedDuration,
+  isLoopLine,
 }) {
   const events = [];
 
@@ -33,7 +39,47 @@ async function detectTrainGhosts({
     const obs = getObservations(line);
     if (obs.length === 0) continue;
 
-    // Group by trDr.
+    // Loop lines: aggregate across trDrs. GTFS gives us one duration (full
+    // Midway→Loop→Midway leg) and one headway for the whole line, so
+    // `duration / headway` is the total active train count line-wide — which
+    // is what we need to compare against.
+    if (isLoopLine && isLoopLine(line)) {
+      const headway = expectedHeadway(line, null);
+      const duration = expectedDuration(line, null);
+      if (headway == null || duration == null || headway <= 0 || duration <= 0) continue;
+
+      const expectedActive = duration / headway;
+      if (expectedActive < 2) continue;
+
+      const perSnapshot = new Map();
+      for (const o of obs) {
+        if (!perSnapshot.has(o.ts)) perSnapshot.set(o.ts, new Set());
+        perSnapshot.get(o.ts).add(o.vehicle_id);
+      }
+      if (perSnapshot.size < MIN_SNAPSHOTS) continue;
+
+      const counts = [...perSnapshot.values()].map((s) => s.size);
+      const observedActive = median(counts);
+      const missing = expectedActive - observedActive;
+      if (missing < MISSING_ABS_THRESHOLD) continue;
+      if (missing / expectedActive < MISSING_PCT_THRESHOLD) continue;
+
+      events.push({
+        line,
+        trDr: null,
+        destination: null,
+        expectedActive,
+        observedActive,
+        missing,
+        snapshots: perSnapshot.size,
+        headway,
+        duration,
+      });
+      continue;
+    }
+
+    // Bi-directional lines: group by trDr and use the direction-specific
+    // GTFS headway/duration selected by destination.
     const byDir = new Map(); // trDr → observations[]
     for (const o of obs) {
       if (!o.direction) continue;

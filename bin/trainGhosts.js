@@ -6,7 +6,7 @@ const argv = require('minimist')(process.argv.slice(2));
 const { LINE_NAMES, LINE_EMOJI, ALL_LINES } = require('../src/trainApi');
 const { detectTrainGhosts } = require('../src/trainGhosts');
 const { buildRollupPost } = require('../src/ghosts');
-const { expectedTrainHeadwayMin, expectedTrainTripMinutes } = require('../src/gtfs');
+const { expectedTrainHeadwayMin, expectedTrainTripMinutes, isTrainLoopLine } = require('../src/gtfs');
 const { getTrainObservations, rolloffOldObservations } = require('../src/observations');
 const { loginTrain, postText } = require('../src/bluesky');
 const trainStations = require('../src/data/trainStations.json');
@@ -58,6 +58,7 @@ async function main() {
     findStation: findStationByDestination,
     expectedHeadway: (line, destStation) => expectedTrainHeadwayMin(line, destStation, new Date(now)),
     expectedDuration: (line, destStation) => expectedTrainTripMinutes(line, destStation, new Date(now)),
+    isLoopLine: isTrainLoopLine,
   });
 
   if (events.length === 0) {
@@ -66,7 +67,8 @@ async function main() {
   }
 
   for (const e of events) {
-    console.log(`  ${LINE_NAMES[e.line]} ${e.trDr} (${e.destination || '?'}): ${e.observedActive.toFixed(1)} observed vs ${e.expectedActive.toFixed(1)} expected (${e.missing.toFixed(1)} missing across ${e.snapshots} snapshots)`);
+    const dirLabel = e.trDr ? `${e.trDr} (${e.destination || '?'})` : '(line-wide)';
+    console.log(`  ${LINE_NAMES[e.line]} ${dirLabel}: ${e.observedActive.toFixed(1)} observed vs ${e.expectedActive.toFixed(1)} expected (${e.missing.toFixed(1)} missing across ${e.snapshots} snapshots)`);
   }
 
   const text = buildPostText(events);
