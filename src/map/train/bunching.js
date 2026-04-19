@@ -5,7 +5,7 @@ const { fitZoom, project } = require('../../shared/projection');
 const { buildLinePolyline, snapToLine } = require('../../train/speedmap');
 const {
   STYLE, WIDTH, HEIGHT,
-  TWEMOJI_TRAIN_INNER,
+  TWEMOJI_TRAIN_INNER, TWEMOJI_HOUSE_INNER,
   buildDirectionArrow, xmlEscape, requireMapboxToken, fetchMapboxStatic,
 } = require('../common');
 
@@ -14,8 +14,35 @@ const TRAIN_BUNCH_BBOX_PADDING_DEG = 0.003; // ~300m — zoom out a little past 
 // Train pin radius. Set well above Mapbox pin-s (stations) so trains read as
 // the primary focal point. Halo/arrow offsets are derived from this.
 const TRAIN_MARKER_RADIUS = 32;
+const TERMINAL_MARKER_RADIUS = TRAIN_MARKER_RADIUS;
 
-function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, lineColor, widthPx, heightPx) {
+// True geographic terminals per line, keyed by the CTA `destNm` string. Loop
+// lines (Brown/Orange/Pink/Purple) return "Loop" when heading downtown — those
+// have no real end-of-line, so we omit them from the map and skip the marker.
+// Yellow's "Skokie" short-name maps to the Dempster-Skokie station.
+const TRUE_TERMINALS = {
+  red:  { 'Howard': 'Howard', '95th/Dan Ryan': '95th/Dan Ryan' },
+  blue: { "O'Hare": "O'Hare", 'Forest Park': 'Forest Park' },
+  g:    { 'Harlem/Lake': 'Harlem/Lake', 'Ashland/63rd': 'Ashland/63rd', 'Cottage Grove': 'Cottage Grove' },
+  brn:  { 'Kimball': 'Kimball' },
+  org:  { 'Midway': 'Midway' },
+  p:    { 'Linden': 'Linden', 'Howard': 'Howard' },
+  pink: { '54th/Cermak': '54th/Cermak' },
+  y:    { 'Dempster-Skokie': 'Dempster-Skokie', 'Skokie': 'Dempster-Skokie', 'Howard': 'Howard' },
+};
+
+function findTerminal(bunch, stations) {
+  const lineTerms = TRUE_TERMINALS[bunch.line];
+  if (!lineTerms) return null;
+  const dest = bunch.trains[0]?.destination;
+  if (!dest) return null;
+  const stationName = lineTerms[dest];
+  if (!stationName) return null;
+  const st = (stations || []).find((s) => s.name === stationName);
+  return st ? { lat: st.lat, lon: st.lon } : null;
+}
+
+function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, lineColor, widthPx, heightPx, terminalPixel) {
   const fontSize = 18;
   const labelHeight = fontSize + 8;
   const gap = 4; // minimum vertical gap between labels
@@ -82,7 +109,22 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
     <text x="${textX}" y="${textY}" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600">${label}</text>`;
   });
 
-  const elements = [...halos, ...trainMarkers, ...arrows, ...labelElements].join('\n');
+  // End-of-line house marker — draw below trains (so a train at the terminal
+  // still reads clearly) and below labels. Only for true geographic terminals;
+  // skipped for Loop-bound trains on Brown/Orange/Pink/Purple.
+  const terminalElements = [];
+  if (terminalPixel) {
+    const { x, y } = terminalPixel;
+    const iconSize = TERMINAL_MARKER_RADIUS * 1.6;
+    const iconX = x - iconSize / 2;
+    const iconY = y - iconSize / 2;
+    terminalElements.push(
+      `<circle cx="${x}" cy="${y}" r="${TERMINAL_MARKER_RADIUS}" fill="#7cb342" stroke="#fff" stroke-width="4"/>`,
+      `<svg x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 36 36">${TWEMOJI_HOUSE_INNER}</svg>`,
+    );
+  }
+
+  const elements = [...terminalElements, ...halos, ...trainMarkers, ...arrows, ...labelElements].join('\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${elements}</svg>`;
 }
 
@@ -204,6 +246,8 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
     bearingDeg = diffFwd <= diffRev ? fwd : rev;
   }
 
+  const terminal = findTerminal(bunch, stations);
+
   return {
     color,
     overlays,
@@ -212,6 +256,7 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
     zoom,
     visibleStations,
     bearingDeg,
+    terminal,
   };
 }
 
@@ -238,7 +283,13 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
     .filter((t) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < 500))
     .map((t) => project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
 
-  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, view.color, WIDTH, HEIGHT);
+  let terminalPixel = null;
+  if (view.terminal) {
+    const { x, y } = project(view.terminal.lat, view.terminal.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    if (x >= 0 && x <= WIDTH && y >= 0 && y <= HEIGHT) terminalPixel = { x, y };
+  }
+
+  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, view.color, WIDTH, HEIGHT, terminalPixel);
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
