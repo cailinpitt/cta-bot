@@ -1,20 +1,8 @@
 const { AtpAgent } = require('@atproto/api');
 
-async function loginBus() {
+async function login(identifier, password) {
   const agent = new AtpAgent({ service: process.env.BLUESKY_SERVICE || 'https://bsky.social' });
-  await agent.login({
-    identifier: process.env.BLUESKY_BUS_IDENTIFIER,
-    password: process.env.BLUESKY_BUS_APP_PASSWORD,
-  });
-  return agent;
-}
-
-async function loginTrain() {
-  const agent = new AtpAgent({ service: process.env.BLUESKY_SERVICE || 'https://bsky.social' });
-  await agent.login({
-    identifier: process.env.BLUESKY_TRAIN_IDENTIFIER,
-    password: process.env.BLUESKY_TRAIN_APP_PASSWORD,
-  });
+  await agent.login({ identifier, password });
   return agent;
 }
 
@@ -122,4 +110,4 @@ async function postText(agent, text, replyRef = null) {
   return { url: postUrl(result), uri: result.uri, cid: result.cid };
 }
 
-module.exports = { loginBus, loginTrain, postWithImage, postWithVideo, postText };
+module.exports = { login, postWithImage, postWithVideo, postText };

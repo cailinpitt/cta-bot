@@ -8,7 +8,7 @@ const { detectTrainGhosts } = require('../src/train/ghosts');
 const { buildRollupPost } = require('../src/bus/ghosts');
 const { expectedTrainHeadwayMin, expectedTrainTripMinutes, isTrainLoopLine } = require('../src/shared/gtfs');
 const { getTrainObservations, rolloffOldObservations } = require('../src/shared/observations');
-const { loginTrain, postText } = require('../src/bluesky');
+const { loginTrain, postText } = require('../src/train/bluesky');
 const trainStations = require('../src/train/data/trainStations.json');
 
 const WINDOW_MS = 60 * 60 * 1000;

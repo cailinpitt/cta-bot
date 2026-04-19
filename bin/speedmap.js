@@ -10,7 +10,7 @@ const { names: routeNames, speedmap: speedmapRoutes } = require('../src/bus/rout
 const { collect, computeSamples, pickTargetPid, binSamples, summarize } = require('../src/bus/speedmap');
 const { loadPattern } = require('../src/bus/patterns');
 const { renderSpeedmap } = require('../src/map');
-const { loginBus, postWithImage } = require('../src/bluesky');
+const { loginBus, postWithImage } = require('../src/bus/bluesky');
 const { pruneOldAssets } = require('../src/shared/cleanup');
 const history = require('../src/shared/history');
 

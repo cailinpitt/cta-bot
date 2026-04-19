@@ -8,7 +8,7 @@ const { detectBusGhosts, buildRollupPost } = require('../src/bus/ghosts');
 const { loadPattern } = require('../src/bus/patterns');
 const { expectedHeadwayMin, expectedTripMinutes } = require('../src/shared/gtfs');
 const { getBusObservations, rolloffOldObservations } = require('../src/shared/observations');
-const { loginBus, postText } = require('../src/bluesky');
+const { loginBus, postText } = require('../src/bus/bluesky');
 
 const WINDOW_MS = 60 * 60 * 1000;
 
