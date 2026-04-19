@@ -38,8 +38,11 @@ function formatLine(event) {
   const emoji = LINE_EMOJI[event.line];
   const missing = Math.round(event.missing);
   const expected = Math.round(event.expectedActive);
+  const pct = Math.round((event.missing / event.expectedActive) * 100);
+  const effectiveHeadway = Math.round(event.headway * (event.expectedActive / event.observedActive));
+  const scheduledHeadway = Math.round(event.headway);
   const dest = event.destination ? ` → ${event.destination}` : '';
-  return `${emoji} ${lineName} Line${dest} · ${missing} of ${expected} missing`;
+  return `${emoji} ${lineName} Line${dest} · ${missing} of ${expected} missing (${pct}%) · every ~${effectiveHeadway} min instead of ~${scheduledHeadway}`;
 }
 
 function buildPostText(events) {

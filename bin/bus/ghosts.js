@@ -26,7 +26,10 @@ function formatLine(event) {
   const dir = abbreviateDirection(event.direction);
   const missing = Math.round(event.missing);
   const expected = Math.round(event.expectedActive);
-  return `🚌 ${title} ${dir} · ${missing} of ${expected} missing`;
+  const pct = Math.round((event.missing / event.expectedActive) * 100);
+  const effectiveHeadway = Math.round(event.headway * (event.expectedActive / event.observedActive));
+  const scheduledHeadway = Math.round(event.headway);
+  return `🚌 ${title} ${dir} · ${missing} of ${expected} missing (${pct}%) · every ~${effectiveHeadway} min instead of ~${scheduledHeadway}`;
 }
 
 function buildPostText(events) {
