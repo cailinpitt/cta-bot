@@ -47,11 +47,11 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   const labelHeight = fontSize + 8;
   const gap = 4; // minimum vertical gap between labels
 
-  // Strip trailing line-only parentheticals ("Chicago (Red)" -> "Chicago") since
-  // bunching maps show a single line. Branch/variant parens like
-  // "(Blue - Forest Park Branch)" or "(Subway)" are preserved because they
-  // still disambiguate stations on the same line.
-  const LINE_ONLY_PARENS = /\s*\((?:Red|Blue|Green|Brown|Purple|Pink|Orange|Yellow|\/|\s)+\)\s*$/;
+  // Strip any trailing parenthetical since bunching maps already show a single
+  // line — both line-only tags ("Chicago (Red)") and branch tags
+  // ("Western (Blue - Forest Park Branch)") are redundant context here, and
+  // the branch form is long enough to dominate the label row.
+  const TRAILING_PARENS = /\s*\([^)]*\)\s*$/;
 
   // Compute initial label positions, then nudge overlapping ones apart.
   // If a train is sitting at the station, anchor the label to the train's
@@ -61,7 +61,7 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   const TRAIN_HALO_EXTRA = 8;
   const LABEL_CLEAR_GAP = 10;
   const labels = stationsWithPixels.map(({ station, x, y, hasTrain, trainY }) => {
-    const label = xmlEscape(station.name.replace(LINE_ONLY_PARENS, ''));
+    const label = xmlEscape(station.name.replace(TRAILING_PARENS, ''));
     const approxWidth = label.length * 10 + 16;
     const rectY = hasTrain
       ? trainY + TRAIN_MARKER_RADIUS + TRAIN_HALO_EXTRA + LABEL_CLEAR_GAP
@@ -203,8 +203,20 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
     overlays.push(`path-7+${color}-0.7(${encodeURIComponent(encode(seg))})`);
   }
 
-  // Include every on-line station whose pixel position lands inside the image.
+  // Label only the stations immediately flanking the bunch, not every on-line
+  // station in the viewport. Wide bunches (e.g. Blue Line trains on both
+  // branches) otherwise produced a forest of labels stretching well past the
+  // bunch itself, crowding the image and pulling attention off the actual
+  // event. Stations between the trains are always kept; behind/ahead are
+  // capped at N on each side along the route.
+  const LABELED_PER_SIDE = 3;
+  const labeledSet = new Set([
+    ...behind.slice(0, LABELED_PER_SIDE).map((s) => s.station.name),
+    ...between.map((s) => s.station.name),
+    ...ahead.slice(0, LABELED_PER_SIDE).map((s) => s.station.name),
+  ]);
   const visibleStations = onLineStations
+    .filter((s) => labeledSet.has(s.name))
     .map((s) => {
       const pixels = project(s.lat, s.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
       return { station: s, ...pixels };
