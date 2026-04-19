@@ -5,4 +5,5 @@ module.exports = {
   ...require('./train/snapshot'),
   ...require('./bus/gaps'),
   ...require('./train/gaps'),
+  ...require('./heatmap'),
 };
