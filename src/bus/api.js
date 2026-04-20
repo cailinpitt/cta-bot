@@ -42,10 +42,22 @@ function parseVehicle(v) {
 }
 
 function parseBusTime(s) {
-  // "20260415 15:52:13"
+  // CTA returns wall-clock Chicago time as "20260415 15:52:13" with no
+  // timezone. Compute the UTC instant by finding the offset that, applied
+  // to the parsed wall-clock, lands back on the same Chicago wall-clock.
   const [d, t] = s.split(' ');
-  const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${t}`;
-  return new Date(iso);
+  const y = +d.slice(0, 4), mo = +d.slice(4, 6), da = +d.slice(6, 8);
+  const [h, mi, se] = t.split(':').map(Number);
+  const utcGuess = Date.UTC(y, mo - 1, da, h, mi, se);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date(utcGuess));
+  const get = (k) => +parts.find((p) => p.type === k).value;
+  const seenAsUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  const offset = utcGuess - seenAsUtc;
+  return new Date(utcGuess + offset);
 }
 
 async function getVehicles(routes) {
@@ -105,4 +117,4 @@ async function getPredictions({ stpid, vid, rt, top }) {
   return body.prd || [];
 }
 
-module.exports = { getVehicles, getPattern, getPredictions };
+module.exports = { getVehicles, getPattern, getPredictions, parseBusTime };
