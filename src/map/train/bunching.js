@@ -44,32 +44,38 @@ function findTerminal(bunch, stations) {
   return st ? { lat: st.lat, lon: st.lon } : null;
 }
 
-// Origin (start of trip) marker. CTA's API doesn't return origin, but for most
-// lines the destination uniquely implies it: red/blue/p/y all have exactly two
-// true terminals, so origin is whichever isn't the destination. Loop lines
-// (brn/org/pink) only list one true terminal — when destination is "Loop"
-// the trains came from that lone terminal; when destination IS that terminal
-// they came from the Loop and we have no marker for it (skip).
+// Origin (start of trip) marker. CTA's API doesn't return origin, so for each
+// line we provide a resolver that returns the implied origin station name (or
+// null if it's ambiguous). Default rule for most lines: destination uniquely
+// implies origin since they have exactly two true terminals.
 //
-// Green is a special case: southbound trains always originate at Harlem/Lake,
-// but northbound terminate at Harlem/Lake from either Ashland/63rd or Cottage
-// Grove and we can't tell which from the API — so we skip the marker only
-// when destination is Harlem/Lake.
+// Green: southbound trains always originate at Harlem/Lake, but northbound
+// could come from either Ashland/63rd or Cottage Grove and we can't tell which.
+function defaultOriginResolver(line, destStationName) {
+  const lineTerms = TRUE_TERMINALS[line];
+  const uniqueStations = [...new Set(Object.values(lineTerms))];
+  const candidates = uniqueStations.filter((n) => n !== destStationName);
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+const LINE_ORIGIN_RESOLVERS = {
+  g: (_line, destStationName) => (
+    destStationName === 'Ashland/63rd' || destStationName === 'Cottage Grove'
+      ? 'Harlem/Lake'
+      : null
+  ),
+};
+
 function findOrigin(bunch, stations) {
   const lineTerms = TRUE_TERMINALS[bunch.line];
   if (!lineTerms) return null;
   const dest = bunch.trains[0]?.destination;
   if (!dest) return null;
   const destStationName = lineTerms[dest] || null;
-  if (bunch.line === 'g') {
-    if (destStationName !== 'Ashland/63rd' && destStationName !== 'Cottage Grove') return null;
-    const st = (stations || []).find((s) => s.name === 'Harlem/Lake');
-    return st ? { lat: st.lat, lon: st.lon } : null;
-  }
-  const uniqueStations = [...new Set(Object.values(lineTerms))];
-  const candidates = uniqueStations.filter((n) => n !== destStationName);
-  if (candidates.length !== 1) return null;
-  const st = (stations || []).find((s) => s.name === candidates[0]);
+  const resolver = LINE_ORIGIN_RESOLVERS[bunch.line] || defaultOriginResolver;
+  const originName = resolver(bunch.line, destStationName);
+  if (!originName) return null;
+  const st = (stations || []).find((s) => s.name === originName);
   return st ? { lat: st.lat, lon: st.lon } : null;
 }
 
