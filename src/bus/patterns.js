@@ -3,7 +3,19 @@ const Fs = require('fs-extra');
 const { getPattern } = require('./api');
 
 const CACHE_DIR = Path.join(__dirname, '..', '..', 'data', 'patterns');
-const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — long enough to avoid churn, short enough to catch reroutes
+// Shortened from 7d → 24h so a mid-week reroute (detour, terminal moved)
+// gets picked up within a day instead of a week. Patterns are tiny and the
+// CTA pattern endpoint is fast, so the extra fetches are cheap.
+const TTL_MS = 24 * 60 * 60 * 1000;
+
+// Stable identifier for the served geometry: length + first/last point. If
+// CTA reissues the pattern with different coords or stop count, the signature
+// changes and downstream code can detect the drift without re-fetching.
+function patternSignature(pattern) {
+  const first = pattern.points[0];
+  const last = pattern.points[pattern.points.length - 1];
+  return `${pattern.lengthFt}:${pattern.points.length}:${first.lat},${first.lon}:${last.lat},${last.lon}`;
+}
 
 async function loadPattern(pid) {
   Fs.ensureDirSync(CACHE_DIR);
@@ -13,6 +25,7 @@ async function loadPattern(pid) {
     if (age < TTL_MS) return Fs.readJsonSync(cachePath);
   }
   const pattern = await getPattern(pid);
+  pattern.signature = patternSignature(pattern);
   Fs.writeJsonSync(cachePath, pattern);
   return pattern;
 }
@@ -31,4 +44,4 @@ function findNearestStop(pattern, pdist) {
   return best;
 }
 
-module.exports = { loadPattern, findNearestStop };
+module.exports = { loadPattern, findNearestStop, patternSignature };
