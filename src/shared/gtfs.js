@@ -71,15 +71,14 @@ function hourlyLookup(byDayType, now) {
  */
 const _directionCache = new Map();
 function resolveDirection(pattern) {
-  if (_directionCache.has(pattern.pid)) return _directionCache.get(pattern.pid);
+  // Cache positive hits only. Caching null would freeze a "missing route"
+  // lookup forever, so a route added to a freshly regenerated index would
+  // never resolve in a long-running process.
+  const cached = _directionCache.get(pattern.pid);
+  if (cached) return cached;
   const index = loadIndex();
-  const byDir = index.routes[pattern.route] && index.routes[pattern.route];
-  // Pattern-route detection: pattern doesn't carry route on its own object, but
-  // points' stop names won't tell us either — caller passes route.
-  if (!byDir) {
-    _directionCache.set(pattern.pid, null);
-    return null;
-  }
+  const byDir = index.routes[pattern.route];
+  if (!byDir) return null;
   const end = pattern.points[pattern.points.length - 1];
   let best = null;
   let bestDist = Infinity;
@@ -92,7 +91,7 @@ function resolveDirection(pattern) {
       best = dir;
     }
   }
-  _directionCache.set(pattern.pid, best);
+  if (best) _directionCache.set(pattern.pid, best);
   return best;
 }
 
