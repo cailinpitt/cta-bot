@@ -9,6 +9,7 @@ const {
   TWEMOJI_TRAIN_INNER, TWEMOJI_HOUSE_INNER, TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
   buildDirectionArrow, xmlEscape, requireMapboxToken, fetchMapboxStatic,
+  separateMarkers, perpendicularFromBearing,
 } = require('../common');
 
 const TRAIN_BUNCH_BBOX_PADDING_DEG = 0.003; // ~300m — zoom out a little past the trains
@@ -309,21 +310,24 @@ async function fetchTrainBunchingBaseMap(view) {
 }
 
 async function renderTrainBunchingFrame(view, baseMap, trains) {
-  const trainPixels = trains.map((t) => ({
-    ...project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT),
-    bearingDeg: view.bearingDeg,
-  }));
+  // Project each train, then nudge overlapping markers apart so a tight bunch
+  // still shows every train instead of stacking them into one disc. Halos and
+  // labels anchor to the separated pixels so they follow the visible markers.
+  const rawTrainPixels = trains.map((t) => project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
+  const separated = separateMarkers(rawTrainPixels, TRAIN_MARKER_RADIUS * 2 + 4, {
+    axis: perpendicularFromBearing(view.bearingDeg),
+  });
+  const trainPixels = separated.map(({ x, y }) => ({ x, y, bearingDeg: view.bearingDeg }));
 
   const stationsWithPixels = view.visibleStations.map(({ station, x, y }) => {
-    const nearbyTrain = trains.find((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT);
-    const trainY = nearbyTrain
-      ? project(nearbyTrain.lat, nearbyTrain.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT).y
-      : null;
-    return { station, x, y, hasTrain: !!nearbyTrain, trainY };
+    const nearbyIdx = trains.findIndex((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT);
+    const trainY = nearbyIdx >= 0 ? separated[nearbyIdx].y : null;
+    return { station, x, y, hasTrain: nearbyIdx >= 0, trainY };
   });
   const atStationPixels = trains
-    .filter((t) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT))
-    .map((t) => project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
+    .map((t, idx) => ({ t, idx }))
+    .filter(({ t }) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT))
+    .map(({ idx }) => ({ x: separated[idx].x, y: separated[idx].y }));
 
   function projectIfVisible(point) {
     if (!point) return null;

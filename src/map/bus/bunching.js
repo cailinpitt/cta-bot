@@ -8,6 +8,7 @@ const {
   TWEMOJI_BUS_INNER, TWEMOJI_HOUSE_INNER, TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
   buildDirectionArrow, requireMapboxToken, fetchMapboxStatic,
+  separateMarkers, perpendicularFromBearing,
 } = require('../common');
 
 const BUS_COLOR = 'ff2a6d';         // hot pink/red reads well on dark
@@ -143,8 +144,15 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
         : `<circle cx="${left + greenOff}" cy="${y}" r="4" fill="#43a047"/>`,
     ].join('');
   });
-  const markerElements = vehicles.map((v) => {
-    const { x, y } = project(v.lat, v.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+  // Nudge markers apart so a tight bunch (buses within a few feet on-street) still
+  // shows every vehicle instead of one disc covering the others. Push sideways
+  // (perpendicular to the route bearing) so buses on a straight road don't look
+  // further ahead/behind than they actually are.
+  const rawMarkerPixels = vehicles.map((v) => project(v.lat, v.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
+  const markerPixels = separateMarkers(rawMarkerPixels, BUS_MARKER_RADIUS * 2 + 4, {
+    axis: perpendicularFromBearing(view.bearingDeg),
+  });
+  const markerElements = markerPixels.map(({ x, y }) => {
     const iconSize = BUS_MARKER_RADIUS * 1.6;
     const iconX = x - iconSize / 2;
     const iconY = y - iconSize / 2;

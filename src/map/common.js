@@ -177,6 +177,81 @@ function sliceIntoSegments(points, cumDist, numBins) {
   return slices;
 }
 
+/**
+ * Nudge overlapping marker pixel positions apart so every marker stays visible
+ * when buses/trains are geographically close (e.g. a tight bunch).
+ *
+ * Iteratively resolves pairwise overlaps. When `opts.axis` (a unit vector in
+ * pixel space) is provided, pushes are applied along ±axis only, preserving
+ * the perpendicular component of each pair's offset. Passing the axis
+ * perpendicular to the route bearing keeps buses at their true along-route
+ * position and only fans them sideways — important on straight roads, where
+ * pushing along the route makes a bunch look more spread out than it is.
+ *
+ * Order of input is preserved and the returned array has the same length.
+ */
+function separateMarkers(points, minDist, opts = {}) {
+  const { axis, maxIterations = 60 } = opts;
+  const out = points.map((p) => ({ ...p }));
+  for (let iter = 0; iter < maxIterations; iter++) {
+    let moved = false;
+    for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const dx = out[j].x - out[i].x;
+        const dy = out[j].y - out[i].y;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 >= minDist * minDist) continue;
+
+        if (axis) {
+          // Component of (j - i) along the axis; the rest is perpendicular and
+          // we leave it alone. If the perpendicular component alone already
+          // clears minDist, we're done.
+          const a = dx * axis.x + dy * axis.y;
+          const perp2 = Math.max(0, dist2 - a * a);
+          if (perp2 >= minDist * minDist) continue;
+          const targetAbs = Math.sqrt(minDist * minDist - perp2);
+          const sign = a !== 0 ? Math.sign(a) : 1; // stable: i goes -, j goes +
+          const targetA = sign * targetAbs;
+          const delta = (targetA - a) / 2;
+          out[i].x -= axis.x * delta;
+          out[i].y -= axis.y * delta;
+          out[j].x += axis.x * delta;
+          out[j].y += axis.y * delta;
+          moved = true;
+        } else {
+          const dist = Math.sqrt(dist2);
+          let ux; let uy;
+          if (dist < 1e-6) {
+            const angle = ((i * 97 + j * 31) % 360) * (Math.PI / 180);
+            ux = Math.cos(angle);
+            uy = Math.sin(angle);
+          } else {
+            ux = dx / dist;
+            uy = dy / dist;
+          }
+          const push = (minDist - dist) / 2;
+          out[i].x -= ux * push;
+          out[i].y -= uy * push;
+          out[j].x += ux * push;
+          out[j].y += uy * push;
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return out;
+}
+
+// Pixel-space perpendicular to a compass bearing (degrees, 0 = north, clockwise).
+// Screen convention: +x right, +y down. Along-route direction in screen pixels
+// is (sin β, -cos β); perpendicular (rotated 90° clockwise, i.e. to the right
+// of travel) is (cos β, sin β).
+function perpendicularFromBearing(bearingDeg) {
+  const rad = (bearingDeg * Math.PI) / 180;
+  return { x: Math.cos(rad), y: Math.sin(rad) };
+}
+
 module.exports = {
   STYLE, WIDTH, HEIGHT,
   ROUTE_HALO_COLOR, ROUTE_HALO_STROKE, ROUTE_CORE_COLOR, ROUTE_CORE_STROKE,
@@ -186,4 +261,6 @@ module.exports = {
   buildTerminalMarker,
   xmlEscape, requireMapboxToken, fetchMapboxStatic,
   sliceIntoSegments,
+  separateMarkers,
+  perpendicularFromBearing,
 };
