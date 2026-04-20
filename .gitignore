@@ -3,6 +3,7 @@ node_modules/
 assets/
 /data/
 /state/
+/tmp/
 *.log
 .DS_Store
 .claude/
