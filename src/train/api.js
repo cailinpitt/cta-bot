@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { recordTrainObservations } = require('../shared/observations');
+const { withRetry } = require('../shared/retry');
 
 const BASE = 'https://lapi.transitchicago.com/api/1.0';
 const ALL_LINES = ['red', 'blue', 'brn', 'g', 'org', 'p', 'pink', 'y'];
@@ -49,10 +50,10 @@ function isInChicagoland(lat, lon) {
 }
 
 async function getAllTrainPositions(lines = ALL_LINES) {
-  const { data } = await axios.get(`${BASE}/ttpositions.aspx`, {
+  const { data } = await withRetry(() => axios.get(`${BASE}/ttpositions.aspx`, {
     params: { key: process.env.CTA_TRAIN_KEY, rt: lines.join(','), outputType: 'JSON' },
     timeout: 15000,
-  });
+  }), { label: 'CTA train positions' });
   const body = data.ctatt;
   if (body.errCd !== '0') throw new Error(`Train API error ${body.errCd}: ${body.errNm}`);
 

@@ -1,13 +1,14 @@
 const axios = require('axios');
 const { recordBusObservations } = require('../shared/observations');
+const { withRetry } = require('../shared/retry');
 
 const BUS_BASE = 'https://www.ctabustracker.com/bustime/api/v3';
 
 async function get(endpoint, params) {
-  const { data } = await axios.get(`${BUS_BASE}/${endpoint}`, {
+  const { data } = await withRetry(() => axios.get(`${BUS_BASE}/${endpoint}`, {
     params: { key: process.env.CTA_BUS_KEY, format: 'json', ...params },
     timeout: 15000,
-  });
+  }), { label: `CTA bus ${endpoint}` });
   const body = data['bustime-response'];
   if (body.error) {
     // "No data found" is CTA's way of saying a route has no active vehicles
