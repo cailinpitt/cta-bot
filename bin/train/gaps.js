@@ -7,7 +7,8 @@ const { getAllTrainPositions, LINE_COLORS, LINE_NAMES } = require('../../src/tra
 const { detectAllTrainGaps } = require('../../src/train/gaps');
 const { renderTrainGap } = require('../../src/map');
 const { loginTrain, postWithImage, postText } = require('../../src/train/bluesky');
-const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
+const { isOnCooldown } = require('../../src/shared/state');
+const { commitAndPost } = require('../../src/shared/postDetection');
 const { expectedTrainHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
@@ -106,27 +107,7 @@ async function main() {
 
   const dirKey = `train_gap_${gap.line}_${gap.trDr}`;
   const lineKey = `train_gap_line_${gap.line}`;
-  if (!acquireCooldown([dirKey, lineKey])) {
-    console.log('Lost cooldown race to another instance, skipping post');
-    history.recordGap({
-      kind: 'train',
-      route: gap.line,
-      direction: gap.trDr,
-      gapFt: gap.gapFt,
-      gapMin: gap.gapMin,
-      expectedMin: gap.expectedMin,
-      ratio: gap.ratio,
-      nearStop: gap.nearStation?.name || gap.leading.nextStation,
-      posted: false,
-    });
-    return;
-  }
-
-  const agent = await loginTrain();
-  const primary = image
-    ? await postWithImage(agent, text, image, alt)
-    : await postText(agent, text);
-  history.recordGap({
+  const baseEvent = {
     kind: 'train',
     route: gap.line,
     direction: gap.trDr,
@@ -135,10 +116,15 @@ async function main() {
     expectedMin: gap.expectedMin,
     ratio: gap.ratio,
     nearStop: gap.nearStation?.name || gap.leading.nextStation,
-    posted: true,
-    postUri: primary.uri,
+  };
+  await commitAndPost({
+    cooldownKeys: [dirKey, lineKey],
+    recordSkip: () => history.recordGap({ ...baseEvent, posted: false }),
+    agentLogin: loginTrain,
+    image, text, alt,
+    recordPosted: (primary) => history.recordGap({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage, postText,
   });
-  console.log(`Posted: ${primary.url}`);
 }
 
 runBin(main);

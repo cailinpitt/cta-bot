@@ -9,7 +9,8 @@ const { detectAllGaps } = require('../../src/bus/gaps');
 const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
 const { renderGapMap } = require('../../src/map');
 const { loginBus, postWithImage, postText } = require('../../src/bus/bluesky');
-const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
+const { isOnCooldown } = require('../../src/shared/state');
+const { commitAndPost } = require('../../src/shared/postDetection');
 const { expectedHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
@@ -187,27 +188,7 @@ async function main() {
     return;
   }
 
-  if (!acquireCooldown([`gap:${gap.pid}`, `gap:route:${gap.route}`])) {
-    console.log('Lost cooldown race to another instance, skipping post');
-    history.recordGap({
-      kind: 'bus',
-      route: gap.route,
-      direction: gap.pid,
-      gapFt: gap.gapFt,
-      gapMin: gap.gapMin,
-      expectedMin: gap.expectedMin,
-      ratio: gap.ratio,
-      nearStop: chosenStop.stopName,
-      posted: false,
-    });
-    return;
-  }
-
-  const agent = await loginBus();
-  const primary = image
-    ? await postWithImage(agent, text, image, alt)
-    : await postText(agent, text);
-  history.recordGap({
+  const baseEvent = {
     kind: 'bus',
     route: gap.route,
     direction: gap.pid,
@@ -216,10 +197,15 @@ async function main() {
     expectedMin: gap.expectedMin,
     ratio: gap.ratio,
     nearStop: chosenStop.stopName,
-    posted: true,
-    postUri: primary.uri,
+  };
+  await commitAndPost({
+    cooldownKeys: [`gap:${gap.pid}`, `gap:route:${gap.route}`],
+    recordSkip: () => history.recordGap({ ...baseEvent, posted: false }),
+    agentLogin: loginBus,
+    image, text, alt,
+    recordPosted: (primary) => history.recordGap({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage, postText,
   });
-  console.log(`Posted: ${primary.url}`);
 }
 
 runBin(main);

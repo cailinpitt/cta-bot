@@ -8,7 +8,8 @@ const { detectTrainBunching } = require('../../src/train/bunching');
 const { renderTrainBunching } = require('../../src/map');
 const { captureTrainBunchingVideo } = require('../../src/train/bunchingVideo');
 const { loginTrain, postWithImage, postWithVideo, postText } = require('../../src/train/bluesky');
-const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
+const { isOnCooldown } = require('../../src/shared/state');
+const { commitAndPost } = require('../../src/shared/postDetection');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { buildPostText, buildAltText, buildVideoPostText, buildVideoAltText } = require('../../src/train/bunchingPost');
@@ -98,38 +99,24 @@ async function main() {
     return;
   }
 
-  // Final atomic cooldown acquire right before posting — closes the race
-  // where two overlapping bot instances both pass the earlier check and
-  // would otherwise both post the same bunch.
-  if (!acquireCooldown([dirCooldownKey, lineCooldownKey])) {
-    console.log('Lost cooldown race to another instance, skipping post');
-    history.recordBunching({
-      kind: 'train',
-      route: bunch.line,
-      direction: bunch.trDr,
-      vehicleCount: bunch.trains.length,
-      severityFt: bunch.spanFt,
-      nearStop: bunch.trains[0].nextStation,
-      posted: false,
-    });
-    return;
-  }
-
-  const agent = await loginTrain();
-  const primary = image
-    ? await postWithImage(agent, text, image, alt)
-    : await postText(agent, text);
-  history.recordBunching({
+  const baseEvent = {
     kind: 'train',
     route: bunch.line,
     direction: bunch.trDr,
     vehicleCount: bunch.trains.length,
     severityFt: bunch.spanFt,
     nearStop: bunch.trains[0].nextStation,
-    posted: true,
-    postUri: primary.uri,
+  };
+  const result = await commitAndPost({
+    cooldownKeys: [dirCooldownKey, lineCooldownKey],
+    recordSkip: () => history.recordBunching({ ...baseEvent, posted: false }),
+    agentLogin: loginTrain,
+    image, text, alt,
+    recordPosted: (primary) => history.recordBunching({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage, postText,
   });
-  console.log(`Posted: ${primary.url}`);
+  if (!result) return;
+  const { agent, primary } = result;
 
   // Capture a timelapse and reply to the primary post. Failures are non-fatal.
   try {
