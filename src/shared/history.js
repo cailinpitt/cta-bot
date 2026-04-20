@@ -68,6 +68,17 @@ function db() {
       key TEXT PRIMARY KEY,
       ts INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS observations (
+      ts INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      route TEXT NOT NULL,
+      direction TEXT,
+      vehicle_id TEXT NOT NULL,
+      destination TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_obs_kind_route_ts
+      ON observations(kind, route, ts);
   `);
   return _db;
 }
