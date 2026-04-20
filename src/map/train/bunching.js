@@ -17,6 +17,10 @@ const TRAIN_BUNCH_BBOX_PADDING_DEG = 0.003; // ~300m — zoom out a little past 
 // the primary focal point. Halo/arrow offsets are derived from this.
 const TRAIN_MARKER_RADIUS = 32;
 const TERMINAL_MARKER_RADIUS = TRAIN_MARKER_RADIUS;
+// Threshold for treating a train as "at" a station (white halo + label
+// anchored to the train). Tightened so departing trains visually leave the
+// station promptly instead of trailing the halo for a couple frames.
+const AT_STATION_FT = 250;
 
 // True geographic terminals per line, keyed by the CTA `destNm` string. Loop
 // lines (Brown/Orange/Pink/Purple) return "Loop" when heading downtown — those
@@ -311,14 +315,14 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   }));
 
   const stationsWithPixels = view.visibleStations.map(({ station, x, y }) => {
-    const nearbyTrain = trains.find((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < 500);
+    const nearbyTrain = trains.find((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT);
     const trainY = nearbyTrain
       ? project(nearbyTrain.lat, nearbyTrain.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT).y
       : null;
     return { station, x, y, hasTrain: !!nearbyTrain, trainY };
   });
   const atStationPixels = trains
-    .filter((t) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < 500))
+    .filter((t) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT))
     .map((t) => project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
 
   function projectIfVisible(point) {
