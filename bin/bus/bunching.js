@@ -10,7 +10,7 @@ const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
 const { renderBunchingMap } = require('../../src/map');
 const { fetchSignalsInBbox, filterSignalsOnRoute, dedupeNearbySignals, annotateSignalOrientations } = require('../../src/bus/trafficSignals');
 const { captureBunchingVideo } = require('../../src/bus/bunchingVideo');
-const { loginBus, postWithImage, postWithVideo } = require('../../src/bus/bluesky');
+const { loginBus, postWithImage, postWithVideo, postText } = require('../../src/bus/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
 const { terminalZoneFt: terminalZoneFor } = require('../../src/shared/geo');
 const history = require('../../src/shared/history');
@@ -132,7 +132,13 @@ async function main() {
   const onRoute = filterSignalsOnRoute(bboxSignals, pattern.points);
   const signals = annotateSignalOrientations(dedupeNearbySignals(onRoute), pattern.points);
   console.log(`Signals: ${bboxSignals.length} in pattern bbox → ${onRoute.length} on route → ${signals.length} after dedupe`);
-  const image = await renderBunchingMap(bunch, pattern, signals);
+  let image;
+  try {
+    image = await renderBunchingMap(bunch, pattern, signals);
+  } catch (e) {
+    console.warn(`Map render failed (${e.message}); will post text-only`);
+    image = null;
+  }
 
   const text = buildPostText(bunch, pattern, stop, callouts);
   const alt = buildAltText(bunch, pattern, stop);
@@ -175,7 +181,9 @@ async function main() {
   }
 
   const agent = await loginBus();
-  const primary = await postWithImage(agent, text, image, alt);
+  const primary = image
+    ? await postWithImage(agent, text, image, alt)
+    : await postText(agent, text);
   history.recordBunching({
     kind: 'bus',
     route: bunch.route,

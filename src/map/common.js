@@ -112,8 +112,23 @@ function requireMapboxToken() {
 }
 
 async function fetchMapboxStatic(url, timeoutMs = 30000) {
-  const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: timeoutMs });
-  return data;
+  // One retry with jittered backoff to absorb transient 429/5xx without
+  // killing the post entirely. If the second attempt also fails, callers
+  // can decide whether to text-only fallback or surface the error.
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: timeoutMs });
+      return data;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) {
+        const wait = 500 + Math.floor(Math.random() * 750);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 /**

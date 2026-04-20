@@ -6,7 +6,7 @@ const argv = require('minimist')(process.argv.slice(2));
 const { getAllTrainPositions, LINE_COLORS, LINE_NAMES } = require('../../src/train/api');
 const { detectAllTrainGaps } = require('../../src/train/gaps');
 const { renderTrainGap } = require('../../src/map');
-const { loginTrain, postWithImage } = require('../../src/train/bluesky');
+const { loginTrain, postWithImage, postText } = require('../../src/train/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
 const { expectedTrainHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
@@ -88,7 +88,13 @@ async function main() {
   if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
 
   console.log('Rendering map...');
-  const image = await renderTrainGap(gap, LINE_COLORS, trainLines, trainStations);
+  let image;
+  try {
+    image = await renderTrainGap(gap, LINE_COLORS, trainLines, trainStations);
+  } catch (e) {
+    console.warn(`Map render failed (${e.message}); will post text-only`);
+    image = null;
+  }
   const text = buildPostText(gap, callouts);
   const alt = buildAltText(gap);
 
@@ -117,7 +123,9 @@ async function main() {
   }
 
   const agent = await loginTrain();
-  const primary = await postWithImage(agent, text, image, alt);
+  const primary = image
+    ? await postWithImage(agent, text, image, alt)
+    : await postText(agent, text);
   history.recordGap({
     kind: 'train',
     route: gap.line,

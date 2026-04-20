@@ -8,7 +8,7 @@ const { gaps: gapRoutes } = require('../../src/bus/routes');
 const { detectAllGaps } = require('../../src/bus/gaps');
 const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
 const { renderGapMap } = require('../../src/map');
-const { loginBus, postWithImage } = require('../../src/bus/bluesky');
+const { loginBus, postWithImage, postText } = require('../../src/bus/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
 const { expectedHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
@@ -170,7 +170,13 @@ async function main() {
   if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
 
   console.log('Rendering map...');
-  const image = await renderGapMap(gap, pattern);
+  let image;
+  try {
+    image = await renderGapMap(gap, pattern);
+  } catch (e) {
+    console.warn(`Map render failed (${e.message}); will post text-only`);
+    image = null;
+  }
 
   const text = buildPostText(gap, pattern, chosenStop, callouts);
   const alt = buildAltText(gap, pattern, chosenStop);
@@ -198,7 +204,9 @@ async function main() {
   }
 
   const agent = await loginBus();
-  const primary = await postWithImage(agent, text, image, alt);
+  const primary = image
+    ? await postWithImage(agent, text, image, alt)
+    : await postText(agent, text);
   history.recordGap({
     kind: 'bus',
     route: gap.route,

@@ -7,7 +7,7 @@ const { getAllTrainPositions, LINE_COLORS, LINE_NAMES } = require('../../src/tra
 const { detectTrainBunching } = require('../../src/train/bunching');
 const { renderTrainBunching } = require('../../src/map');
 const { captureTrainBunchingVideo } = require('../../src/train/bunchingVideo');
-const { loginTrain, postWithImage, postWithVideo } = require('../../src/train/bluesky');
+const { loginTrain, postWithImage, postWithVideo, postText } = require('../../src/train/bluesky');
 const { isOnCooldown, acquireCooldown } = require('../../src/shared/state');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
@@ -68,7 +68,13 @@ async function main() {
   if (callouts.length > 0) console.log(`Callouts: ${callouts.join(' · ')}`);
 
   console.log('Rendering map...');
-  const image = await renderTrainBunching(bunch, LINE_COLORS, trainLines, trainStations);
+  let image;
+  try {
+    image = await renderTrainBunching(bunch, LINE_COLORS, trainLines, trainStations);
+  } catch (e) {
+    console.warn(`Map render failed (${e.message}); will post text-only`);
+    image = null;
+  }
   const text = buildPostText(bunch, callouts);
   const alt = buildAltText(bunch);
 
@@ -110,7 +116,9 @@ async function main() {
   }
 
   const agent = await loginTrain();
-  const primary = await postWithImage(agent, text, image, alt);
+  const primary = image
+    ? await postWithImage(agent, text, image, alt)
+    : await postText(agent, text);
   history.recordBunching({
     kind: 'train',
     route: bunch.line,
