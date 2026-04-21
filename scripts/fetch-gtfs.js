@@ -167,6 +167,7 @@ async function main() {
   // last-stop id (stop_sequence === max).
   const firstDeparture = new Map(); // trip_id → seconds
   const firstSeq = new Map();
+  const firstStopId = new Map();   // trip_id → stop_id (origin)
   const lastStopId = new Map();    // trip_id → stop_id
   const lastArrival = new Map();   // trip_id → seconds (last-stop arrival)
   const lastSeq = new Map();
@@ -195,6 +196,7 @@ async function main() {
     if (prevFirst === undefined || seq < prevFirst) {
       firstSeq.set(tripId, seq);
       firstDeparture.set(tripId, parseGtfsTime(parts[depIdx]));
+      firstStopId.set(tripId, parts[stopIdIdx]);
     }
     const prevLast = lastSeq.get(tripId);
     if (prevLast === undefined || seq > prevLast) {
@@ -230,6 +232,34 @@ async function main() {
     if (!prev || c > prev.count) dominantService.set(rdth, { serviceId, count: c });
   }
 
+  // Rail route|dir → most-common origin stop_id. Blue/Red/etc. mix full
+  // terminal-to-terminal trips with short-turns (UIC-Halsted, Jefferson Park,
+  // etc.) that all share the same direction_id. Counting their first-departure
+  // gaps together collapses the apparent headway toward zero — a 10 AM Blue
+  // dir-1 hour bucket ends up at "2 min" because full trips from Forest Park
+  // and short-turns from mid-route stagger their start times. Lock on the
+  // dominant origin per direction so we only measure the full terminal→terminal
+  // run, which is what the CTA publishes as service frequency.
+  const railOriginCounts = new Map(); // route|dir → Map(stopId → count)
+  for (const [tripId, meta] of tripMeta) {
+    if (meta.mode !== 'rail') continue;
+    const origin = firstStopId.get(tripId);
+    if (!origin) continue;
+    const k = `${meta.route}|${meta.dir}`;
+    if (!railOriginCounts.has(k)) railOriginCounts.set(k, new Map());
+    const m = railOriginCounts.get(k);
+    m.set(origin, (m.get(origin) || 0) + 1);
+  }
+  const railDominantOrigin = new Map(); // route|dir → stop_id
+  for (const [k, counts] of railOriginCounts) {
+    let best = null;
+    let bestCount = -1;
+    for (const [stopId, c] of counts) {
+      if (c > bestCount) { bestCount = c; best = stopId; }
+    }
+    if (best) railDominantOrigin.set(k, best);
+  }
+
   const buckets = new Map();
   // Parallel bucket keyed the same way as `buckets`, storing per-trip durations
   // (minutes) so ghost detection can compare observed active vehicle counts to
@@ -247,6 +277,10 @@ async function main() {
     const rdth = `${meta.route}|${meta.dir}|${meta.dayType}|${hour}`;
     const dominant = dominantService.get(rdth);
     if (!dominant || dominant.serviceId !== meta.serviceId) continue;
+    if (meta.mode === 'rail') {
+      const domOrigin = railDominantOrigin.get(`${meta.route}|${meta.dir}`);
+      if (domOrigin && firstStopId.get(tripId) !== domOrigin) continue;
+    }
     const key = bucketKey(meta.route, meta.dir, meta.dayType, hour);
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(dep);
