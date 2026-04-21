@@ -84,8 +84,21 @@ async function getAllTrainPositions(lines = ALL_LINES) {
 // display the line, so the tag reads as clutter. Branch ambiguity (two
 // "Western" on the Blue Line) is rare enough to tolerate in exchange.
 const TRAILING_PARENS = /\s*\([^)]*\)\s*$/;
+// Station names longer than the typical ~15 char label eat horizontal space
+// on dense stretches (Green Line west branch) and spill their rect across
+// adjacent station pins. Override with a shorter form; the line is already
+// stated in the post so the omitted qualifier doesn't harm readability.
+const STATION_NAME_OVERRIDES = {
+  'Conservatory-Central Park Drive': 'Conservatory',
+  'Jefferson Park Transit Center': 'Jefferson Park',
+  'Illinois Medical District': 'IMD',
+  'Cermak-McCormick Place': 'Cermak',
+  '35th-Bronzeville-IIT': '35th-Bronzeville',
+};
 function shortStationName(name) {
-  return name ? name.replace(TRAILING_PARENS, '') : name;
+  if (!name) return name;
+  if (STATION_NAME_OVERRIDES[name]) return STATION_NAME_OVERRIDES[name];
+  return name.replace(TRAILING_PARENS, '');
 }
 
 module.exports = { getAllTrainPositions, LINE_COLORS, LINE_NAMES, LINE_EMOJI, ALL_LINES, shortStationName };

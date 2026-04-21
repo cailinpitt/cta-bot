@@ -84,34 +84,157 @@ function findOrigin(bunch, stations) {
   return st ? { lat: st.lat, lon: st.lon } : null;
 }
 
-function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, lineColor, widthPx, heightPx, terminalPixel, originPixel) {
+function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, lineColor, widthPx, heightPx, terminalPixel, originPixel, bearingDeg = 0) {
   const fontSize = 18;
   const labelHeight = fontSize + 8;
-  const gap = 4; // minimum vertical gap between labels
 
-  // Compute initial label positions, then nudge overlapping ones apart.
-  // If a train is sitting at the station, anchor the label to the train's
-  // projected y (not the station's) so the label sits below the train marker
-  // + halo even when the train is offset from the station centroid.
-  const STATION_LABEL_OFFSET = 18;
-  const TRAIN_HALO_EXTRA = 8;
-  const LABEL_CLEAR_GAP = 10;
-  const labels = stationsWithPixels.map(({ station, x, y, hasTrain, trainY }) => {
-    const label = xmlEscape(shortStationName(station.name));
-    const approxWidth = label.length * 10 + 16;
-    const rectY = hasTrain
-      ? trainY + TRAIN_MARKER_RADIUS + TRAIN_HALO_EXTRA + LABEL_CLEAR_GAP
-      : y + STATION_LABEL_OFFSET;
-    return { label, x, rectY, approxWidth };
+  // Station pin-s (Mapbox "small" pin) is ~20x30px at @2x. Use its bounding
+  // radius as the exclusion for compass placement so labels sit right next to
+  // the pin, not drifting across the map.
+  const STATION_PIN_RADIUS = 14;
+  const LABEL_GAP = 8;             // gap between pin/halo edge and label rect
+  const LABEL_COLLISION_PAD = 4;   // padding when testing label-vs-label overlap
+
+  // Reserved no-go boxes: train markers + their halos, and terminal (house/
+  // flag) markers. Labels placed near trains should not slide over the train
+  // icon.
+  const reserved = [];
+  for (const { x, y } of trainPixels) {
+    const r = TRAIN_MARKER_RADIUS + 8;
+    reserved.push({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
+  }
+  if (terminalPixel) {
+    const r = TERMINAL_MARKER_RADIUS + 4;
+    reserved.push({ x: terminalPixel.x - r, y: terminalPixel.y - r, w: r * 2, h: r * 2 });
+  }
+  if (originPixel) {
+    const r = TERMINAL_MARKER_RADIUS + 4;
+    reserved.push({ x: originPixel.x - r, y: originPixel.y - r, w: r * 2, h: r * 2 });
+  }
+  // Station pins too — a label covering a neighboring station's pin hides
+  // the thing the label is pointing at and confuses the reader. Tight pad
+  // since pins are small (~14px).
+  for (const { x, y } of stationsWithPixels) {
+    const r = STATION_PIN_RADIUS + 2;
+    reserved.push({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
+  }
+
+  // Per-station bearing is used to compute that station's local "perpendicular
+  // to the route" — the preferred label side. Lines with big bends (Green at
+  // the Loop, Blue at the Kennedy) need per-station bearings because a single
+  // global bearing would put labels along-route for stations on the other leg.
+  function unitVectors(stationBearingDeg) {
+    const perp = perpendicularFromBearing(stationBearingDeg);
+    const brad = (stationBearingDeg * Math.PI) / 180;
+    const along = { x: Math.sin(brad), y: -Math.cos(brad) };
+    return { perp, along };
+  }
+  // Global bearing used for along-route sort order (so alternation walks in a
+  // stable direction across the whole frame).
+  const { along: globalAlong } = unitVectors(bearingDeg);
+
+  // Build 8 candidates but ordered by preference. `side`: +1 = right-of-travel
+  // first, -1 = left-of-travel first. Caller alternates per station.
+  function candidates(pinX, pinY, radius, w, h, side, stationBearingDeg) {
+    const r = radius + LABEL_GAP;
+    const { perp, along } = unitVectors(stationBearingDeg);
+    // Label rect's top-left for a placement centered on (cx, cy).
+    const rectFrom = (cx, cy, anchor) => ({ x: cx - w / 2, y: cy - h / 2, anchor });
+    const perpSide = (s) => {
+      const cx = pinX + perp.x * (r + w / 2) * s;
+      const cy = pinY + perp.y * (r + h / 2) * s;
+      return rectFrom(cx, cy, 'middle');
+    };
+    // Preferred first: both sides perpendicular to the route, primary side first.
+    // Then along-route +/- (useful on curves), then pure cardinals that may
+    // coincide with perpendiculars on cardinal bearings (redundancy is fine —
+    // the first hit wins).
+    const primary = perpSide(side);
+    const opposite = perpSide(-side);
+    const alongPos = rectFrom(
+      pinX + along.x * (r + w / 2),
+      pinY + along.y * (r + h / 2),
+      'middle',
+    );
+    const alongNeg = rectFrom(
+      pinX - along.x * (r + w / 2),
+      pinY - along.y * (r + h / 2),
+      'middle',
+    );
+    // Cardinal + diagonal fallbacks, in case viewport edges clip the route-
+    // relative placements.
+    return [
+      primary,
+      opposite,
+      alongPos,
+      alongNeg,
+      { x: pinX + r, y: pinY - h / 2, anchor: 'start' },                 // E
+      { x: pinX - r - w, y: pinY - h / 2, anchor: 'end' },               // W
+      { x: pinX + r * 0.5, y: pinY + r * 0.5, anchor: 'start' },         // SE
+      { x: pinX - r * 0.5 - w, y: pinY + r * 0.5, anchor: 'end' },       // SW
+      { x: pinX + r * 0.5, y: pinY - r * 0.5 - h, anchor: 'start' },     // NE
+      { x: pinX - r * 0.5 - w, y: pinY - r * 0.5 - h, anchor: 'end' },   // NW
+    ];
+  }
+
+  function rectsOverlap(a, b) {
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+  }
+  function inViewport(r) {
+    return r.x >= 0 && r.y >= 0 && r.x + r.w <= widthPx && r.y + r.h <= heightPx;
+  }
+
+  // Sort stations along the route (by projected pixel position onto the route
+  // bearing) so we can alternate which side of the track each label sits on.
+  // Within that order, hoist train-hosting stations to the front so they get
+  // the best available slots.
+  const sorted = [...stationsWithPixels].sort((a, b) => {
+    if (a.hasTrain !== b.hasTrain) return a.hasTrain ? -1 : 1;
+    const aProj = a.x * globalAlong.x + a.y * globalAlong.y;
+    const bProj = b.x * globalAlong.x + b.y * globalAlong.y;
+    return aProj - bProj;
   });
 
-  labels.sort((a, b) => a.rectY - b.rectY);
-  for (let i = 1; i < labels.length; i++) {
-    const prev = labels[i - 1];
-    const minY = prev.rectY + labelHeight + gap;
-    if (labels[i].rectY < minY) {
-      labels[i].rectY = minY;
+  const placed = [];
+  const labels = [];
+  let sideFlip = 1; // alternates +1/-1 along the route; trains force a reset
+  for (const s of sorted) {
+    const text = xmlEscape(shortStationName(s.station.name));
+    const approxWidth = text.length * 10 + 16;
+    // Trains get the bigger exclusion radius so labels clear the halo.
+    const pinX = s.hasTrain ? s.trainX ?? s.x : s.x;
+    const pinY = s.hasTrain ? s.trainY : s.y;
+    const radius = s.hasTrain ? TRAIN_MARKER_RADIUS + 8 : STATION_PIN_RADIUS;
+
+    const cands = candidates(pinX, pinY, radius, approxWidth, labelHeight, sideFlip, s.bearingDeg ?? bearingDeg);
+    sideFlip = -sideFlip;
+    let chosen = null;
+    for (const c of cands) {
+      const box = { x: c.x, y: c.y, w: approxWidth, h: labelHeight };
+      if (!inViewport(box)) continue;
+      const pad = { x: box.x - LABEL_COLLISION_PAD, y: box.y - LABEL_COLLISION_PAD, w: box.w + LABEL_COLLISION_PAD * 2, h: box.h + LABEL_COLLISION_PAD * 2 };
+      if (placed.some((p) => rectsOverlap(pad, p))) continue;
+      if (reserved.some((r) => rectsOverlap(box, r))) continue;
+      chosen = { ...c, box };
+      break;
     }
+    // No candidate fit cleanly — relax the label-vs-label constraint but
+    // keep the train-marker exclusion hard. A label overlapping another label
+    // is recoverable noise; a label covering a train hides the focal element
+    // of the post, so we'd rather drop the label entirely.
+    if (!chosen) {
+      for (const c of cands) {
+        const box = { x: c.x, y: c.y, w: approxWidth, h: labelHeight };
+        if (!inViewport(box)) continue;
+        if (reserved.some((r) => rectsOverlap(box, r))) continue;
+        chosen = { ...c, box };
+        break;
+      }
+    }
+    if (!chosen) continue;
+
+    placed.push(chosen.box);
+    labels.push({ label: text, rectX: chosen.x, rectY: chosen.y, approxWidth, anchor: chosen.anchor });
   }
 
   // White ring halo for trains sitting at a station.
@@ -136,13 +259,16 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
     arrows.push(buildDirectionArrow(widthPx - 220, 180, trainPixels[0].bearingDeg));
   }
 
-  const labelElements = labels.map(({ label, x, rectY, approxWidth }) => {
-    const rectX = x - approxWidth / 2;
-    const textX = x;
+  const labelElements = labels.map(({ label, rectX, rectY, approxWidth, anchor }) => {
+    // Text x depends on text-anchor: start → left edge, middle → center,
+    // end → right edge. Keeps the text visually centered within its rect.
+    const textX = anchor === 'start' ? rectX + 8
+      : anchor === 'end' ? rectX + approxWidth - 8
+      : rectX + approxWidth / 2;
     const textY = rectY + fontSize + 2;
     return `
     <rect x="${rectX}" y="${rectY}" width="${approxWidth}" height="${labelHeight}" fill="#000" fill-opacity="0.8" rx="3"/>
-    <text x="${textX}" y="${textY}" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600">${label}</text>`;
+    <text x="${textX}" y="${textY}" fill="#fff" text-anchor="${anchor}" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600">${label}</text>`;
   });
 
   // Origin (house) and destination (flag) markers — draw below trains so a
@@ -153,7 +279,9 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   if (originPixel) terminalElements.push(...buildTerminalMarker(originPixel.x, originPixel.y, TERMINAL_MARKER_RADIUS, TWEMOJI_HOUSE_INNER));
   if (terminalPixel) terminalElements.push(...buildTerminalMarker(terminalPixel.x, terminalPixel.y, TERMINAL_MARKER_RADIUS, TWEMOJI_FLAG_INNER));
 
-  const elements = [...terminalElements, ...halos, ...trainMarkers, ...arrows, ...labelElements].join('\n');
+  // Draw labels before trains+halos so a stray overlap never hides a train.
+  // Placement already avoids reserved train boxes, so this is belt-and-suspenders.
+  const elements = [...terminalElements, ...labelElements, ...halos, ...trainMarkers, ...arrows].join('\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${elements}</svg>`;
 }
 
@@ -236,19 +364,58 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
   // station in the viewport. Wide bunches (e.g. Blue Line trains on both
   // branches) otherwise produced a forest of labels stretching well past the
   // bunch itself, crowding the image and pulling attention off the actual
-  // event. Stations between the trains are always kept; behind/ahead are
-  // capped at N on each side along the route.
+  // event. Behind/ahead are capped at N on each side along the route.
+  // For gaps (where `between` can span 10+ stations), cap between too and
+  // evenly sample so endpoints + interior context are both represented.
   const LABELED_PER_SIDE = 3;
+  const LABELED_BETWEEN_MAX = 8;
+  function sampleEvenly(arr, max) {
+    if (arr.length <= max) return arr;
+    const out = [];
+    const step = (arr.length - 1) / (max - 1);
+    const seen = new Set();
+    for (let i = 0; i < max; i++) {
+      const idx = Math.round(i * step);
+      if (!seen.has(idx)) { seen.add(idx); out.push(arr[idx]); }
+    }
+    return out;
+  }
   const labeledSet = new Set([
     ...behind.slice(0, LABELED_PER_SIDE).map((s) => s.station.name),
-    ...between.map((s) => s.station.name),
+    ...sampleEvenly(between, LABELED_BETWEEN_MAX).map((s) => s.station.name),
     ...ahead.slice(0, LABELED_PER_SIDE).map((s) => s.station.name),
   ]);
+  // Compute per-station local route bearing by finding the nearest polyline
+  // segment and taking that segment's heading. Lines with big bends (Green at
+  // the Loop, Blue at the Kennedy) need this because a global bearing puts
+  // the "perpendicular" direction along-route for stations on the other leg,
+  // which re-introduces the stacking problem we're trying to fix.
+  const allSegPoints = lineSegments.flatMap((seg) => seg.map(([lat, lon]) => ({ lat, lon })));
+  function localBearingFor(pt) {
+    if (allSegPoints.length < 2) return 0;
+    let bestDist = Infinity;
+    let bestA = null;
+    let bestB = null;
+    for (let i = 0; i < allSegPoints.length - 1; i++) {
+      const a = allSegPoints[i];
+      const b = allSegPoints[i + 1];
+      const dx = b.lon - a.lon;
+      const dy = b.lat - a.lat;
+      const lenSq = dx * dx + dy * dy;
+      let t = 0;
+      if (lenSq > 0) t = Math.max(0, Math.min(1, ((pt.lon - a.lon) * dx + (pt.lat - a.lat) * dy) / lenSq));
+      const proj = { lat: a.lat + t * dy, lon: a.lon + t * dx };
+      const d = haversineFt(pt, proj);
+      if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
+    }
+    return bearing(bestA, bestB);
+  }
+
   const visibleStations = onLineStations
     .filter((s) => labeledSet.has(s.name))
     .map((s) => {
       const pixels = project(s.lat, s.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
-      return { station: s, ...pixels };
+      return { station: s, ...pixels, bearingDeg: localBearingFor(s) };
     })
     .filter(({ x, y }) => x >= 0 && x <= WIDTH && y >= 0 && y <= HEIGHT);
 
@@ -256,8 +423,6 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
     overlays.push(`pin-s+ffffff(${s.lon.toFixed(5)},${s.lat.toFixed(5)})`);
   }
 
-  // Compute the route-wide direction arrow once from the initial bunch.
-  const allSegPoints = lineSegments.flatMap((seg) => seg.map(([lat, lon]) => ({ lat, lon })));
   function nearestSegment(pt) {
     let bestDist = Infinity;
     let bestA = null;
@@ -319,10 +484,11 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   });
   const trainPixels = separated.map(({ x, y }) => ({ x, y, bearingDeg: view.bearingDeg }));
 
-  const stationsWithPixels = view.visibleStations.map(({ station, x, y }) => {
+  const stationsWithPixels = view.visibleStations.map(({ station, x, y, bearingDeg }) => {
     const nearbyIdx = trains.findIndex((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT);
+    const trainX = nearbyIdx >= 0 ? separated[nearbyIdx].x : null;
     const trainY = nearbyIdx >= 0 ? separated[nearbyIdx].y : null;
-    return { station, x, y, hasTrain: nearbyIdx >= 0, trainY };
+    return { station, x, y, bearingDeg, hasTrain: nearbyIdx >= 0, trainX, trainY };
   });
   const atStationPixels = trains
     .map((t, idx) => ({ t, idx }))
@@ -337,7 +503,7 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   const terminalPixel = projectIfVisible(view.terminal);
   const originPixel = projectIfVisible(view.origin);
 
-  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, view.color, WIDTH, HEIGHT, terminalPixel, originPixel);
+  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, view.color, WIDTH, HEIGHT, terminalPixel, originPixel, view.bearingDeg);
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
