@@ -6,9 +6,11 @@ const {
   renderTrainBunchingFrame,
 } = require('./bunching');
 
-// Red overlay for the stretch of track between the two bounding trains — the
-// "where riders are waiting" segment. Matches the bus gap map.
-const GAP_SEGMENT_COLOR = 'ff2a00';
+// Magenta overlay for the stretch of track between the two bounding trains —
+// the "where riders are waiting" segment. Magenta avoids clashing with any of
+// the eight CTA line colors (CTA Pink is a muted salmon, not magenta), unlike
+// the red used for bus gaps which blends into the Red Line.
+const GAP_SEGMENT_COLOR = 'ff00ff';
 const GAP_SEGMENT_STROKE = 10;
 
 /**
