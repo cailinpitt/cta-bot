@@ -68,7 +68,7 @@ async function main() {
     return;
   }
 
-  if (argv['dry-run']) {
+  if (argv['dry-run'] || process.env.GHOSTS_DRY_RUN) {
     console.log(`\n--- DRY RUN ---\n${text}`);
     return;
   }

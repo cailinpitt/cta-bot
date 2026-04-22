@@ -15,9 +15,12 @@ const GTFS_URL = 'https://www.transitchicago.com/downloads/sch_data/google_trans
 const ZIP_PATH = '/tmp/cta-gtfs.zip';
 const OUT_PATH = Path.join(__dirname, '..', 'data', 'gtfs', 'index.json');
 
-// Restrict bus indexing to the routes the bot actually polls. Keeps the
-// index small. Rail indexing is always all-lines — there are only eight.
-const { bunching: BUS_ROUTES } = require('../src/bus/routes');
+// Restrict bus indexing to the routes the bot actually polls across any job.
+// Taking the union of every polled list avoids the footgun where a route added
+// to ghosts/gaps/speedmap but not bunching silently has no schedule and gets
+// skipped at runtime. Rail indexing is always all-lines — there are only eight.
+const { bunching, ghosts, gaps, speedmap } = require('../src/bus/routes');
+const BUS_ROUTES = [...new Set([...bunching, ...ghosts, ...gaps, ...speedmap])].sort();
 const RAIL_ROUTES = ['Red', 'Blue', 'Brn', 'G', 'Org', 'P', 'Pink', 'Y'];
 
 async function downloadGtfs() {
@@ -114,25 +117,95 @@ function dayTypeFor(cal) {
   return null; // mixed/unusual services — skip so we don't mash weekday + weekend headways together
 }
 
+// Bus origin-dominance: picks a single origin per (route, dir) only when one
+// origin accounts for ≥60% of the day's trips. Otherwise returns no mapping
+// for that key — the caller keeps all origins. Threshold is the guardrail
+// against the Route 55 2 AM regression from the per-hour variant (commit
+// 775a151).
+const BUS_DOMINANCE_THRESHOLD = 0.6;
+function computeBusDominantOrigin(tripMeta, firstStopId, { log = false } = {}) {
+  const counts = new Map();
+  for (const [tripId, meta] of tripMeta) {
+    if (meta.mode !== 'bus') continue;
+    const origin = firstStopId.get(tripId);
+    if (!origin) continue;
+    const k = `${meta.route}|${meta.dir}`;
+    if (!counts.has(k)) counts.set(k, new Map());
+    const m = counts.get(k);
+    m.set(origin, (m.get(origin) || 0) + 1);
+  }
+  const dominant = new Map();
+  for (const [k, c] of counts) {
+    let best = null;
+    let bestCount = -1;
+    let total = 0;
+    for (const [stopId, n] of c) {
+      total += n;
+      if (n > bestCount) { bestCount = n; best = stopId; }
+    }
+    if (best && bestCount / total >= BUS_DOMINANCE_THRESHOLD) {
+      dominant.set(k, best);
+    } else if (log) {
+      console.log(`bus ${k}: no dominant origin (top=${bestCount}/${total}, ${c.size} origins) — keeping all`);
+    }
+  }
+  return dominant;
+}
+
 async function main() {
+  console.log(`Indexing ${BUS_ROUTES.length} bus routes: ${BUS_ROUTES.join(', ')}`);
   await downloadGtfs();
 
   console.log('Reading calendar.txt...');
   const calendars = parseCsv(await readFromZip('calendar.txt'));
-  // Restrict to service_ids whose date range covers today. CTA ships seasonal
-  // duplicates (e.g. 67708 for 3/20–3/28 + 67808 for 3/29–5/31 — same Sunday
-  // schedule, different windows). Only one applies on any given date; keeping
-  // both would double-count trips in the hour buckets below.
   const today = new Date();
   const todayStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+
+  // calendar_dates.txt encodes holiday service: exception_type=1 force-adds a
+  // service_id for a specific date, =2 force-removes one. Without this, CTA
+  // holidays (Memorial Day, Thanksgiving, etc.) have observations against a
+  // holiday schedule but the index reflects regular weekday → mass false-ghosts.
+  console.log('Reading calendar_dates.txt...');
+  let calendarDates = [];
+  try {
+    calendarDates = parseCsv(await readFromZip('calendar_dates.txt'));
+  } catch (e) {
+    console.warn(`  could not read calendar_dates.txt: ${e.message} — proceeding without exceptions`);
+  }
+  const addForToday = new Set();
+  const removeForToday = new Set();
+  for (const r of calendarDates) {
+    if (r.date !== todayStr) continue;
+    if (r.exception_type === '1') addForToday.add(r.service_id);
+    else if (r.exception_type === '2') removeForToday.add(r.service_id);
+  }
+
+  // Restrict to service_ids whose date range covers today AND aren't removed
+  // by calendar_dates. CTA ships seasonal duplicates (e.g. 67708 for 3/20–3/28
+  // + 67808 for 3/29–5/31 — same Sunday schedule, different windows). Only one
+  // applies on any given date; keeping both would double-count trips.
   const serviceDayType = new Map();
   for (const c of calendars) {
     const dt = dayTypeFor(c);
     if (!dt) continue;
     if (todayStr < c.start_date || todayStr > c.end_date) continue;
+    if (removeForToday.has(c.service_id)) continue;
     serviceDayType.set(c.service_id, dt);
   }
-  console.log(`  ${serviceDayType.size} service_ids active on ${todayStr} mapped to day types`);
+  // Force-add holiday-only service_ids under today's wall-clock dayType so
+  // the bucketing below keys them correctly.
+  if (addForToday.size) {
+    const fallbackDt = (() => {
+      const w = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' }).format(today);
+      if (w === 'Sat') return 'saturday';
+      if (w === 'Sun') return 'sunday';
+      return 'weekday';
+    })();
+    for (const sid of addForToday) {
+      if (!serviceDayType.has(sid)) serviceDayType.set(sid, fallbackDt);
+    }
+  }
+  console.log(`  ${serviceDayType.size} service_ids active on ${todayStr} (+${addForToday.size} added / -${removeForToday.size} removed via calendar_dates)`);
 
   console.log('Reading trips.txt...');
   const trips = parseCsv(await readFromZip('trips.txt'));
@@ -260,6 +333,18 @@ async function main() {
     if (best) railDominantOrigin.set(k, best);
   }
 
+  // Same idea for buses: some routes have garage pullouts from a depot stop
+  // staggered with revenue trips from the main terminal. Merging them into
+  // the per-hour consecutive-departure-gap median pulls headway below the
+  // rider-facing frequency, inflating expectedActive and firing ghosts.
+  //
+  // Apply day-level (not per-hour) dominance at a ≥60% share threshold — the
+  // per-hour variant previously caused Route 55 EB 2 AM to narrow to two
+  // bunched trips (commit 775a151). Day-level dominance picks up the main
+  // terminal whenever one exists while leaving genuinely multi-origin routes
+  // untouched.
+  const busDominantOrigin = computeBusDominantOrigin(tripMeta, firstStopId, { log: true });
+
   const buckets = new Map();
   // Parallel bucket keyed the same way as `buckets`, storing per-trip durations
   // (minutes) so ghost detection can compare observed active vehicle counts to
@@ -279,6 +364,9 @@ async function main() {
     if (!dominant || dominant.serviceId !== meta.serviceId) continue;
     if (meta.mode === 'rail') {
       const domOrigin = railDominantOrigin.get(`${meta.route}|${meta.dir}`);
+      if (domOrigin && firstStopId.get(tripId) !== domOrigin) continue;
+    } else if (meta.mode === 'bus') {
+      const domOrigin = busDominantOrigin.get(`${meta.route}|${meta.dir}`);
       if (domOrigin && firstStopId.get(tripId) !== domOrigin) continue;
     }
     const key = bucketKey(meta.route, meta.dir, meta.dayType, hour);
@@ -355,7 +443,11 @@ async function main() {
   console.log(`Wrote ${OUT_PATH} (${(bytes / 1024).toFixed(1)} KB, ${routeCount} bus routes, ${lineCount} rail lines)`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e);
-  process.exit(1);
-});
+module.exports = { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD };
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e.stack || e);
+    process.exit(1);
+  });
+}

@@ -33,16 +33,27 @@ async function detectBusGhosts({
     const obs = getObservations(route);
     if (obs.length === 0) continue;
 
-    // Resolve each unique pid to a pattern once.
+    // Resolve each unique pid to a pattern once. If any pid we actually have
+    // observations for fails to resolve (fetch error, empty direction label,
+    // etc.), skip the whole route — expectedActive still counts those trips
+    // so dropping the observations alone would inflate `missing` and fire a
+    // spurious ghost.
     const pids = [...new Set(obs.map((o) => o.direction).filter(Boolean))];
     const patternByPid = new Map();
+    const failedPids = [];
     for (const pid of pids) {
       try {
         const p = await getPattern(pid);
-        if (p) patternByPid.set(pid, p);
+        if (p && p.direction) patternByPid.set(pid, p);
+        else failedPids.push(pid);
       } catch (e) {
+        failedPids.push(pid);
         console.warn(`ghosts: pattern fetch failed for pid ${pid}: ${e.message}`);
       }
+    }
+    if (failedPids.length > 0) {
+      console.warn(`ghosts: skipping route ${route} — unresolved pids with observations: ${failedPids.join(', ')}`);
+      continue;
     }
 
     // Group observations by pattern.direction (the rider-facing label, e.g.
@@ -53,7 +64,6 @@ async function detectBusGhosts({
       const pattern = patternByPid.get(o.direction);
       if (!pattern) continue;
       const label = pattern.direction;
-      if (!label) continue;
       if (!byDir.has(label)) byDir.set(label, { obs: [], pattern });
       byDir.get(label).obs.push(o);
     }

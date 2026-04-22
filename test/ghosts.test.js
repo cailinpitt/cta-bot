@@ -223,6 +223,36 @@ test('bi-directional lines still split by trDr', async () => {
   assert.equal(events[0].expectedActive, 14);
 });
 
+test('skips a route entirely when any observed pid fails pattern resolution', async () => {
+  const obs = [
+    ...buildObs({ pid: 'good', snapshots: 12, vidsPerSnapshot: 3 }),
+    ...buildObs({ pid: 'broken', snapshots: 12, vidsPerSnapshot: 3 }).map((r, i) => ({ ...r, vehicle_id: `x${i % 3}` })),
+  ];
+  const events = await detectBusGhosts({
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async (pid) => {
+      if (pid === 'broken') throw new Error('CTA getpatterns down');
+      return mkPattern('Eastbound');
+    },
+    expectedHeadway: () => 6,
+    expectedDuration: () => 60,
+  });
+  assert.equal(events.length, 0);
+});
+
+test('skips a route when a pid resolves to a pattern with no direction label', async () => {
+  const obs = buildObs({ pid: 'headless', snapshots: 12, vidsPerSnapshot: 3 });
+  const events = await detectBusGhosts({
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => ({ pid: 'headless', direction: '', route: '66' }),
+    expectedHeadway: () => 6,
+    expectedDuration: () => 60,
+  });
+  assert.equal(events.length, 0);
+});
+
 test('sorts events by missing count descending', async () => {
   const getObservations = (route) => {
     if (route === 'A') return buildObs({ pid: 'pa', snapshots: 12, vidsPerSnapshot: 3 }); // missing 3

@@ -11,7 +11,7 @@ const { renderGapMap } = require('../../src/map');
 const { loginBus, postWithImage, postText } = require('../../src/bus/bluesky');
 const { isOnCooldown } = require('../../src/shared/state');
 const { commitAndPost } = require('../../src/shared/postDetection');
-const { expectedHeadwayMin } = require('../../src/shared/gtfs');
+const { expectedHeadwayMin, loadIndex } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { buildPostText, buildAltText } = require('../../src/bus/gapPost');
@@ -20,6 +20,12 @@ async function main() {
   setup();
 
   const routes = gapRoutes;
+  const index = loadIndex();
+  const unindexed = routes.filter((r) => !index.routes[r]);
+  if (unindexed.length) {
+    console.warn(`Routes missing from GTFS index (will be skipped): ${unindexed.join(', ')} — re-run scripts/fetch-gtfs.js`);
+  }
+
   console.log(`Fetching vehicles for ${routes.length} routes...`);
   const vehicles = await getVehicles(routes);
   console.log(`Got ${vehicles.length} vehicles`);

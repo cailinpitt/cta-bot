@@ -7,7 +7,7 @@ const { names: routeNames, ghosts: ghostRoutes } = require('../../src/bus/routes
 const { detectBusGhosts } = require('../../src/bus/ghosts');
 const { buildRollupPost } = require('../../src/shared/post');
 const { loadPattern } = require('../../src/bus/patterns');
-const { expectedHeadwayMin, expectedTripMinutes } = require('../../src/shared/gtfs');
+const { expectedHeadwayMin, expectedTripMinutes, loadIndex } = require('../../src/shared/gtfs');
 const { getBusObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginBus, postText } = require('../../src/bus/bluesky');
 const { runBin } = require('../../src/shared/runBin');
@@ -41,6 +41,12 @@ function buildPostText(events) {
 async function main() {
   rolloffOldObservations();
 
+  const index = loadIndex();
+  const unindexed = ghostRoutes.filter((r) => !index.routes[r]);
+  if (unindexed.length) {
+    console.warn(`Routes missing from GTFS index (will be skipped): ${unindexed.join(', ')} — re-run scripts/fetch-gtfs.js`);
+  }
+
   const now = Date.now();
   const sinceTs = now - WINDOW_MS;
 
@@ -67,7 +73,7 @@ async function main() {
     return;
   }
 
-  if (argv['dry-run']) {
+  if (argv['dry-run'] || process.env.GHOSTS_DRY_RUN) {
     console.log(`\n--- DRY RUN ---\n${text}`);
     return;
   }

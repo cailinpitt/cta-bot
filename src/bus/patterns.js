@@ -24,7 +24,16 @@ async function loadPattern(pid) {
     const age = Date.now() - Fs.statSync(cachePath).mtimeMs;
     if (age < TTL_MS) return Fs.readJsonSync(cachePath);
   }
-  const pattern = await getPattern(pid);
+  let pattern;
+  try {
+    pattern = await getPattern(pid);
+  } catch (e) {
+    // One-shot retry on transient failure before giving up. The caller (ghost
+    // detection) skips the whole route if this still throws, so a short retry
+    // pays for itself many times over.
+    await new Promise((r) => setTimeout(r, 250));
+    pattern = await getPattern(pid);
+  }
   pattern.signature = patternSignature(pattern);
   Fs.writeJsonSync(cachePath, pattern);
   return pattern;
