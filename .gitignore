@@ -7,3 +7,5 @@ assets/
 *.log
 .DS_Store
 .claude/
+plan.md
+research.md
