@@ -87,23 +87,18 @@ dependency (see the shipping-order graph at the bottom of this doc).
 
 ### Phase 4 — Holiday service awareness (Bug F)
 
-- [ ] 4.1 In `scripts/fetch-gtfs.js`, after the calendar.txt loop, add
-      `calendar_dates.txt` parsing. Build `addForToday` /
-      `removeForToday` sets keyed on today's `YYYYMMDD`.
-- [ ] 4.2 Extend the `serviceDayType` builder to (a) exclude any
-      `service_id` in `removeForToday`; (b) force-include any in
-      `addForToday`, mapping to today's wall-clock dayType.
-- [ ] 4.3 Log a summary line: `+N added / -M removed via calendar_dates`.
-- [ ] 4.4 Tighten `STALE_MS` in `src/shared/gtfs.js:6` from 30d to 2d
-      (warn-only).
-- [ ] 4.5 In `bin/bus/ghosts.js` and `bin/train/ghosts.js`, exit with a
-      non-zero code if `loadIndex()` reports `generatedAt` older than 7d.
-      Cron surfaces this as a visible failure instead of silent
-      under-reporting.
-- [ ] 4.6 Add a daily cron entry (server crontab) for `fetch-gtfs.js`;
-      document in README under an "Operations" section.
-- [ ] 4.7 Unit test `calendar_dates.txt` exception handling with a small
-      fixture (one add + one remove for a synthetic "today").
+- [x] 4.1 calendar_dates.txt parsing added in `scripts/fetch-gtfs.js` via
+      `resolveServiceDayTypes` helper.
+- [x] 4.2 `serviceDayType` excludes `removeForToday` and force-includes
+      `addForToday` under today's wall-clock dayType.
+- [x] 4.3 Summary line appended to the "service_ids active" log.
+- [x] 4.4 `STALE_WARN_MS` set to 2d in `src/shared/gtfs.js`.
+- [x] 4.5 `loadIndex()` throws at 7d — propagates through both ghost bins
+      via `runBin`, producing a non-zero exit.
+- [x] 4.6 README updated with a daily fetch-gtfs cron recommendation and
+      the staleness contract.
+- [x] 4.7 Unit tests for calendar_dates: type=1 add, type=2 remove, other-
+      date ignore, Saturday fallback, date-range exclusion (5 tests).
 
 ### Phase 5 — Pattern direction resolution via both endpoints (Bug G)
 

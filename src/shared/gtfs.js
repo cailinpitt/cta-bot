@@ -3,7 +3,11 @@ const Fs = require('fs-extra');
 const { haversineFt } = require('./geo');
 
 const INDEX_PATH = Path.join(__dirname, '..', '..', 'data', 'gtfs', 'index.json');
-const STALE_MS = 30 * 24 * 60 * 60 * 1000; // warn-only: index older than 30d is probably out of date
+// Warn at 2d because calendar_dates.txt makes the index date-specific — it
+// now represents *today*, not a week. Fatal at 7d so a cron outage produces a
+// visible failure instead of silent under-reporting against a stale schedule.
+const STALE_WARN_MS = 2 * 24 * 60 * 60 * 1000;
+const STALE_FATAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 let _index = null;
 
@@ -14,8 +18,12 @@ function loadIndex() {
   }
   _index = Fs.readJsonSync(INDEX_PATH);
   const age = Date.now() - (_index.generatedAt || 0);
-  if (age > STALE_MS) {
-    console.warn(`GTFS index is ${Math.round(age / (24 * 60 * 60 * 1000))} days old — consider re-running fetch-gtfs.js`);
+  const days = Math.round(age / (24 * 60 * 60 * 1000));
+  if (age > STALE_FATAL_MS) {
+    throw new Error(`GTFS index is ${days} days old (>${STALE_FATAL_MS / (24 * 60 * 60 * 1000)}d) — re-run scripts/fetch-gtfs.js before retrying`);
+  }
+  if (age > STALE_WARN_MS) {
+    console.warn(`GTFS index is ${days} days old — re-run fetch-gtfs.js (calendar_dates makes it date-specific)`);
   }
   return _index;
 }

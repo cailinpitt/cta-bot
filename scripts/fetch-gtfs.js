@@ -117,6 +117,34 @@ function dayTypeFor(cal) {
   return null; // mixed/unusual services — skip so we don't mash weekday + weekend headways together
 }
 
+// Resolve a service_id → dayType map honoring calendar.txt date ranges plus
+// calendar_dates.txt exceptions for the target date. `todayStr` is YYYYMMDD
+// and `todayDow` is 'Sat' / 'Sun' / other (anything else → weekday).
+function resolveServiceDayTypes({ calendars, calendarDates, todayStr, todayDow }) {
+  const addForToday = new Set();
+  const removeForToday = new Set();
+  for (const r of calendarDates) {
+    if (r.date !== todayStr) continue;
+    if (r.exception_type === '1') addForToday.add(r.service_id);
+    else if (r.exception_type === '2') removeForToday.add(r.service_id);
+  }
+  const out = new Map();
+  for (const c of calendars) {
+    const dt = dayTypeFor(c);
+    if (!dt) continue;
+    if (todayStr < c.start_date || todayStr > c.end_date) continue;
+    if (removeForToday.has(c.service_id)) continue;
+    out.set(c.service_id, dt);
+  }
+  if (addForToday.size) {
+    const fallbackDt = todayDow === 'Sat' ? 'saturday' : todayDow === 'Sun' ? 'sunday' : 'weekday';
+    for (const sid of addForToday) {
+      if (!out.has(sid)) out.set(sid, fallbackDt);
+    }
+  }
+  return { serviceDayType: out, addForToday, removeForToday };
+}
+
 // Bus origin-dominance: picks a single origin per (route, dir) only when one
 // origin accounts for ≥60% of the day's trips. Otherwise returns no mapping
 // for that key — the caller keeps all origins. Threshold is the guardrail
@@ -172,39 +200,8 @@ async function main() {
   } catch (e) {
     console.warn(`  could not read calendar_dates.txt: ${e.message} — proceeding without exceptions`);
   }
-  const addForToday = new Set();
-  const removeForToday = new Set();
-  for (const r of calendarDates) {
-    if (r.date !== todayStr) continue;
-    if (r.exception_type === '1') addForToday.add(r.service_id);
-    else if (r.exception_type === '2') removeForToday.add(r.service_id);
-  }
-
-  // Restrict to service_ids whose date range covers today AND aren't removed
-  // by calendar_dates. CTA ships seasonal duplicates (e.g. 67708 for 3/20–3/28
-  // + 67808 for 3/29–5/31 — same Sunday schedule, different windows). Only one
-  // applies on any given date; keeping both would double-count trips.
-  const serviceDayType = new Map();
-  for (const c of calendars) {
-    const dt = dayTypeFor(c);
-    if (!dt) continue;
-    if (todayStr < c.start_date || todayStr > c.end_date) continue;
-    if (removeForToday.has(c.service_id)) continue;
-    serviceDayType.set(c.service_id, dt);
-  }
-  // Force-add holiday-only service_ids under today's wall-clock dayType so
-  // the bucketing below keys them correctly.
-  if (addForToday.size) {
-    const fallbackDt = (() => {
-      const w = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' }).format(today);
-      if (w === 'Sat') return 'saturday';
-      if (w === 'Sun') return 'sunday';
-      return 'weekday';
-    })();
-    for (const sid of addForToday) {
-      if (!serviceDayType.has(sid)) serviceDayType.set(sid, fallbackDt);
-    }
-  }
+  const todayDow = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' }).format(today);
+  const { serviceDayType, addForToday, removeForToday } = resolveServiceDayTypes({ calendars, calendarDates, todayStr, todayDow });
   console.log(`  ${serviceDayType.size} service_ids active on ${todayStr} (+${addForToday.size} added / -${removeForToday.size} removed via calendar_dates)`);
 
   console.log('Reading trips.txt...');
@@ -443,7 +440,7 @@ async function main() {
   console.log(`Wrote ${OUT_PATH} (${(bytes / 1024).toFixed(1)} KB, ${routeCount} bus routes, ${lineCount} rail lines)`);
 }
 
-module.exports = { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD };
+module.exports = { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD, resolveServiceDayTypes, dayTypeFor };
 
 if (require.main === module) {
   main().catch((e) => {

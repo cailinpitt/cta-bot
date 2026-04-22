@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD } = require('../../scripts/fetch-gtfs');
+const { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD, resolveServiceDayTypes } = require('../../scripts/fetch-gtfs');
 
 function mkTrips(spec) {
   const tripMeta = new Map();
@@ -64,6 +64,71 @@ test('trips missing an origin are skipped without crashing', () => {
   const firstStopId = new Map([['T1', 'X'], ['T2', 'X']]); // T3 has no origin
   const dom = computeBusDominantOrigin(tripMeta, firstStopId);
   assert.equal(dom.get('9|0'), 'X');
+});
+
+const WEEKDAY_CAL = {
+  service_id: 'REG', monday: '1', tuesday: '1', wednesday: '1', thursday: '1',
+  friday: '1', saturday: '0', sunday: '0', start_date: '20260101', end_date: '20261231',
+};
+const SUNDAY_CAL = {
+  service_id: 'SUN', monday: '0', tuesday: '0', wednesday: '0', thursday: '0',
+  friday: '0', saturday: '0', sunday: '1', start_date: '20260101', end_date: '20261231',
+};
+
+test('calendar_dates exception_type=2 removes the regular service_id on the target date', () => {
+  const { serviceDayType, removeForToday } = resolveServiceDayTypes({
+    calendars: [WEEKDAY_CAL],
+    calendarDates: [{ date: '20260525', service_id: 'REG', exception_type: '2' }],
+    todayStr: '20260525',
+    todayDow: 'Mon',
+  });
+  assert.equal(serviceDayType.has('REG'), false);
+  assert.equal(removeForToday.has('REG'), true);
+});
+
+test('calendar_dates exception_type=1 adds a holiday-only service_id', () => {
+  const { serviceDayType, addForToday } = resolveServiceDayTypes({
+    calendars: [WEEKDAY_CAL],
+    calendarDates: [
+      { date: '20260525', service_id: 'REG', exception_type: '2' },
+      { date: '20260525', service_id: 'HOLIDAY', exception_type: '1' },
+    ],
+    todayStr: '20260525',
+    todayDow: 'Mon',
+  });
+  assert.equal(serviceDayType.get('HOLIDAY'), 'weekday');
+  assert.equal(addForToday.has('HOLIDAY'), true);
+  assert.equal(serviceDayType.has('REG'), false);
+});
+
+test('calendar_dates exceptions for other dates are ignored', () => {
+  const { serviceDayType } = resolveServiceDayTypes({
+    calendars: [WEEKDAY_CAL],
+    calendarDates: [{ date: '20260526', service_id: 'REG', exception_type: '2' }],
+    todayStr: '20260525',
+    todayDow: 'Mon',
+  });
+  assert.equal(serviceDayType.get('REG'), 'weekday');
+});
+
+test('added holiday service_id maps to saturday when today is Saturday', () => {
+  const { serviceDayType } = resolveServiceDayTypes({
+    calendars: [],
+    calendarDates: [{ date: '20260704', service_id: 'JULY4', exception_type: '1' }],
+    todayStr: '20260704',
+    todayDow: 'Sat',
+  });
+  assert.equal(serviceDayType.get('JULY4'), 'saturday');
+});
+
+test('service_ids outside their active date range are still excluded', () => {
+  const { serviceDayType } = resolveServiceDayTypes({
+    calendars: [{ ...SUNDAY_CAL, start_date: '20260601', end_date: '20260831' }],
+    calendarDates: [],
+    todayStr: '20260422',
+    todayDow: 'Wed',
+  });
+  assert.equal(serviceDayType.has('SUN'), false);
 });
 
 test('staggered two-origin scenario: dominant terminal drives bucketing', () => {

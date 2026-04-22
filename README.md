@@ -87,7 +87,14 @@ The DB uses WAL mode — if you inspect `history.sqlite` with a CLI while the bo
 
 ## GTFS
 
-Gap and ghost detection (bus and train) compare observed service against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → { median headway, median trip duration }` lookup covering tracked bus routes and all 8 L lines. Run it weekly — headways don't change often, but scheduled service pickups/cuts do. Requires `unzip` on PATH.
+Gap and ghost detection (bus and train) compare observed service against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → { median headway, median trip duration }` lookup covering tracked bus routes and all 8 L lines. The index is **date-specific** — it honors `calendar_dates.txt` exceptions for the day it was generated, so holiday service is represented correctly. **Run it daily** via cron; `loadIndex()` warns after 2 days and throws after 7 so a missed cron surfaces loudly instead of silently reporting against a stale schedule. Requires `unzip` on PATH.
+
+Recommended daily cron:
+
+```
+# Rebuild GTFS index each morning before other jobs run
+15 3 * * * cd /path/to/cta-bot && /usr/bin/node scripts/fetch-gtfs.js >> cron/fetch-gtfs.log 2>&1
+```
 
 ## Ghost detection
 
