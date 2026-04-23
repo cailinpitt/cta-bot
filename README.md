@@ -96,9 +96,9 @@ Everything is designed to be driven by cron. There's no long-running process —
 # Train snapshot — live positions. Hourly is plenty.
 0 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/snapshot.js      >> cron/train-snapshot.log 2>&1
 
-# Heatmap rollups — weekly (chronic spots over the last 7 days).
-0 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/bus/heatmap.js --window week   >> cron/bus-heatmap.log 2>&1
-5 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/train/heatmap.js --window week >> cron/train-heatmap.log 2>&1
+# Weekly recap — chronic bunching heatmap plus threaded gap-leaderboard reply.
+0 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/bus/recap.js --window week   >> cron/bus-recap.log 2>&1
+5 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/train/recap.js --window week >> cron/train-recap.log 2>&1
 
 # --- Observers (ghost detection data) ---
 # Bus observer — fetches ghost-candidate routes on a fixed 5-min cadence so every route
@@ -121,7 +121,7 @@ Everything is designed to be driven by cron. There's no long-running process —
 
 ## Scripts reference
 
-All bin scripts accept `--dry-run` (writes image under `assets/` instead of posting). Heatmap scripts additionally accept `--window week|month` (default `month`).
+All bin scripts accept `--dry-run` (writes image under `assets/` instead of posting). Recap scripts additionally accept `--window week|month` (default `month`).
 
 ### Posting
 | Command | Description |
@@ -129,12 +129,12 @@ All bin scripts accept `--dry-run` (writes image under `assets/` instead of post
 | `npm run bunching` / `:dry` | Bus bunching detection |
 | `npm run gaps` / `:dry` | Bus gap detection |
 | `npm run speedmap` / `:dry` | Bus speedmap collection (1-hour window) |
-| `npm run heatmap` / `:dry` | Bus chronic-spot heatmap |
+| `npm run recap` / `:dry` | Bus recap — bunching heatmap + threaded gap-leaderboard reply |
 | `npm run ghosts` / `:dry` | Bus ghost rollup (hourly) |
 | `npm run train-bunching` / `:dry` | Train bunching detection |
 | `npm run train-gaps` / `:dry` | Train gap detection |
 | `npm run train-speedmap` / `:dry` | Train speedmap collection (1-hour window) |
-| `npm run train-heatmap` / `:dry` | Train chronic-spot heatmap |
+| `npm run train-recap` / `:dry` | Train recap — bunching heatmap + threaded gap-leaderboard reply |
 | `npm run train-snapshot` / `:dry` | System-wide L snapshot |
 | `npm run train-ghosts` / `:dry` | Train ghost rollup (hourly) |
 
@@ -233,15 +233,19 @@ Reply: ~10-minute timelapse video of the cluster, with intersection traffic sign
 
 ![Bus speedmap](docs/images/bus-speedmap.jpg)
 
-### Bus heatmap
-> 🚌 Chronic bus trouble spots, this month
+### Bus recap
+> 🚌 Chronic bus bunching spots, this week
 >
-> 23 incidents across 5 stops:
-> · Michigan & Delaware/Walton (7)
-> · Foster & Marine Drive (7)
-> · Lake Shore Drive & Belmont (3)
+> 97 bunches observed near 27 stops:
+> · Grand & Union — Route 66 (9)
+> · Michigan & Superior — Routes 147, 151 (5)
+> · Washington & Canal — Routes 20, 56, 60 (5)
+>
+> Only what the bot observed; real totals are higher.
 
 ![Bus heatmap](docs/images/heatmap-bus.jpg)
+
+Reply: a square bar chart of headway gaps by route over the same window.
 
 ### Bus ghost rollup
 > 👻 Ghost buses, past hour
@@ -284,13 +288,19 @@ Reply: ~10-minute timelapse of the bunch.
 
 ![Train snapshot](docs/images/snapshot.jpg)
 
-### Train heatmap
-> 🚆 Chronic train trouble spots, this month
+### Train recap
+> 🚆 Chronic train bunching spots, this week
 >
-> 3 incidents across 1 station:
-> · North/Clybourn (3)
+> 74 bunches observed near 18 stations:
+> · Belmont — Red, Brown, Purple (7)
+> · Adams/Wabash — Brown, Green, Purple (7)
+> · Montrose — Blue (5)
+>
+> Only what the bot observed; real totals are higher.
 
 ![Train heatmap](docs/images/heatmap-train.jpg)
+
+Reply: a square bar chart of headway gaps by line over the same window, with each bar in the line's brand color.
 
 ### Train ghost rollup
 > 👻 Ghost trains, past hour

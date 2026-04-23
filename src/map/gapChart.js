@@ -19,7 +19,7 @@ const BAR_GAP = 18;
 
 const WINDOW_LABELS = { week: 'this week', month: 'this month' };
 
-function renderGapChart({ kind, entries, window, lineNames = null, lineColors = null, totalGaps }) {
+function renderGapChart({ kind, entries, window, lineNames = null, lineColors = null, totalGaps, formatRoute = null }) {
   const title = kind === 'train' ? '⏰ Headway gaps by line' : '⏰ Headway gaps by route';
   const subtitle = `${totalGaps} gap${totalGaps === 1 ? '' : 's'}, ${WINDOW_LABELS[window] || window}`;
 
@@ -38,9 +38,9 @@ function renderGapChart({ kind, entries, window, lineNames = null, lineColors = 
     const color = kind === 'train' && lineColors?.[e.route]
       ? `#${lineColors[e.route]}`
       : '#ff2a6d';
-    const labelText = kind === 'train' && lineNames?.[e.route]
-      ? lineNames[e.route]
-      : e.route;
+    const labelText = formatRoute
+      ? formatRoute(e.route)
+      : (kind === 'train' && lineNames?.[e.route] ? lineNames[e.route] : e.route);
     const labelY = y + rowHeight / 2 + 10;
     const countX = barX + w + 16;
     const barRadius = Math.min(10, rowHeight / 2);

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPostText, buildAltText } = require('../../src/shared/heatmapPost');
+const { buildPostText, buildAltText } = require('../../src/shared/recapPost');
 
 const points = [
   { label: 'Foster & Marine Drive', lat: 41.97, lon: -87.64, count: 7, bunching: 1, gap: 6 },

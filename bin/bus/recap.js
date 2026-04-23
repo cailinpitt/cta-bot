@@ -3,14 +3,14 @@ require('../../src/shared/env');
 
 const argv = require('minimist')(process.argv.slice(2));
 
-const { loadBusHeatmap, loadGapLeaderboard } = require('../../src/shared/heatmap');
+const { loadBusHeatmap, loadGapLeaderboard } = require('../../src/shared/recap');
 const { renderHeatmap, renderGapChart } = require('../../src/map');
 const { loginBus, postWithImage } = require('../../src/bus/bluesky');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const {
   buildPostText, buildAltText,
   buildGapReplyText, buildGapReplyAlt,
-} = require('../../src/shared/heatmapPost');
+} = require('../../src/shared/recapPost');
 
 // Cap the gap chart to the worst-N routes so the square canvas stays legible.
 // Below that floor the bars get noise-thin; above it the text gets cramped.
@@ -36,8 +36,11 @@ function formatBusRoutes(routes) {
     if (Number.isFinite(nb)) return 1;
     return a.localeCompare(b);
   });
-  return sorted.join(', ');
+  const prefix = sorted.length === 1 ? 'Route' : 'Routes';
+  return `${prefix} ${sorted.join(', ')}`;
 }
+
+const formatBusRoute = (r) => `Route ${r}`;
 
 async function main() {
   setup();
@@ -49,7 +52,7 @@ async function main() {
   }
   const minCount = MIN_COUNT[window];
 
-  console.log(`Bus heatmap, ${window} (${days}-day window)`);
+  console.log(`Bus recap, ${window} (${days}-day window)`);
   const allPoints = loadBusHeatmap(days);
   const points = allPoints
     .filter((p) => p.count >= minCount)
@@ -80,9 +83,9 @@ async function main() {
   let gapText = '';
   let gapAlt = '';
   if (hasGapReply) {
-    gapImage = await renderGapChart({ kind: 'bus', entries: gapEntries, window, totalGaps });
-    gapText = buildGapReplyText({ mode: 'bus', window, entries: gapEntries, totalGaps });
-    gapAlt = buildGapReplyAlt({ mode: 'bus', window, entries: gapEntries, totalGaps });
+    gapImage = await renderGapChart({ kind: 'bus', entries: gapEntries, window, totalGaps, formatRoute: formatBusRoute });
+    gapText = buildGapReplyText({ mode: 'bus', window, entries: gapEntries, totalGaps, routeCount: gapEntriesAll.length, formatRoute: formatBusRoute });
+    gapAlt = buildGapReplyAlt({ mode: 'bus', window, entries: gapEntries, totalGaps, formatRoute: formatBusRoute });
   }
 
   if (argv['dry-run']) {

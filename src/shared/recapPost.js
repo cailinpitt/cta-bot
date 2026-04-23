@@ -1,8 +1,12 @@
-// Post builder for heatmap rollups. Single module for both bus and train
+// Post builders for the weekly/monthly recap: the heatmap parent post plus
+// the threaded gap-leaderboard reply. Single module for both bus and train
 // since the structure is identical; only the noun ("stops" vs "stations")
 // and emoji differ.
 
 const WINDOW_LABELS = { week: 'this week', month: 'this month' };
+// Appended to every non-empty heatmap/gap post so readers know the numbers
+// are a sample of what the bot caught, not an exhaustive system-wide count.
+const OBSERVED_FOOTER = 'Only what the bot observed; real totals are higher.';
 
 function titleFor(mode, window) {
   const emoji = mode === 'bus' ? '🚌' : '🚆';
@@ -28,10 +32,11 @@ function buildPostText({ mode, window, points, totalIncidents }) {
   const [locSing, locPlur] = locNouns(mode);
   const bunches = pluralize(totalIncidents, 'bunch', 'bunches');
   const locs = pluralize(points.length, locSing, locPlur);
-  lines.push('', `${bunches} near ${locs}:`);
+  lines.push('', `${bunches} observed near ${locs}:`);
   for (const p of points.slice(0, 3)) {
     lines.push(`· ${formatBullet(p)}`);
   }
+  lines.push('', OBSERVED_FOOTER);
   return lines.join('\n');
 }
 
@@ -54,19 +59,21 @@ function buildAltText({ mode, window, points, totalIncidents }) {
   return `Heatmap of Chicago showing where ${subject} bunched ${label}: ${bunches} near ${locs}, with red circles sized by frequency. Top spots: ${top}.`;
 }
 
-function buildGapReplyText({ mode, window, entries, totalGaps, formatRoute }) {
+function buildGapReplyText({ mode, window, entries, totalGaps, routeCount, formatRoute }) {
   const label = WINDOW_LABELS[window] || window;
   const lines = [`⏰ Headway gaps, ${label}`];
   if (totalGaps === 0 || entries.length === 0) {
     lines.push('', 'No gaps recorded in this window.');
     return lines.join('\n');
   }
-  const noun = mode === 'bus' ? 'routes' : 'lines';
+  const [nounSing, nounPlur] = mode === 'bus' ? ['route', 'routes'] : ['line', 'lines'];
   const gaps = pluralize(totalGaps, 'gap', 'gaps');
-  lines.push('', `${gaps} across ${entries.length} ${noun}. Where service was thinnest:`);
+  const routes = pluralize(routeCount ?? entries.length, nounSing, nounPlur);
+  lines.push('', `${gaps} observed across ${routes}. Where service was thinnest:`);
   for (const e of entries.slice(0, 3)) {
     lines.push(`· ${formatRoute ? formatRoute(e.route) : e.route} (${e.count})`);
   }
+  lines.push('', OBSERVED_FOOTER);
   return lines.join('\n');
 }
 

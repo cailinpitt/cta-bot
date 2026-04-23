@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { bucket, resolveTrainStation } = require('../../src/shared/heatmap');
+const { bucket, resolveTrainStation } = require('../../src/shared/recap');
 
 test('bucket groups events at the same coords and counts sources', () => {
   const events = [

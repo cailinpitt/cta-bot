@@ -1,9 +1,12 @@
-// Builds bunching heatmap data from history.sqlite. Aggregates posted
-// bunching events by location (stop name for bus, station name for train)
-// over a time window, resolves each to lat/lon, and returns a list of
-// points sorted by frequency. Gaps are intentionally excluded — they're a
-// line-level dispatch/headway phenomenon, not a location phenomenon, so
-// plotting them geographically would be misleading.
+// Builds data for the weekly/monthly recap from history.sqlite. Has two
+// loaders:
+//   - loadBusHeatmap / loadTrainHeatmap: aggregate posted bunching events by
+//     location (stop/station) over a time window, resolve to lat/lon, and
+//     return points sorted by frequency. Feeds the heatmap parent post.
+//   - loadGapLeaderboard: aggregates posted gap events by route/line over
+//     the same window. Feeds the threaded gap-chart reply. Gaps aren't
+//     plotted geographically because they're a line-level dispatch/headway
+//     phenomenon, not a location phenomenon.
 //
 // Locations are resolved lazily:
 //   - Bus: near_stop is the pattern stop name; direction is the pid. We

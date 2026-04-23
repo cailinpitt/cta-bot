@@ -4,14 +4,14 @@ require('../../src/shared/env');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { LINE_COLORS, LINE_NAMES } = require('../../src/train/api');
-const { loadTrainHeatmap, loadGapLeaderboard } = require('../../src/shared/heatmap');
+const { loadTrainHeatmap, loadGapLeaderboard } = require('../../src/shared/recap');
 const { renderHeatmap, renderGapChart } = require('../../src/map');
 const { loginTrain, postWithImage } = require('../../src/train/bluesky');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const {
   buildPostText, buildAltText,
   buildGapReplyText, buildGapReplyAlt,
-} = require('../../src/shared/heatmapPost');
+} = require('../../src/shared/recapPost');
 const trainLines = require('../../src/train/data/trainLines.json');
 
 const WINDOW_DAYS = { week: 7, month: 30 };
@@ -51,7 +51,7 @@ async function main() {
   }
   const minCount = MIN_COUNT[window];
 
-  console.log(`Train heatmap, ${window} (${days}-day window)`);
+  console.log(`Train recap, ${window} (${days}-day window)`);
   const allPoints = loadTrainHeatmap(days);
   const points = allPoints
     .filter((p) => p.count >= minCount)
@@ -94,7 +94,8 @@ async function main() {
       kind: 'train', entries: rankedGapEntries, window, totalGaps,
       lineNames: LINE_NAMES, lineColors: LINE_COLORS,
     });
-    gapText = buildGapReplyText({ mode: 'train', window, entries: rankedGapEntries, totalGaps, formatRoute: formatTrainRoute });
+    const linesWithGaps = rankedGapEntries.filter((e) => e.count > 0).length;
+    gapText = buildGapReplyText({ mode: 'train', window, entries: rankedGapEntries, totalGaps, routeCount: linesWithGaps, formatRoute: formatTrainRoute });
     gapAlt = buildGapReplyAlt({ mode: 'train', window, entries: rankedGapEntries, totalGaps, formatRoute: formatTrainRoute });
   }
 
