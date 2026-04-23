@@ -1,10 +1,10 @@
 const STALE_MS = 3 * 60 * 1000;
-const TERMINAL_PDIST_FT = 1500;
 // Convert pdist-feet to a time estimate. Typical in-city bus speed sits around
 // 10 mph ≈ 880 ft/min once stops/signals are factored in. A crude conversion
 // but we only use it to filter on a ratio vs. GTFS-scheduled headway — not an
 // absolute ETA.
 const TYPICAL_SPEED_FT_PER_MIN = 880;
+const { terminalZoneFt } = require('../shared/geo');
 // Flag a gap when observed time-gap exceeds this multiple of scheduled headway,
 // AND exceeds the absolute floor (so low-frequency routes with 30-min schedule
 // don't spam on every 31-min drift).
@@ -42,6 +42,8 @@ function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new
     const sorted = [...group].sort((a, b) => a.pdist - b.pdist);
     const pattern = patternForPid(pid);
     const patternLengthFt = pattern?.lengthFt || 0;
+    if (!patternLengthFt) continue;
+    const zoneFt = terminalZoneFt(patternLengthFt);
 
     for (let i = 0; i < sorted.length - 1; i++) {
       const a = sorted[i];
@@ -52,9 +54,10 @@ function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new
       // Skip pairs that straddle a terminal zone on either side — the bus
       // just past the start or about to finish isn't in "service territory"
       // for headway purposes, and the bus behind/ahead of it gets a misleading
-      // gap measurement.
-      if (a.pdist < TERMINAL_PDIST_FT) continue;
-      if (patternLengthFt && patternLengthFt - b.pdist < TERMINAL_PDIST_FT) continue;
+      // gap measurement. Zone scales with route length (10%, capped at 1500 ft)
+      // to match bunching detection.
+      if (a.pdist < zoneFt) continue;
+      if (patternLengthFt - b.pdist < zoneFt) continue;
 
       const ratio = gapMin / expectedMin;
       if (gapMin < ABSOLUTE_MIN_MIN) continue;
@@ -81,3 +84,4 @@ function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new
 }
 
 module.exports = { detectAllGaps, RATIO_THRESHOLD, ABSOLUTE_MIN_MIN, TYPICAL_SPEED_FT_PER_MIN };
+

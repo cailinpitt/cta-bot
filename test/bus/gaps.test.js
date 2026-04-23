@@ -59,6 +59,12 @@ test('skips pids with no scheduled headway', () => {
   assert.equal(detectAllGaps(vs, () => null, patternFor, FRESH).length, 0);
 });
 
+test('skips pids whose pattern lacks a lengthFt', () => {
+  const vs = [bus({ vid: '1', pdist: 10000 }), bus({ vid: '2', pdist: 40000 })];
+  const pf = () => ({ direction: 'Northbound' });
+  assert.equal(detectAllGaps(vs, expected, pf, FRESH).length, 0);
+});
+
 test('sorts multiple gaps worst-first by ratio', () => {
   const vs = [
     // pid 100: 30-min-ish gap on a 10-min headway → ratio ~3
