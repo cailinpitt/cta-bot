@@ -14,7 +14,12 @@ const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { formatTimeCT } = require('../../src/shared/format');
 const trainLines = require('../../src/train/data/trainLines.json');
 
-const NUM_BINS = 40;
+// ~0.5 mi per bin keeps spatial resolution uniform across lines. A flat bin
+// count made Yellow (~5 mi) look sparse: with only 2 trains in service and
+// 660-ft bins, most bins ended a 60-min window empty and rendered as no-data
+// grey. Floor at 8 so trivially short branches still produce a readable ribbon.
+const FT_PER_BIN = 2640;
+const MIN_BINS = 8;
 const POLL_INTERVAL_MS = 30 * 1000;
 const DEFAULT_DURATION_MIN = 60;
 
@@ -104,9 +109,10 @@ async function main() {
     if (stats.offLine > 0 || stats.stationary > 0 || stats.dropped > 0) {
       console.log(`Branch ${i} filter: ${stats.offLine} off-line, ${stats.stationary} stationary, ${stats.dropped} out-of-range`);
     }
+    const numBins = Math.max(MIN_BINS, Math.round(totalFt / FT_PER_BIN));
     const binSpeedsByDir = {};
     for (const [trDr, samples] of byDir) {
-      binSpeedsByDir[trDr] = binSamples(samples, totalFt, NUM_BINS);
+      binSpeedsByDir[trDr] = binSamples(samples, totalFt, numBins);
       const s = summarize(binSpeedsByDir[trDr], TRAIN_THRESHOLDS);
       const dest = destForBranchDir(rnsByDir.get(trDr) || new Set(), trDr, destByRnDir);
       const label = dirLabel(dest);
