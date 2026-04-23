@@ -7,8 +7,21 @@ const MISSING_ABS_THRESHOLD = 3;     // ...and ≥3 buses missing in absolute te
 const MIN_SNAPSHOTS = 8;             // at a 5-min cadence the window holds ~12; 8 tolerates ≤4 dropped polls
 const MIN_OBSERVED = 2;              // observed ≥ 2 — "missing 7 of 9" with observed=0/1 is either a schedule bug or a genuine outage the gap bot already covers
 const MAX_EXPECTED_ACTIVE = 30;      // sanity ceiling — expected > 30 almost always means a bad GTFS bucket (e.g. sub-minute median) slipped through
+const RAMP_FILL_RATIO = 0.8;         // tail-of-window median ≥ this × expectedActive ⇒ pipeline is filling (service ramp-up), not a ghost
+const RAMP_TAIL_FRACTION = 0.25;     // tail = last 25% of snapshots, min 3
 
 const { median } = require('../shared/stats');
+
+// Sort (ts, count) pairs chronologically and return the median of the last
+// `RAMP_TAIL_FRACTION` of them. Used to detect a filling pipeline: during AM
+// ramp-up the full-window median lags reality, but the tail median tracks
+// actual current service.
+function tailMedian(perSnapshot) {
+  const pairs = [...perSnapshot.entries()].sort((a, b) => a[0] - b[0]);
+  const tailLen = Math.max(3, Math.ceil(pairs.length * RAMP_TAIL_FRACTION));
+  const tail = pairs.slice(-tailLen).map(([, set]) => set.size);
+  return median(tail);
+}
 
 /**
  * Detect ghost buses for a set of routes over a time window.
@@ -107,6 +120,10 @@ async function detectBusGhosts({
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
       if (stddev > observedActive) continue;
+      // Service ramp-up gate: tail median ≥ 80% of expected means the pipeline
+      // has filled by the end of the window — the deficit is at the front of
+      // the hour, not now. Real outages persist into the tail.
+      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * expectedActive) continue;
 
       events.push({
         route,
@@ -125,4 +142,4 @@ async function detectBusGhosts({
   return events;
 }
 
-module.exports = { detectBusGhosts, MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE };
+module.exports = { detectBusGhosts, MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE, RAMP_FILL_RATIO, RAMP_TAIL_FRACTION };

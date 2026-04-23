@@ -20,6 +20,20 @@ function buildObs({ pid, snapshots, vidsPerSnapshot, startTs = 1_700_000_000_000
 
 function mkPattern(label, route = '66') { return { pid: `p-${label}-${route}`, direction: label, route }; }
 
+// Build an observation stream where each snapshot has a specific count. Used
+// for ramp-up / tail-median tests where shape-over-time matters.
+function buildObsShaped({ pid, countsPerSnapshot, startTs = 1_700_000_000_000, intervalMs = 5 * 60 * 1000 }) {
+  const rows = [];
+  for (let i = 0; i < countsPerSnapshot.length; i++) {
+    const ts = startTs + i * intervalMs;
+    const n = countsPerSnapshot[i];
+    for (let v = 0; v < n; v++) {
+      rows.push({ ts, direction: pid, vehicle_id: `v${v}`, destination: null });
+    }
+  }
+  return rows;
+}
+
 test('flags a route+direction with observed below expected by both thresholds', async () => {
   // Expected active: duration 60 / headway 10 = 6. Observed: 3. Missing: 3 (=50%).
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 3 });
@@ -377,4 +391,69 @@ test('sorts events by missing count descending', async () => {
   assert.equal(events.length, 2);
   assert.equal(events[0].route, 'B');
   assert.equal(events[1].route, 'A');
+});
+
+test('ramp-up gate: suppresses when tail-of-window median reaches expected (pipeline filling)', async () => {
+  // Expected 12 (duration 60 / headway 5). Counts ramp from 2 → 12 across 12 snapshots.
+  // Full-window median = 7 (would normally fire: 5 missing, 42%), but the tail median
+  // (last 3 of 12) = 11 ≥ 0.8 × 12 = 9.6, so the pipeline is filling, not ghosting.
+  const obs = buildObsShaped({ pid: 'p1', countsPerSnapshot: [2,3,4,5,6,7,8,9,10,11,11,12] });
+  const events = await detectBusGhosts({
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 5,
+    expectedDuration: () => 60,
+  });
+  assert.equal(events.length, 0);
+});
+
+test('ramp-up gate: still fires when tail remains well below expected (real outage)', async () => {
+  // Expected 12. Counts dropped and stayed dropped: median 5, tail median 5. 5 < 0.8 × 12 = 9.6 → fires.
+  const obs = buildObsShaped({ pid: 'p1', countsPerSnapshot: [5,5,5,6,5,5,5,6,5,5,5,5] });
+  const events = await detectBusGhosts({
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 5,
+    expectedDuration: () => 60,
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].observedActive, 5);
+});
+
+test('ramp-up gate: fires on mid-window outage even if tail partially recovers (below 80% threshold)', async () => {
+  // Expected 12. Outage mid-window, partial recovery to 9 at tail. 9 < 0.8 × 12 = 9.6 → still fires.
+  const obs = buildObsShaped({ pid: 'p1', countsPerSnapshot: [12,12,4,3,3,3,4,5,6,8,9,9] });
+  const events = await detectBusGhosts({
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 5,
+    expectedDuration: () => 60,
+  });
+  assert.equal(events.length, 1);
+});
+
+test('ramp-up gate applies to trains too (loop line)', async () => {
+  // Brown line loop — expected 9 (duration 45 / headway 5). Counts ramp 1 → 8.
+  // Tail median 8 ≥ 0.8 × 9 = 7.2 → suppressed.
+  const rows = [];
+  const ts0 = 1_700_000_000_000;
+  const counts = [1,2,3,4,5,6,7,7,8,8,8,8];
+  for (let i = 0; i < counts.length; i++) {
+    const ts = ts0 + i * 5 * 60 * 1000;
+    for (let v = 0; v < counts[i]; v++) {
+      rows.push({ ts, direction: null, vehicle_id: `v${v}`, destination: null });
+    }
+  }
+  const events = await detectTrainGhosts({
+    lines: ['Brn'],
+    getObservations: () => rows,
+    findStation: () => ({ lat: 0, lon: 0, name: 'Kimball', isTerminal: true }),
+    expectedHeadway: () => 5,
+    expectedDuration: () => 45,
+    isLoopLine: () => true,
+  });
+  assert.equal(events.length, 0);
 });

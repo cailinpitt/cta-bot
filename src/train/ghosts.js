@@ -2,8 +2,15 @@
 // train count (median per snapshot) against `trip_duration / headway` per
 // (line, trDr).
 
-const { MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE } = require('../bus/ghosts');
+const { MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE, RAMP_FILL_RATIO, RAMP_TAIL_FRACTION } = require('../bus/ghosts');
 const { median } = require('../shared/stats');
+
+function tailMedian(perSnapshot) {
+  const pairs = [...perSnapshot.entries()].sort((a, b) => a[0] - b[0]);
+  const tailLen = Math.max(3, Math.ceil(pairs.length * RAMP_TAIL_FRACTION));
+  const tail = pairs.slice(-tailLen).map(([, set]) => set.size);
+  return median(tail);
+}
 
 /**
  * Detect ghost trains for a set of lines over a time window.
@@ -66,6 +73,7 @@ async function detectTrainGhosts({
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
       if (stddev > observedActive) continue;
+      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * expectedActive) continue;
 
       events.push({
         line,
@@ -134,6 +142,7 @@ async function detectTrainGhosts({
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
       if (stddev > observedActive) continue;
+      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * expectedActive) continue;
 
       events.push({
         line,
