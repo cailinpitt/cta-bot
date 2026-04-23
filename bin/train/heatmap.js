@@ -18,6 +18,18 @@ const RENDER_CAP = 40;
 // Canonical line order so "Red, Brown, Purple" reads the same way every time
 // regardless of which event happened to land in the bucket first.
 const LINE_ORDER = ['red', 'blue', 'brn', 'g', 'org', 'p', 'pink', 'y'];
+const LINE_NAME_SET = new Set(Object.values(LINE_NAMES));
+// Strip a trailing " (Red/Brown/Purple)"-style line-list from a station label
+// so it doesn't duplicate the routes shown after the em-dash. Leaves richer
+// parentheticals like "Harlem (Blue - O'Hare Branch)" intact since stripping
+// those would collide "Harlem (Blue - Forest Park Branch)" into the same label.
+function stripLineParens(label) {
+  const m = label.match(/^(.+?)\s*\(([^()]+)\)\s*$/);
+  if (!m) return label;
+  const tokens = m[2].split('/').map((t) => t.trim());
+  return tokens.every((t) => LINE_NAME_SET.has(t)) ? m[1] : label;
+}
+
 function formatTrainLines(routes) {
   if (!routes || routes.length === 0) return '';
   return [...routes]
@@ -40,7 +52,11 @@ async function main() {
   const allPoints = loadTrainHeatmap(days);
   const points = allPoints
     .filter((p) => p.count >= minCount)
-    .map((p) => ({ ...p, routesLabel: formatTrainLines(p.routes) }));
+    .map((p) => ({
+      ...p,
+      label: stripLineParens(p.label),
+      routesLabel: formatTrainLines(p.routes),
+    }));
   const totalIncidents = points.reduce((sum, p) => sum + p.count, 0);
 
   console.log(`  ${allPoints.length} total spots, ${points.length} above the ${minCount}-incident floor (${totalIncidents} incidents)`);
