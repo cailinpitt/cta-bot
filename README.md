@@ -1,114 +1,308 @@
 # cta-bot
 
-Bluesky bots that post visualizations generated from CTA train and bus tracker APIs.
+Bluesky bots that turn CTA train and bus tracker data into Chicago-specific transit visualizations.
 
 - **Bus**: [@ctabusinsights.bsky.social](https://bsky.app/profile/ctabusinsights.bsky.social)
 - **Train**: [@ctatraininsights.bsky.social](https://bsky.app/profile/ctatraininsights.bsky.social)
 
-## Features
+This README is written for operators running their own copy. If you just want to see the output, follow the accounts above. Scroll to the [Examples gallery](#examples-gallery) for sample posts.
 
-- **Bus bunching** — detects clusters of buses on the same route/direction, posts an annotated map, then replies with a ~10-minute timelapse of the cluster
-- **Bus gaps** — inverse of bunching: flags long stretches with no bus service, comparing observed spacing against the CTA's published GTFS schedule
-- **Train bunching** — detects clusters (2+) of L trains running too close together, same map + timelapse reply flow
-- **Train gaps** — flags long stretches with no L service on a given line/direction, using the GTFS rail schedule for expected headways
-- **Bus speedmap** — color-codes a bus route by actual vehicle speed over an hour
-- **Train speedmap** — color-codes an L line by actual train speed over an hour, with separate ribbons per direction
-- **L system snapshot** — map of all active trains system-wide, with a zoomed inset of the Loop
-- **Ghost buses / trains** — hourly rollup post listing route+direction pairs where observed active vehicle count is materially below what the scheduled headway + trip duration imply
-- **Historical callouts** — posts are annotated with frequency and severity context from prior posts (e.g. "3rd Route 66 bunch reported today", "tightest reported on this line in 30 days")
+## What it posts
 
-The bus bot tracks a subset of CTA routes — see `src/routes.js` for the list. The train bot covers all 8 L lines.
+### Bus (`@ctabusinsights`)
+- **Bunching** — clusters of buses on the same route/direction, as an annotated map. Reply includes a ~10-minute timelapse video of the cluster, with traffic signals annotated.
+- **Gaps** — long stretches with no bus service, compared against the scheduled headway from GTFS.
+- **Speedmap** — a bus route color-coded by observed speed over a 1-hour window.
+- **Heatmap** — weekly/monthly rollup of chronic bunching + gap stops, plotted across Chicago.
+- **Ghost buses** — hourly rollup of routes with materially fewer active buses than the schedule implies.
 
-## Examples
+### Train (`@ctatraininsights`)
+- **Bunching** — clusters (2+) of L trains running too close together, with map + timelapse reply.
+- **Gaps** — long stretches with no L service on a given line/direction, using the GTFS rail schedule.
+- **Speedmap** — an L line color-coded by observed train speed, with a separate ribbon per direction. For Purple, truncates to the shuttle segment outside express hours.
+- **Heatmap** — weekly/monthly rollup of chronic bunching + gap stations, with a Loop inset since five lines share the elevated rectangle.
+- **Snapshot** — map of all active trains system-wide, with a Loop inset.
+- **Ghost trains** — hourly rollup of line/direction pairs missing trains vs. the schedule.
 
-### Bus bunching
+### Both
+- **Historical callouts** — posts carry frequency and severity context from prior posts in `history.sqlite`, e.g. *"3rd Route 66 bunch reported today"* or *"tightest reported on this line in 30 days"*.
 
-> 🚌 Route 151 (Sheridan) — Southbound
-> 3 buses within 889 ft near Michigan & Erie
-
-![Bus bunching example — 3 buses on Route 151 within 889 ft near Michigan & Erie](docs/images/bus-bunching.jpg)
-
-### Bus gap
-
-> 🕳️ Route 147 (Outer Lake Shore Express) — Southbound
-> 35 min gap near Foster & Marine Drive — currently scheduled every 9 min
-
-![Bus gap example — 35 min gap on Route 147 near Foster & Marine Drive](docs/images/bus-gap.jpg)
-
-### L system snapshot
-
-> 🚆 CTA L right now
-> 3:35 PM CT · 63 trains system-wide
->
-> Red 14 · Blue 19 · Brown 9 · Green 11 · Orange 3 · Purple 1 · Pink 6 · Yellow 0
-
-![L system snapshot — live positions of all active CTA L trains](docs/images/snapshot.jpg)
+The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train bot covers all 8 L lines.
 
 ## Setup
 
-1. `cp .env.example .env` and fill in CTA API keys, Bluesky credentials, and a Mapbox token.
-2. `npm install`
-3. Install `ffmpeg` if you want bunching timelapse replies (`brew install ffmpeg` / `apt install ffmpeg`).
+1. **Clone and install**
+   ```
+   git clone https://github.com/cailinpitt/cta-bot.git
+   cd cta-bot
+   npm install
+   ```
 
-## Scripts
+2. **Install `ffmpeg`** — required for bunching timelapse replies.
+   ```
+   brew install ffmpeg    # macOS
+   apt install ffmpeg     # Debian/Ubuntu
+   ```
 
+3. **Create `.env`** — `cp .env.example .env` and fill in:
+
+   | Var | What it's for | Where to get it |
+   |---|---|---|
+   | `CTA_TRAIN_KEY` | CTA Train Tracker API key | [transitchicago.com/developers](https://www.transitchicago.com/developers/) |
+   | `CTA_BUS_KEY` | CTA Bus Tracker API key | same |
+   | `MAPBOX_TOKEN` | Mapbox Static Images API | [account.mapbox.com](https://account.mapbox.com/access-tokens/) |
+   | `BLUESKY_SERVICE` | Bluesky PDS URL | defaults to `https://bsky.social` |
+   | `BLUESKY_BUS_IDENTIFIER` | Bus bot handle or DID | your Bluesky account |
+   | `BLUESKY_BUS_APP_PASSWORD` | Bus bot app password | bsky.app → Settings → App Passwords |
+   | `BLUESKY_TRAIN_IDENTIFIER` | Train bot handle or DID | same |
+   | `BLUESKY_TRAIN_APP_PASSWORD` | Train bot app password | same |
+
+4. **Build the GTFS index** — required before any gap or ghost detection runs.
+   ```
+   npm run fetch-gtfs
+   ```
+
+5. **Fetch traffic signals** — optional, one-time. Annotates bus bunching timelapse videos with intersection signals.
+   ```
+   npm run fetch-signals
+   ```
+
+6. **Smoke test** — loads every bin file with `--check`.
+   ```
+   npm run smoke
+   ```
+
+7. **Try a dry run** — writes an image under `assets/`, does not post.
+   ```
+   npm run bunching:dry
+   ```
+
+## Running it
+
+Everything is designed to be driven by cron. There's no long-running process — each script does one detection or rollup and exits. A reasonable full crontab:
+
+```cron
+# --- Detection + posting ---
+# Bunching and gap detection poll frequently; each post is cooldown-gated by history.sqlite.
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/bunching.js      >> cron/bus-bunching.log 2>&1
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/gaps.js          >> cron/bus-gaps.log 2>&1
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/bunching.js    >> cron/train-bunching.log 2>&1
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/gaps.js        >> cron/train-gaps.log 2>&1
+
+# Speedmaps collect for ~1 hour per run — space them out so they don't all hit the API at once.
+30 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/speedmap.js       >> cron/bus-speedmap.log 2>&1
+45 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/speedmap.js     >> cron/train-speedmap.log 2>&1
+
+# Train snapshot — live positions. Hourly is plenty.
+0 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/snapshot.js      >> cron/train-snapshot.log 2>&1
+
+# Heatmap rollups — weekly (chronic spots over the last 7 days).
+0 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/bus/heatmap.js --window week   >> cron/bus-heatmap.log 2>&1
+5 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/train/heatmap.js --window week >> cron/train-heatmap.log 2>&1
+
+# --- Observers (ghost detection data) ---
+# Bus observer — fetches ghost-candidate routes on a fixed 5-min cadence so every route
+# gets consistent coverage. Trains don't need one; getAllTrainPositions covers all 8 lines
+# per call and other train jobs already write observations.
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node scripts/observeGhosts.js >> cron/observe-ghosts.log 2>&1
+
+# --- Ghost rollups ---
+# Offset from other jobs to avoid API-bursting.
+7 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/ghosts.js          >> cron/ghosts.log 2>&1
+8 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/ghosts.js        >> cron/train-ghosts.log 2>&1
+
+# --- Maintenance ---
+# GTFS index is date-specific (honors calendar_dates.txt), so refresh daily before other jobs wake up.
+15 3 * * * cd /path/to/cta-bot && /usr/bin/node scripts/fetch-gtfs.js     >> cron/fetch-gtfs.log 2>&1
+
+# Traffic signals rarely move; monthly is plenty.
+0 4 1 * * cd /path/to/cta-bot && /usr/bin/node scripts/fetch-signals.js   >> cron/fetch-signals.log 2>&1
+```
+
+## Scripts reference
+
+All bin scripts accept `--dry-run` (writes image under `assets/` instead of posting). Heatmap scripts additionally accept `--window week|month` (default `month`).
+
+### Posting
 | Command | Description |
 |---|---|
-| `npm run bunching` | Run bus bunching detection and post |
-| `npm run bunching:dry` | Dry run (saves image, no post) |
-| `npm run gaps` | Run bus gap detection and post |
-| `npm run gaps:dry` | Dry run |
-| `npm run fetch-gtfs` | Refresh the GTFS headway index (weekly cron recommended) |
-| `npm run speedmap` | Run bus speedmap collection and post |
-| `npm run speedmap:dry` | Dry run |
-| `npm run train-bunching` | Run train bunching detection and post |
-| `npm run train-bunching:dry` | Dry run |
-| `npm run train-gaps` | Run train gap detection and post |
-| `npm run train-gaps:dry` | Dry run |
-| `npm run train-speedmap` | Run train speedmap collection and post |
-| `npm run train-speedmap:dry` | Dry run |
-| `npm run train-snapshot` | Post L system snapshot |
-| `npm run train-snapshot:dry` | Dry run |
-| `npm run observe-ghosts` | Bus observer for ghost detection — fetches `routes.ghosts` and logs positions (no posting). Run on a ~5-minute cron. |
-| `npm run ghosts` | Post the hourly ghost-bus rollup |
-| `npm run ghosts:dry` | Dry run |
-| `npm run train-ghosts` | Post the hourly ghost-train rollup |
-| `npm run train-ghosts:dry` | Dry run |
-| `npm test` | Run the test suite |
+| `npm run bunching` / `:dry` | Bus bunching detection |
+| `npm run gaps` / `:dry` | Bus gap detection |
+| `npm run speedmap` / `:dry` | Bus speedmap collection (1-hour window) |
+| `npm run heatmap` / `:dry` | Bus chronic-spot heatmap |
+| `npm run ghosts` / `:dry` | Bus ghost rollup (hourly) |
+| `npm run train-bunching` / `:dry` | Train bunching detection |
+| `npm run train-gaps` / `:dry` | Train gap detection |
+| `npm run train-speedmap` / `:dry` | Train speedmap collection (1-hour window) |
+| `npm run train-heatmap` / `:dry` | Train chronic-spot heatmap |
+| `npm run train-snapshot` / `:dry` | System-wide L snapshot |
+| `npm run train-ghosts` / `:dry` | Train ghost rollup (hourly) |
 
-## State
+### Observers / maintenance
+| Command | Description |
+|---|---|
+| `npm run observe-ghosts` | Bus observer — fetches `routes.ghosts` and records positions (no posting). Run every 5 min. |
+| `npm run fetch-gtfs` | Rebuild `data/gtfs/index.json`. Run daily. |
+| `npm run fetch-signals` | Rebuild `data/signals/chicago.json` from OpenStreetMap. Run monthly. |
 
-Local state lives in `state/` (gitignored):
+### Dev
+| Command | Description |
+|---|---|
+| `npm test` | Run the test suite (`node --test`). |
+| `npm run smoke` | Load each bin with `--check` — fast sanity check after edits. |
 
-- `posted.json` — cooldown keys + timestamps, blocks re-posting the same route/direction too often
-- `history.sqlite` — SQLite history of every detection/run (posted or cooldown-suppressed). Drives the frequency + severity callouts on each post; rolled off after 90 days.
+## How it works
 
-The DB uses WAL mode — if you inspect `history.sqlite` with a CLI while the bot is running, recent rows may still be in `history.sqlite-wal` until checkpoint.
+### Data sources
+- **CTA Bus Tracker** and **CTA Train Tracker** APIs — live vehicle positions, polled by each script for its detection window.
+- **GTFS static feed** — the scheduled baseline for gap and ghost detection. Rebuilt daily from the CTA's published bundle into `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → { median headway, median trip duration }` lookup.
+- **OpenStreetMap (Overpass)** — traffic signal nodes inside a Chicago bounding box, used to annotate bus bunching timelapses. Rebuilt monthly.
+- **Mapbox Static Images API** — base maps for every rendered image.
 
-## GTFS
+### Observation flow
+Every call to `getVehicles` (bus) and `getAllTrainPositions` (train) writes a row to the `observations` table in `history.sqlite`. That means *every* job — bunching, gaps, speedmaps, snapshots — contributes data that ghost detection later consumes.
 
-Gap and ghost detection (bus and train) compare observed service against the CTA's published schedule. `npm run fetch-gtfs` downloads the GTFS feed and builds `data/gtfs/index.json`, a compact `(route/line, direction, day_type, hour) → { median headway, median trip duration }` lookup covering tracked bus routes and all 8 L lines. The index is **date-specific** — it honors `calendar_dates.txt` exceptions for the day it was generated, so holiday service is represented correctly. **Run it daily** via cron; `loadIndex()` warns after 2 days and throws after 7 so a missed cron surfaces loudly instead of silently reporting against a stale schedule. Requires `unzip` on PATH.
+Bus routes not touched by bunching or gaps need an explicit observer run to show up in the ghost rollups. `scripts/observeGhosts.js` handles that, fetching `routes.ghosts` on a fixed ~5-min cadence. Trains don't need a dedicated observer — one API call returns all 8 lines and other jobs hit the API often enough.
 
-Recommended daily cron:
+### History DB and callouts
+`state/history.sqlite` records every detection (posted or cooldown-suppressed) and every observation. Retention is 90 days. Two things feed off it:
+- **Cooldown** — posts for the same route/direction inside a short window are suppressed to avoid spam. Tracked in `state/posted.json`.
+- **Callouts** — each post is annotated with frequency and severity from prior records, e.g. *"3rd Route 66 bunch reported today"* or *"largest gap reported on this line in 30 days"*.
 
+SQLite runs in **WAL mode**. If you inspect `history.sqlite` with a CLI while jobs are running, recent rows may still live in `history.sqlite-wal` until checkpoint.
+
+### Ghost detection math
 ```
-# Rebuild GTFS index each morning before other jobs run
-15 3 * * * cd /path/to/cta-bot && /usr/bin/node scripts/fetch-gtfs.js >> cron/fetch-gtfs.log 2>&1
+expected_active = trip_duration / headway
+missing = expected_active − observed_active
 ```
+`observed_active` is the median distinct-vehicle count per polling snapshot over the past hour. A ghost event requires **both**:
+- `missing / expected_active` ≥ 25%, **and**
+- `missing` ≥ 3 vehicles in absolute terms.
 
-## Ghost detection
+The absolute floor keeps single-vehicle routes (where a 1-bus gap is 50% of expected) from producing hair-trigger posts.
 
-Ghosts = buses/trains missing from the road versus what the schedule implies. The model is `trip_duration / headway` = expected active vehicles per direction, compared against the median distinct-vehicle count per polling snapshot over the past hour. A ghost event requires the gap to be ≥25% of expected **and** ≥3 vehicles in absolute terms.
+### GTFS freshness gates
+`loadIndex()` checks the age of `data/gtfs/index.json`:
+- **> 2 days old** — warns on stderr.
+- **> 7 days old** — throws.
 
-Observations are written to the `observations` table in `history.sqlite` from inside `getVehicles` and `getAllTrainPositions`, so every API call made by any job contributes. To guarantee consistent bus coverage for routes not touched by bunching/gaps, a dedicated observer cron (`npm run observe-ghosts`) fetches `routes.ghosts` on a fixed ~5-minute cadence. Trains need no dedicated observer — the train API returns all 8 lines in one call, which bunching/gaps jobs already make regularly.
+Because the index honors `calendar_dates.txt`, a stale index misreports holiday/special-service days. The fatal threshold makes a missed cron loud rather than silently reporting against the wrong schedule.
 
-Recommended crontab additions:
+### Purple line (speedmap quirk)
+Purple runs Linden↔Loop express during weekday rush, Linden↔Howard shuttle otherwise. The speedmap reads the scheduled trip duration from the GTFS index — a ~95-min trip means express is running, a ~14-min trip means shuttle, and the polyline is truncated at Howard when the window is shuttle-only.
 
-```
-# Ghost bus observer — feeds the hourly rollup with consistent coverage
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node scripts/observeGhosts.js >> cron/observe-ghosts-cron.log 2>&1
+## State and storage
 
-# Hourly ghost rollups (offset from other jobs to avoid stomping)
-7 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/ghosts.js >> cron/ghosts-cron.log 2>&1
-8 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/ghosts.js >> cron/train-ghosts-cron.log 2>&1
-```
+Local state (gitignored, operator-managed):
+
+| Path | Purpose | Rebuilt by |
+|---|---|---|
+| `state/posted.json` | Cooldown keys + timestamps | each posting job |
+| `state/history.sqlite` | Detections + observations, 90-day window | each posting + observer job |
+| `data/gtfs/index.json` | Schedule lookup | `npm run fetch-gtfs` (daily) |
+| `data/signals/chicago.json` | OSM traffic signals | `npm run fetch-signals` (monthly) |
+| `data/patterns/*.json` | Cached bus route patterns (7-day TTL) | populated on demand |
+
+## Examples gallery
+
+### Bus bunching
+> 🚌 Route 66 (Chicago) — Eastbound
+> 4 buses within 330 ft near Grand & Union
+> 📊 3rd Route 66 bunch reported today
+
+![Bus bunching example](docs/images/bus-bunching.jpg)
+
+Reply: ~10-minute timelapse video of the cluster, with intersection traffic signals annotated.
+
+### Bus gap
+> 🕳 Route 76 (Diversey) — Westbound
+> 20 min gap near Diversey & Oak Park — currently scheduled every 6 min
+
+![Bus gap example](docs/images/bus-gap.jpg)
+
+### Bus speedmap
+> 🚦 Route 77 (Belmont) — Westbound
+> 10:00 PM–11:00 PM CT · average speed 12.9 mph
+>
+> Each colored segment of the route shows how fast buses were moving there:
+> 🟥 under 5 mph — stopped or crawling
+> 🟧 5–10 mph — slow
+> 🟨 10–15 mph — moderate
+> 🟩 15+ mph — moving well
+
+![Bus speedmap](docs/images/bus-speedmap.jpg)
+
+### Bus heatmap
+> 🚌 Chronic bus trouble spots, this month
+>
+> 23 incidents across 5 stops:
+> · Michigan & Delaware/Walton (7)
+> · Foster & Marine Drive (7)
+> · Lake Shore Drive & Belmont (3)
+
+![Bus heatmap](docs/images/heatmap-bus.jpg)
+
+### Bus ghost rollup
+> 👻 Ghost buses, past hour
+>
+> 🚌 Route 146 (Inner Lake Shore/Michigan Exp.) SB · 4 of 12 missing (31%) · every ~7 min instead of ~5
+
+![Bus ghost rollup](docs/images/ghost-bus.jpg)
+
+### Train bunching
+> 🚆 Green Line — to Harlem/Lake
+> 2 trains within 0.27 mi near Pulaski
+
+![Train bunching example](docs/images/train-bunching.jpg)
+
+Reply: ~10-minute timelapse of the bunch.
+
+### Train gap
+> 🕳 Red Line — to 95th/Dan Ryan
+> 18 min gap near Garfield — currently scheduled every 4 min
+> 📊 2nd Red Line gap reported today · biggest gap vs schedule on this route in 30 days
+
+![Train gap example](docs/images/train-gap.jpg)
+
+### Train speedmap
+> 🚦 Pink Line speedmap
+> 12:00 PM–1:00 PM CT
+> Toward 54th/Cermak: 24.0 mph
+> 📊 slowest reported in 14 days
+>
+> Two parallel ribbons = the two travel directions.
+> 🟥 under 15 mph · 🟧 15–25 · 🟨 25–35 · 🟪 35–45 · 🟩 45+ · ⬜ no data
+
+![Train speedmap](docs/images/train-speedmap.jpg)
+
+### Train snapshot
+> 🚆 CTA L right now
+> 5:00 PM CT · 110 trains system-wide
+>
+> Red 26 · Blue 28 · Brown 14 · Green 14 · Orange 7 · Purple 13 · Pink 8 · Yellow 0
+
+![Train snapshot](docs/images/snapshot.jpg)
+
+### Train heatmap
+> 🚆 Chronic train trouble spots, this month
+>
+> 3 incidents across 1 station:
+> · North/Clybourn (3)
+
+![Train heatmap](docs/images/heatmap-train.jpg)
+
+### Train ghost rollup
+> 👻 Ghost trains, past hour
+>
+> 🟦 Blue Line → O'Hare · 3 of 8 missing (40%) · every ~17 min instead of ~10
+>
+> "Missing" = fewer trains than the full terminal-to-terminal schedule predicts.
+
+![Train ghost rollup](docs/images/ghost-train.jpg)
+
+## Contributing and issues
+
+Issues and PRs welcome at [github.com/cailinpitt/cta-bot](https://github.com/cailinpitt/cta-bot).
+
+CTA Bus and Train Tracker data © Chicago Transit Authority. Base maps © Mapbox, © OpenStreetMap contributors.
