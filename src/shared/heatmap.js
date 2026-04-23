@@ -1,7 +1,9 @@
-// Builds incident heatmap data from history.sqlite. Aggregates posted
-// bunching + gap events by location (stop name for bus, station name for
-// train) over a time window, resolves each to lat/lon, and returns a list
-// of points sorted by frequency.
+// Builds bunching heatmap data from history.sqlite. Aggregates posted
+// bunching events by location (stop name for bus, station name for train)
+// over a time window, resolves each to lat/lon, and returns a list of
+// points sorted by frequency. Gaps are intentionally excluded — they're a
+// line-level dispatch/headway phenomenon, not a location phenomenon, so
+// plotting them geographically would be misleading.
 //
 // Locations are resolved lazily:
 //   - Bus: near_stop is the pattern stop name; direction is the pid. We
@@ -112,15 +114,10 @@ function bucket(events, resolve) {
 function loadEvents(kind, windowDays, now = Date.now()) {
   const since = now - windowDays * DAY_MS;
   const db = getDb();
-  const bunches = db.prepare(`
+  return db.prepare(`
     SELECT route, direction, near_stop FROM bunching_events
     WHERE kind = ? AND posted = 1 AND ts >= ? AND near_stop IS NOT NULL
   `).all(kind, since).map((r) => ({ ...r, source: 'bunching' }));
-  const gaps = db.prepare(`
-    SELECT route, direction, near_stop FROM gap_events
-    WHERE kind = ? AND posted = 1 AND ts >= ? AND near_stop IS NOT NULL
-  `).all(kind, since).map((r) => ({ ...r, source: 'gap' }));
-  return [...bunches, ...gaps];
 }
 
 function loadBusHeatmap(windowDays, now = Date.now()) {

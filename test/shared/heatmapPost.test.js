@@ -13,7 +13,7 @@ test('buildPostText names the top-3 worst spots with counts', () => {
   const text = buildPostText({ mode: 'bus', window: 'month', points, totalIncidents: 18 });
   assert.ok(text.includes('🚌'));
   assert.ok(text.includes('this month'));
-  assert.ok(text.includes('18 incidents'));
+  assert.ok(text.includes('18 bunches'));
   assert.ok(text.includes('4 stops'));
   assert.ok(text.includes('Foster & Marine Drive (7)'));
   assert.ok(text.includes('Michigan & Delaware (6)'));
@@ -31,10 +31,10 @@ test('buildPostText uses singular nouns when counts are 1', () => {
     points: [{ label: 'North/Clybourn', lat: 41.91, lon: -87.65, count: 1, bunching: 1, gap: 0 }],
     totalIncidents: 1,
   });
-  assert.ok(text.includes('1 incident '));
+  assert.ok(text.includes('1 bunch '));
   assert.ok(text.includes('1 station'));
   assert.ok(!text.includes('1 stations'));
-  assert.ok(!text.includes('1 incidents'));
+  assert.ok(!text.includes('1 bunches'));
 });
 
 test('buildPostText uses train noun and emoji for train mode', () => {
@@ -46,14 +46,14 @@ test('buildPostText uses train noun and emoji for train mode', () => {
 
 test('buildPostText handles an empty window cleanly', () => {
   const text = buildPostText({ mode: 'bus', window: 'week', points: [], totalIncidents: 0 });
-  assert.ok(text.includes('No reliability incidents'));
+  assert.ok(text.includes('No chronic bunching'));
   assert.ok(!text.includes('Worst spots'));
 });
 
 test('buildAltText summarizes the map for screen readers', () => {
   const alt = buildAltText({ mode: 'bus', window: 'month', points, totalIncidents: 18 });
   assert.ok(alt.includes('Heatmap of Chicago'));
-  assert.ok(alt.includes('18 incidents'));
+  assert.ok(alt.includes('18 bunches'));
   assert.ok(alt.includes('4 stops'));
   assert.ok(alt.includes('Foster & Marine Drive (7)'));
 });

@@ -8,7 +8,7 @@ function titleFor(mode, window) {
   const emoji = mode === 'bus' ? '🚌' : '🚆';
   const label = WINDOW_LABELS[window] || window;
   const noun = mode === 'bus' ? 'bus' : 'train';
-  return `${emoji} Chronic ${noun} trouble spots, ${label}`;
+  return `${emoji} Chronic ${noun} bunching spots, ${label}`;
 }
 
 function pluralize(n, singular, plural) {
@@ -22,13 +22,13 @@ function locNouns(mode) {
 function buildPostText({ mode, window, points, totalIncidents }) {
   const lines = [titleFor(mode, window)];
   if (totalIncidents === 0) {
-    lines.push('', 'No reliability incidents recorded.');
+    lines.push('', 'No chronic bunching recorded.');
     return lines.join('\n');
   }
   const [locSing, locPlur] = locNouns(mode);
-  const incidents = pluralize(totalIncidents, 'incident', 'incidents');
+  const bunches = pluralize(totalIncidents, 'bunch', 'bunches');
   const locs = pluralize(points.length, locSing, locPlur);
-  lines.push('', `${incidents} across ${locs}:`);
+  lines.push('', `${bunches} across ${locs}:`);
   for (const p of points.slice(0, 3)) {
     lines.push(`· ${p.label} (${p.count})`);
   }
@@ -36,16 +36,16 @@ function buildPostText({ mode, window, points, totalIncidents }) {
 }
 
 function buildAltText({ mode, window, points, totalIncidents }) {
-  const subject = mode === 'bus' ? 'bus bunches and gaps' : 'train bunches and gaps';
+  const subject = mode === 'bus' ? 'buses' : 'trains';
   const label = WINDOW_LABELS[window] || window;
   if (totalIncidents === 0) {
-    return `Map of Chicago with no incidents plotted — no ${subject} were recorded ${label}.`;
+    return `Map of Chicago with no points plotted — no chronic ${subject} bunching was recorded ${label}.`;
   }
   const [locSing, locPlur] = locNouns(mode);
-  const incidents = pluralize(totalIncidents, 'incident', 'incidents');
+  const bunches = pluralize(totalIncidents, 'bunch', 'bunches');
   const locs = pluralize(points.length, locSing, locPlur);
   const top = points.slice(0, 3).map((p) => `${p.label} (${p.count})`).join(', ');
-  return `Heatmap of Chicago showing where ${subject} occurred ${label}: ${incidents} across ${locs}, with red circles sized by frequency. Top spots: ${top}.`;
+  return `Heatmap of Chicago showing where ${subject} bunched ${label}: ${bunches} across ${locs}, with red circles sized by frequency. Top spots: ${top}.`;
 }
 
 module.exports = { buildPostText, buildAltText, titleFor };
