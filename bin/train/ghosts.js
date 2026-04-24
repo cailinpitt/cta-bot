@@ -8,7 +8,7 @@ const { detectTrainGhosts } = require('../../src/train/ghosts');
 const { buildRollupPost, POST_MAX_CHARS } = require('../../src/shared/post');
 
 const DISCLAIMER = '"Missing" = fewer trains than the full terminal-to-terminal schedule predicts.';
-const { expectedTrainHeadwayMin, expectedTrainTripMinutes, isTrainLoopLine } = require('../../src/shared/gtfs');
+const { expectedTrainHeadwayMin, expectedTrainTripMinutes, expectedTrainActiveTrips, isTrainLoopLine } = require('../../src/shared/gtfs');
 const { getTrainObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginTrain, postText } = require('../../src/train/bluesky');
 const { runBin } = require('../../src/shared/runBin');
@@ -22,8 +22,11 @@ function formatLine(event) {
   const missing = Math.round(event.missing);
   const expected = Math.round(event.expectedActive);
   const pct = Math.round((event.missing / event.expectedActive) * 100);
-  const scheduledHeadway = Math.round(event.headway);
   const dest = event.destination ? ` → ${event.destination}` : '';
+  if (event.headway == null) {
+    return `${emoji} ${lineName} Line${dest} · ${missing} of ${expected} missing (${pct}%)`;
+  }
+  const scheduledHeadway = Math.round(event.headway);
   const ratio = event.expectedActive / Math.max(event.observedActive, 1);
   if (ratio > 3) {
     return `${emoji} ${lineName} Line${dest} · ${missing} of ${expected} missing (${pct}%) · scheduled every ~${scheduledHeadway} min`;
@@ -47,13 +50,16 @@ async function main() {
 
   const now = Date.now();
   const sinceTs = now - WINDOW_MS;
+  // Look up schedule at window midpoint; see bin/bus/ghosts.js for why.
+  const lookupAt = new Date(now - WINDOW_MS / 2);
 
   const events = await detectTrainGhosts({
     lines: ALL_LINES,
     getObservations: (line) => getTrainObservations(line, sinceTs),
     findStation: findStationByDestination,
-    expectedHeadway: (line, destStation) => expectedTrainHeadwayMin(line, destStation, new Date(now)),
-    expectedDuration: (line, destStation) => expectedTrainTripMinutes(line, destStation, new Date(now)),
+    expectedHeadway: (line, destStation) => expectedTrainHeadwayMin(line, destStation, lookupAt),
+    expectedDuration: (line, destStation) => expectedTrainTripMinutes(line, destStation, lookupAt),
+    expectedActive: (line, destStation) => expectedTrainActiveTrips(line, destStation, lookupAt),
     isLoopLine: isTrainLoopLine,
   });
 

@@ -43,6 +43,7 @@ test('flags a route+direction with observed below expected by both thresholds', 
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 10,
     expectedDuration: () => 60,
+    expectedActive: () => 6,
   });
   assert.equal(events.length, 1);
   assert.equal(events[0].route, '66');
@@ -61,6 +62,7 @@ test('suppresses events under the absolute-missing threshold', async () => {
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 10,
     expectedDuration: () => 60,
+    expectedActive: () => 6,
   });
   assert.equal(events.length, 0);
 });
@@ -72,8 +74,9 @@ test('suppresses events under the 25% gate even when ≥3 missing in absolute te
     routes: ['66'],
     getObservations: () => obs,
     getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 4,   // headway 4, duration 60 → expected 15
+    expectedHeadway: () => 4,
     expectedDuration: () => 60,
+    expectedActive: () => 15,
   });
   assert.equal(events.length, 0);
 });
@@ -86,6 +89,7 @@ test('skips routes with fewer than MIN_SNAPSHOTS in the window', async () => {
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 10,
     expectedDuration: () => 60,
+    expectedActive: () => 6,
   });
   assert.equal(events.length, 0);
 });
@@ -102,8 +106,9 @@ test('merges observations from multiple pids when they resolve to the same direc
     routes: ['66'],
     getObservations: () => rows,
     getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6,     // expected active = 60/6 = 10, missing = 6
+    expectedHeadway: () => 6,
     expectedDuration: () => 60,
+    expectedActive: () => 10,
   });
   assert.equal(events.length, 1);
   assert.equal(events[0].observedActive, 4);
@@ -111,7 +116,6 @@ test('merges observations from multiple pids when they resolve to the same direc
 });
 
 test('skips when expected active count is below 2 (too sparse to be newsworthy)', async () => {
-  // Headway 40, duration 60 → expected 1.5. Below the 2-vehicle floor.
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 0 });
   const events = await detectBusGhosts({
     routes: ['66'],
@@ -119,22 +123,18 @@ test('skips when expected active count is below 2 (too sparse to be newsworthy)'
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 40,
     expectedDuration: () => 60,
+    expectedActive: () => 1.5,
   });
   assert.equal(events.length, 0);
 });
 
-test('skips routes where headway or duration is null', async () => {
+test('skips routes where expectedActive is null (no schedule data for this hour)', async () => {
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 1 });
-  const noHeadway = await detectBusGhosts({
+  const events = await detectBusGhosts({
     routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => null, expectedDuration: () => 60,
+    expectedHeadway: () => 10, expectedDuration: () => 60, expectedActive: () => null,
   });
-  assert.equal(noHeadway.length, 0);
-  const noDuration = await detectBusGhosts({
-    routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 10, expectedDuration: () => null,
-  });
-  assert.equal(noDuration.length, 0);
+  assert.equal(events.length, 0);
 });
 
 test('buildRollupPost keeps all lines when they fit under the limit', () => {
@@ -192,6 +192,7 @@ test('loop lines aggregate across trDrs instead of splitting', async () => {
     findStation: () => null,
     expectedHeadway: () => 10,
     expectedDuration: () => 62,
+    expectedActive: () => 6.2,
     isLoopLine: () => true,
   });
   assert.equal(events.length, 1);
@@ -213,6 +214,7 @@ test('loop lines suppress false positives that per-trDr grouping would fire', as
     findStation: () => null,
     expectedHeadway: () => 10,
     expectedDuration: () => 62,
+    expectedActive: () => 6.2,
     isLoopLine: () => true,
   });
   assert.equal(events.length, 0);
@@ -229,6 +231,7 @@ test('bi-directional lines still split by trDr', async () => {
     findStation: () => ({ lat: 41.87, lon: -87.81, isTerminal: true }),
     expectedHeadway: () => 6,
     expectedDuration: () => 84,
+    expectedActive: () => 14,
     isLoopLine: () => false,
   });
   assert.equal(events.length, 1);
@@ -245,6 +248,7 @@ test('bi-directional line: skips direction whose destinations are all short-turn
     findStation: () => ({ lat: 41.87, lon: -87.65, isTerminal: false }),
     expectedHeadway: () => 6,
     expectedDuration: () => 84,
+    expectedActive: () => 14,
     isLoopLine: () => false,
   });
   assert.equal(events.length, 0);
@@ -266,6 +270,7 @@ test('bi-directional line: prefers a terminal destination when mixed with short-
     findStation,
     expectedHeadway: () => 6,
     expectedDuration: () => 84,
+    expectedActive: () => 14,
     isLoopLine: () => false,
   });
   assert.equal(events.length, 1);
@@ -286,6 +291,7 @@ test('skips a route entirely when any observed pid fails pattern resolution', as
     },
     expectedHeadway: () => 6,
     expectedDuration: () => 60,
+    expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -298,6 +304,7 @@ test('skips a route when a pid resolves to a pattern with no direction label', a
     getPattern: async () => ({ pid: 'headless', direction: '', route: '66' }),
     expectedHeadway: () => 6,
     expectedDuration: () => 60,
+    expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -334,7 +341,7 @@ test('sanity gate: MIN_OBSERVED blocks events when observed drops below 2', asyn
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 1 });
   const events = await detectBusGhosts({
     routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6, expectedDuration: () => 60,
+    expectedHeadway: () => 6, expectedDuration: () => 60, expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -343,17 +350,16 @@ test('sanity gate: MIN_SNAPSHOTS=8 blocks coverage below 8 snapshots', async () 
   const obs = buildObs({ pid: 'p1', snapshots: 7, vidsPerSnapshot: 3 });
   const events = await detectBusGhosts({
     routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6, expectedDuration: () => 60,
+    expectedHeadway: () => 6, expectedDuration: () => 60, expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
 
 test('sanity gate: MAX_EXPECTED_ACTIVE cap blocks absurd schedules', async () => {
-  // Headway 0.5, duration 60 → expected 120. Well above the 30 cap.
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 10 });
   const events = await detectBusGhosts({
     routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 0.5, expectedDuration: () => 60,
+    expectedHeadway: () => 0.5, expectedDuration: () => 60, expectedActive: () => 120,
   });
   assert.equal(events.length, 0);
 });
@@ -370,7 +376,7 @@ test('sanity gate: stddev > observed blocks noisy/bimodal polling windows', asyn
   }
   const events = await detectBusGhosts({
     routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6, expectedDuration: () => 60,
+    expectedHeadway: () => 6, expectedDuration: () => 60, expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -387,6 +393,7 @@ test('sorts events by missing count descending', async () => {
     getPattern: async (pid) => mkPattern('Eastbound', pid === 'pa' ? 'A' : 'B'),
     expectedHeadway: () => 10,
     expectedDuration: () => 60,
+    expectedActive: () => 6,
   });
   assert.equal(events.length, 2);
   assert.equal(events[0].route, 'B');
@@ -404,6 +411,7 @@ test('ramp-up gate: suppresses when tail-of-window median reaches expected (pipe
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 5,
     expectedDuration: () => 60,
+    expectedActive: () => 12,
   });
   assert.equal(events.length, 0);
 });
@@ -417,6 +425,7 @@ test('ramp-up gate: still fires when tail remains well below expected (real outa
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 5,
     expectedDuration: () => 60,
+    expectedActive: () => 12,
   });
   assert.equal(events.length, 1);
   assert.equal(events[0].observedActive, 5);
@@ -431,6 +440,7 @@ test('ramp-up gate: fires on mid-window outage even if tail partially recovers (
     getPattern: async () => mkPattern('Eastbound'),
     expectedHeadway: () => 5,
     expectedDuration: () => 60,
+    expectedActive: () => 12,
   });
   assert.equal(events.length, 1);
 });
@@ -453,6 +463,7 @@ test('ramp-up gate applies to trains too (loop line)', async () => {
     findStation: () => ({ lat: 0, lon: 0, name: 'Kimball', isTerminal: true }),
     expectedHeadway: () => 5,
     expectedDuration: () => 45,
+    expectedActive: () => 9,
     isLoopLine: () => true,
   });
   assert.equal(events.length, 0);

@@ -344,9 +344,15 @@ async function main() {
 
   const buckets = new Map();
   // Parallel bucket keyed the same way as `buckets`, storing per-trip durations
-  // (minutes) so ghost detection can compare observed active vehicle counts to
-  // `duration / headway`.
+  // (minutes). Kept as a display aid ("every ~X min") even though ghost
+  // detection now uses `activeBuckets` directly.
   const durationBuckets = new Map();
+  // Count of trips whose [departure, arrival] interval overlaps each hour. This
+  // is the ground-truth expected-active-vehicle count and replaces the old
+  // `duration / headway` approximation, which broke during service ramp-up
+  // (sparse hours with a few bunched starts produced a misleadingly tight
+  // headway median). Keyed route|dir|dayType|hour → integer count.
+  const activeBuckets = new Map();
   function bucketKey(route, dir, dayType, hour) {
     return `${route}|${dir}|${dayType}|${hour}`;
   }
@@ -375,6 +381,17 @@ async function main() {
       const durMin = (arr - dep) / 60;
       if (!durationBuckets.has(key)) durationBuckets.set(key, []);
       durationBuckets.get(key).push(durMin);
+
+      // Count this trip as active in every hour its [dep, arr] interval
+      // overlaps. A 90-min trip starting at 04:20 is active during hours 4
+      // and 5, so it increments both buckets. Modulo 24 handles trips that
+      // cross midnight (25:xx:xx in GTFS parlance).
+      const startHour = Math.floor(dep / 3600);
+      const endHour = Math.floor((arr - 1) / 3600);
+      for (let h = startHour; h <= endHour; h++) {
+        const k = bucketKey(meta.route, meta.dir, meta.dayType, h % 24);
+        activeBuckets.set(k, (activeBuckets.get(k) || 0) + 1);
+      }
     }
 
     const rdKey = `${meta.route}|${meta.dir}`;
@@ -436,6 +453,20 @@ async function main() {
         bucket[route][dir].durations[dayType][hour] = Math.round(medDur * 10) / 10;
       }
     }
+
+  }
+
+  // Emit active-trip counts separately. An hour can have zero trip-starts but
+  // still be served by trips that started earlier — those hours aren't in
+  // `buckets` but ARE in `activeBuckets`, and we need a count for them.
+  for (const [key, count] of activeBuckets) {
+    const [route, dir, dayType, hourStr] = key.split('|');
+    const hour = parseInt(hourStr, 10);
+    const bucket = routeMode.get(route) === 'rail' ? out.lines : out.routes;
+    if (!bucket[route] || !bucket[route][dir]) continue;
+    if (!bucket[route][dir].activeByHour) bucket[route][dir].activeByHour = {};
+    if (!bucket[route][dir].activeByHour[dayType]) bucket[route][dir].activeByHour[dayType] = {};
+    bucket[route][dir].activeByHour[dayType][hour] = count;
   }
 
   Fs.ensureDirSync(Path.dirname(OUT_PATH));

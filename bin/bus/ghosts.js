@@ -7,7 +7,7 @@ const { names: routeNames, ghosts: ghostRoutes } = require('../../src/bus/routes
 const { detectBusGhosts } = require('../../src/bus/ghosts');
 const { buildRollupPost } = require('../../src/shared/post');
 const { loadPattern } = require('../../src/bus/patterns');
-const { expectedHeadwayMin, expectedTripMinutes, loadIndex } = require('../../src/shared/gtfs');
+const { expectedHeadwayMin, expectedTripMinutes, expectedActiveTrips, loadIndex } = require('../../src/shared/gtfs');
 const { getBusObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginBus, postText } = require('../../src/bus/bluesky');
 const { runBin } = require('../../src/shared/runBin');
@@ -29,6 +29,11 @@ function formatLine(event) {
   const missing = Math.round(event.missing);
   const expected = Math.round(event.expectedActive);
   const pct = Math.round((event.missing / event.expectedActive) * 100);
+  // Headway is display-only; may be absent for mid-route-coverage hours with
+  // no trip-starts in the bucket. Fall back to a shorter sentence when so.
+  if (event.headway == null) {
+    return `🚌 ${title} ${dir} · ${missing} of ${expected} missing (${pct}%)`;
+  }
   const scheduledHeadway = Math.round(event.headway);
   // When observed drops near zero, the effective-headway estimate explodes and
   // looks like noise ("every ~180 min instead of ~10"). Above 3× the scheduled
@@ -57,13 +62,20 @@ async function main() {
 
   const now = Date.now();
   const sinceTs = now - WINDOW_MS;
+  // Look up the schedule at the window's midpoint, not `now`. The cron fires
+  // at :07, so the 60-min window spans mostly the *previous* wall-clock hour
+  // (53 min of it) and only 7 min of the current hour. Looking up expected
+  // service at `now` would fetch the wrong hour at schedule-transition
+  // boundaries (e.g., afternoon-rush ramp-up) and produce spurious ghosts.
+  const lookupAt = new Date(now - WINDOW_MS / 2);
 
   const events = await detectBusGhosts({
     routes: ghostRoutes,
     getObservations: (route) => getBusObservations(route, sinceTs),
     getPattern: (pid) => loadPattern(pid),
-    expectedHeadway: (route, pattern) => expectedHeadwayMin(route, pattern, new Date(now)),
-    expectedDuration: (route, pattern) => expectedTripMinutes(route, pattern, new Date(now)),
+    expectedHeadway: (route, pattern) => expectedHeadwayMin(route, pattern, lookupAt),
+    expectedDuration: (route, pattern) => expectedTripMinutes(route, pattern, lookupAt),
+    expectedActive: (route, pattern) => expectedActiveTrips(route, pattern, lookupAt),
   });
 
   if (events.length === 0) {

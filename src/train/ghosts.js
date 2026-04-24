@@ -1,6 +1,7 @@
 // Ghost train detection. Mirrors detectBusGhosts — compares observed active
-// train count (median per snapshot) against `trip_duration / headway` per
-// (line, trDr).
+// train count (median per snapshot) against the scheduled active-trip count
+// per hour (trips whose [dep, arr] interval overlaps the current hour),
+// grouped by (line, trDr).
 
 const { MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE, RAMP_FILL_RATIO, RAMP_TAIL_FRACTION } = require('../bus/ghosts');
 const { median } = require('../shared/stats');
@@ -32,6 +33,7 @@ async function detectTrainGhosts({
   findStation,
   expectedHeadway,
   expectedDuration,
+  expectedActive,
   isLoopLine,
 }) {
   const events = [];
@@ -47,12 +49,12 @@ async function detectTrainGhosts({
     if (isLoopLine && isLoopLine(line)) {
       const headway = expectedHeadway(line, null);
       const duration = expectedDuration(line, null);
-      if (headway == null || duration == null || headway <= 0 || duration <= 0) continue;
+      const active = expectedActive(line, null);
+      if (active == null || active <= 0) continue;
 
-      const expectedActive = duration / headway;
-      if (expectedActive < 2) continue;
-      if (expectedActive > MAX_EXPECTED_ACTIVE) {
-        console.warn(`ghosts: ${line} line-wide expectedActive=${expectedActive.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
+      if (active < 2) continue;
+      if (active > MAX_EXPECTED_ACTIVE) {
+        console.warn(`ghosts: ${line} line-wide expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
         continue;
       }
 
@@ -65,21 +67,21 @@ async function detectTrainGhosts({
 
       const counts = [...perSnapshot.values()].map((s) => s.size);
       const observedActive = median(counts);
-      const missing = expectedActive - observedActive;
+      const missing = active - observedActive;
       if (missing < MISSING_ABS_THRESHOLD) continue;
-      if (missing / expectedActive < MISSING_PCT_THRESHOLD) continue;
+      if (missing / active < MISSING_PCT_THRESHOLD) continue;
       if (observedActive < MIN_OBSERVED) continue;
       const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
       if (stddev > observedActive) continue;
-      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * expectedActive) continue;
+      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * active) continue;
 
       events.push({
         line,
         trDr: null,
         destination: null,
-        expectedActive,
+        expectedActive: active,
         observedActive,
         missing,
         snapshots: perSnapshot.size,
@@ -116,12 +118,12 @@ async function detectTrainGhosts({
       const sampleDest = bestDest;
       const headway = expectedHeadway(line, destStation);
       const duration = expectedDuration(line, destStation);
-      if (headway == null || duration == null || headway <= 0 || duration <= 0) continue;
+      const active = expectedActive(line, destStation);
+      if (active == null || active <= 0) continue;
 
-      const expectedActive = duration / headway;
-      if (expectedActive < 2) continue;
-      if (expectedActive > MAX_EXPECTED_ACTIVE) {
-        console.warn(`ghosts: ${line}/${trDr} expectedActive=${expectedActive.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
+      if (active < 2) continue;
+      if (active > MAX_EXPECTED_ACTIVE) {
+        console.warn(`ghosts: ${line}/${trDr} expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
         continue;
       }
 
@@ -134,21 +136,21 @@ async function detectTrainGhosts({
 
       const counts = [...perSnapshot.values()].map((s) => s.size);
       const observedActive = median(counts);
-      const missing = expectedActive - observedActive;
+      const missing = active - observedActive;
       if (missing < MISSING_ABS_THRESHOLD) continue;
-      if (missing / expectedActive < MISSING_PCT_THRESHOLD) continue;
+      if (missing / active < MISSING_PCT_THRESHOLD) continue;
       if (observedActive < MIN_OBSERVED) continue;
       const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
       if (stddev > observedActive) continue;
-      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * expectedActive) continue;
+      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * active) continue;
 
       events.push({
         line,
         trDr,
         destination: sampleDest,
-        expectedActive,
+        expectedActive: active,
         observedActive,
         missing,
         snapshots: perSnapshot.size,

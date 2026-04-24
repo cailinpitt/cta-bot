@@ -135,6 +135,13 @@ function expectedTripMinutes(route, pattern, now = new Date()) {
   return busLookup(route, pattern, 'durations', now);
 }
 
+// Ground-truth count of trips scheduled to be in-progress at some point during
+// the current hour — the correct target for ghost-vs-observed comparison.
+// Replaces `duration / headway`, which was biased during service ramp-up.
+function expectedActiveTrips(route, pattern, now = new Date()) {
+  return busLookup(route, pattern, 'activeByHour', now);
+}
+
 // Train Tracker line codes (lowercase) → GTFS route_id in the index. These
 // are the only eight rail "routes" CTA publishes and the mapping is static.
 const TRAIN_LINE_TO_GTFS = {
@@ -178,6 +185,10 @@ function expectedTrainTripMinutes(line, destination, now = new Date()) {
   return trainLookup(line, destination, 'durations', now);
 }
 
+function expectedTrainActiveTrips(line, destination, now = new Date()) {
+  return trainLookup(line, destination, 'activeByHour', now);
+}
+
 // Loop lines (Brown/Orange/Pink/Purple/Yellow) ship a single GTFS direction_id
 // covering the full Midway→Loop→Midway round trip. Bi-directional lines
 // (Red/Blue/Green) have two. Ghost detection uses this to decide whether to
@@ -191,4 +202,4 @@ function isTrainLoopLine(line) {
   return Object.keys(byDir).length === 1;
 }
 
-module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, expectedTripMinutes, expectedTrainTripMinutes, isTrainLoopLine, resolveDirection, dayTypeFor, chicagoHour, hourlyLookup };
+module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, expectedTripMinutes, expectedTrainTripMinutes, expectedActiveTrips, expectedTrainActiveTrips, isTrainLoopLine, resolveDirection, dayTypeFor, chicagoHour, hourlyLookup };
