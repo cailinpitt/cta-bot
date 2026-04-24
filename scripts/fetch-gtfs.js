@@ -382,15 +382,23 @@ async function main() {
       if (!durationBuckets.has(key)) durationBuckets.set(key, []);
       durationBuckets.get(key).push(durMin);
 
-      // Count this trip as active in every hour its [dep, arr] interval
-      // overlaps. A 90-min trip starting at 04:20 is active during hours 4
-      // and 5, so it increments both buckets. Modulo 24 handles trips that
-      // cross midnight (25:xx:xx in GTFS parlance).
+      // Accumulate average simultaneously-active trips per hour. For each
+      // hour [H, H+1) the trip's [dep, arr] crosses, add the fraction of
+      // that hour the trip spent in progress — `(min(arr, Hend) - max(dep,
+      // Hstart)) / 3600`. Summing across trips yields the mean simultaneous
+      // count, which is the right target to compare against observed
+      // snapshot counts. Naively incrementing by 1 per overlapping hour
+      // would conflate "trips that appeared at any point in the hour" with
+      // "trips simultaneously in service," wildly overstating PM peak.
       const startHour = Math.floor(dep / 3600);
       const endHour = Math.floor((arr - 1) / 3600);
       for (let h = startHour; h <= endHour; h++) {
+        const hStart = h * 3600;
+        const hEnd = hStart + 3600;
+        const overlap = Math.min(arr, hEnd) - Math.max(dep, hStart);
+        if (overlap <= 0) continue;
         const k = bucketKey(meta.route, meta.dir, meta.dayType, h % 24);
-        activeBuckets.set(k, (activeBuckets.get(k) || 0) + 1);
+        activeBuckets.set(k, (activeBuckets.get(k) || 0) + overlap / 3600);
       }
     }
 
@@ -466,7 +474,7 @@ async function main() {
     if (!bucket[route] || !bucket[route][dir]) continue;
     if (!bucket[route][dir].activeByHour) bucket[route][dir].activeByHour = {};
     if (!bucket[route][dir].activeByHour[dayType]) bucket[route][dir].activeByHour[dayType] = {};
-    bucket[route][dir].activeByHour[dayType][hour] = count;
+    bucket[route][dir].activeByHour[dayType][hour] = Math.round(count * 10) / 10;
   }
 
   Fs.ensureDirSync(Path.dirname(OUT_PATH));
