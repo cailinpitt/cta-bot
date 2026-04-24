@@ -1,7 +1,10 @@
 const { getDb } = require('./history');
 
 // Observations table is ensured by history.js on first DB open.
-const ROLLOFF_MS = 3 * 60 * 60 * 1000; // 3h — ghost job looks back at most 1h; keep a cushion
+// Ghost detection only looks back 1h, but we keep a much larger window so we
+// can post-hoc investigate flagged events (trace which specific vehicle_ids
+// disappeared and when). 48h covers two full service days.
+const ROLLOFF_MS = 48 * 60 * 60 * 1000;
 
 function rolloffOldObservations(now = Date.now()) {
   getDb().prepare('DELETE FROM observations WHERE ts < ?').run(now - ROLLOFF_MS);
