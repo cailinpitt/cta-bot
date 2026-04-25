@@ -24,7 +24,7 @@ This README is written for operators running their own copy. If you just want to
 - **Gaps** — long stretches with no L service on a given line/direction, using the GTFS rail schedule.
 - **Speedmap** — an L line color-coded by observed train speed, with a separate ribbon per direction. For Purple, truncates to the shuttle segment outside express hours.
 - **Heatmap** — weekly/monthly rollup of chronic bunching + gap stations, with a Loop inset since five lines share the elevated rectangle.
-- **Snapshot** — map of all active trains system-wide, with a Loop inset.
+- **Snapshot** — 15-minute timelapse of every active train system-wide, with a Loop inset.
 - **Ghost trains** — hourly rollup of line/direction pairs missing trains vs. the schedule.
 
 ### Alerts (`@ctaalertinsights`)
@@ -89,55 +89,15 @@ The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train
 
 ## Running it
 
-Everything is designed to be driven by cron. There's no long-running process — each script does one detection or rollup and exits. A reasonable full crontab:
+Everything is designed to be driven by cron. There's no long-running process — each script does one detection or rollup and exits. The full schedule lives in [`cron/crontab.txt`](cron/crontab.txt) and can be installed with `crontab cron/crontab.txt` (or merged into an existing crontab between the `# CTA-BOT-START` / `# CTA-BOT-END` markers to preserve unrelated jobs).
+
+Each line uses [`bin/cron-run.sh`](bin/cron-run.sh) — a small wrapper that handles `cd` to the repo root, timestamps each invocation, and redirects stdout/stderr to `cron/<log-name>-cron.log`. So a job entry is just:
 
 ```cron
-# --- Detection + posting ---
-# Bunching and gap detection poll frequently; each post is cooldown-gated by history.sqlite.
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/bunching.js      >> cron/bus-bunching.log 2>&1
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/gaps.js          >> cron/bus-gaps.log 2>&1
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/bunching.js    >> cron/train-bunching.log 2>&1
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/gaps.js        >> cron/train-gaps.log 2>&1
-
-# Speedmaps collect for ~1 hour per run — space them out so they don't all hit the API at once.
-30 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/speedmap.js       >> cron/bus-speedmap.log 2>&1
-45 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/speedmap.js     >> cron/train-speedmap.log 2>&1
-
-# Train snapshot — live positions. Hourly is plenty.
-0 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/snapshot.js      >> cron/train-snapshot.log 2>&1
-
-# Weekly recap — chronic bunching heatmap plus threaded gap-leaderboard reply.
-0 9 * * 1 cd /path/to/cta-insights && /usr/bin/node bin/bus/recap.js --window week   >> cron/bus-recap.log 2>&1
-5 9 * * 1 cd /path/to/cta-insights && /usr/bin/node bin/train/recap.js --window week >> cron/train-recap.log 2>&1
-
-# --- Alerts ---
-# Republish significant CTA alerts and post threaded "cleared" replies. Run frequently
-# so the resolution-tick counter (3 consecutive misses) clears alerts within ~15 min.
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/alerts.js        >> cron/bus-alerts.log 2>&1
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/alerts.js      >> cron/train-alerts.log 2>&1
-
-# Pulse — bot-detected dead segments on rail lines. Posts to the alerts account when a
-# ≥2 mi stretch goes cold for 15+ min, threaded under any open CTA alert for the same line.
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/pulse.js       >> cron/pulse.log 2>&1
-
-# --- Observers (ghost detection data) ---
-# Bus observer — fetches ghost-candidate routes on a fixed 5-min cadence so every route
-# gets consistent coverage. Trains don't need one; getAllTrainPositions covers all 8 lines
-# per call and other train jobs already write observations.
-*/5 * * * * cd /path/to/cta-insights && /usr/bin/node scripts/observeGhosts.js >> cron/observe-ghosts.log 2>&1
-
-# --- Ghost rollups ---
-# Offset from other jobs to avoid API-bursting.
-7 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/ghosts.js          >> cron/ghosts.log 2>&1
-8 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/ghosts.js        >> cron/train-ghosts.log 2>&1
-
-# --- Maintenance ---
-# GTFS index is date-specific (honors calendar_dates.txt), so refresh daily before other jobs wake up.
-15 3 * * * cd /path/to/cta-insights && /usr/bin/node scripts/fetch-gtfs.js     >> cron/fetch-gtfs.log 2>&1
-
-# Traffic signals rarely move; monthly is plenty.
-0 4 1 * * cd /path/to/cta-insights && /usr/bin/node scripts/fetch-signals.js   >> cron/fetch-signals.log 2>&1
+*/10 * * * * /home/you/cta-insights/bin/cron-run.sh train-bunching bin/train/bunching.js
 ```
+
+instead of repeating the boilerplate on every line. The snapshot timelapse runs in-process for ~15 minutes per invocation, so it's scheduled every 3 hours; everything else is fast and runs on its own cadence.
 
 ## Scripts reference
 
