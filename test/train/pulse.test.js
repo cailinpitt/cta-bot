@@ -24,7 +24,6 @@ function position(ft, ts) {
 test('flags a long cold stretch in the middle of the line', () => {
   const now = 1_700_000_000_000;
   const stations = buildStations();
-  // Plenty of recent trains near the ends, none in the middle.
   const recent = [];
   for (let ft = 6000; ft <= 20000; ft += 2000) recent.push(position(ft, now - 2 * 60 * 1000));
   for (let ft = 55000; ft <= 74000; ft += 2000) recent.push(position(ft, now - 3 * 60 * 1000));
@@ -35,7 +34,7 @@ test('flags a long cold stretch in the middle of the line', () => {
     trainLines, stations,
     headwayMin: 7,
     now,
-    opts: { recentPositions: recent, minRunFt: 5000 },
+    opts: { recentPositions: recent, minRunFt: 5000, minCoverageFrac: 0, minSpanFrac: 0 },
   });
 
   assert.ok(candidates.length >= 1, 'should flag a candidate');
@@ -57,9 +56,70 @@ test('does not flag when trains are distributed across the line', () => {
     trainLines, stations,
     headwayMin: 7,
     now,
-    opts: { recentPositions: recent },
+    opts: { recentPositions: recent, minCoverageFrac: 0, minSpanFrac: 0 },
   });
   assert.equal(candidates.length, 0);
+});
+
+test('does not flag full-line cold-start with sparse observations', () => {
+  const now = 1_700_000_000_000;
+  const stations = buildStations();
+  const recent = [
+    position(2000, now - 1 * 60 * 1000),
+    position(4000, now - 1 * 60 * 1000),
+  ];
+  const candidates = detectDeadSegments({
+    line: 'red',
+    observations: [],
+    trainLines, stations,
+    headwayMin: 7,
+    now,
+    opts: { recentPositions: recent, minSpanFrac: 0 },
+  });
+  assert.equal(candidates.length, 0);
+});
+
+test('does not flag when fresh observations span less than half lookback', () => {
+  const now = 1_700_000_000_000;
+  const stations = buildStations();
+  const recent = [];
+  for (let ft = 4000; ft <= TOTAL_FT - 4000; ft += 4000) {
+    recent.push(position(ft, now - 30 * 1000));
+  }
+  const candidates = detectDeadSegments({
+    line: 'red',
+    observations: [],
+    trainLines, stations,
+    headwayMin: 7,
+    now,
+    opts: { recentPositions: recent, minCoverageFrac: 0 },
+  });
+  assert.equal(candidates.length, 0);
+});
+
+test('flags a real outage when coverage and span gates are met', () => {
+  const now = 1_700_000_000_000;
+  const stations = buildStations();
+  const recent = [];
+  for (let ft = 4000; ft <= 25000; ft += 1000) {
+    recent.push(position(ft, now - 18 * 60 * 1000));
+    recent.push(position(ft, now - 1 * 60 * 1000));
+  }
+  for (let ft = 50000; ft <= TOTAL_FT - 4000; ft += 1000) {
+    recent.push(position(ft, now - 18 * 60 * 1000));
+    recent.push(position(ft, now - 1 * 60 * 1000));
+  }
+  const candidates = detectDeadSegments({
+    line: 'red',
+    observations: [],
+    trainLines, stations,
+    headwayMin: 7,
+    now,
+    opts: { recentPositions: recent, minRunFt: 5000 },
+  });
+  assert.ok(candidates.length >= 1, 'should flag a candidate when gates are met');
+  const c = candidates[0];
+  assert.ok(c.runLoFt > 25000 && c.runHiFt < 50000);
 });
 
 test('ignores terminal zones at both ends', () => {
@@ -75,7 +135,7 @@ test('ignores terminal zones at both ends', () => {
     trainLines, stations,
     headwayMin: 7,
     now,
-    opts: { recentPositions: recent, minRunFt: 5000 },
+    opts: { recentPositions: recent, minRunFt: 5000, minCoverageFrac: 0, minSpanFrac: 0 },
   });
   // Either no candidates (terminals excluded) or candidates bounded away from
   // the very ends — what matters is the detector doesn't flag the terminal.

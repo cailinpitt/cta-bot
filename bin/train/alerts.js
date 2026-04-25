@@ -11,7 +11,9 @@ const {
   buildAlertPostText, buildAlertAltText, buildResolutionReplyText,
 } = require('../../src/shared/alertPost');
 const {
-  getAlertPost, recordAlertSeen, recordAlertResolved, listUnresolvedAlerts,
+  getAlertPost, recordAlertSeen, recordAlertResolved,
+  incrementAlertClearTicks, resetAlertClearTicks,
+  listUnresolvedAlerts, ALERT_CLEAR_TICKS,
 } = require('../../src/shared/history');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
@@ -42,9 +44,9 @@ function tryBuildDisruption(alert) {
 async function postNewAlert(alert, agentGetter) {
   const disruption = tryBuildDisruption(alert);
   const text = buildAlertPostText({ alert, kind: KIND, disruption });
-  const alt = buildAlertAltText({ alert, kind: KIND, disruption });
 
   let image = null;
+  let alt = null;
   if (disruption) {
     try {
       image = await renderDisruption({
@@ -54,27 +56,32 @@ async function postNewAlert(alert, agentGetter) {
         trains: [],
         stations: trainStations,
       });
+      alt = buildAlertAltText({ alert, kind: KIND, disruption });
     } catch (e) {
       console.warn(`renderDisruption failed for alert ${alert.id}: ${e.message}`);
       image = null;
+      alt = null;
     }
   }
+
+  const routes = alert.trainLines.join(',');
 
   if (DRY_RUN) {
     const stub = image
       ? writeDryRunAsset(image, `alert-train-${alert.id}-${Date.now()}.jpg`)
       : '(text-only post)';
-    console.log(`--- DRY RUN alert ${alert.id} ---\n${text}\n\nAlt: ${alt}\nImage: ${stub}`);
-    recordAlertSeen({ alertId: alert.id, kind: KIND, routes: alert.trainLines.join(','), headline: alert.headline, postUri: null });
+    console.log(`--- DRY RUN alert ${alert.id} (DB write skipped) ---\n${text}\n\nAlt: ${alt || '(no image)'}\nImage: ${stub}`);
     return;
   }
+
+  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: null });
 
   const agent = await agentGetter();
   const result = image
     ? await postWithImage(agent, text, image, alt)
     : await postText(agent, text);
   console.log(`Posted alert ${alert.id}: ${result.url}`);
-  recordAlertSeen({ alertId: alert.id, kind: KIND, routes: alert.trainLines.join(','), headline: alert.headline, postUri: result.uri });
+  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: result.uri });
 }
 
 async function postResolution(alertRow, agentGetter) {
@@ -82,12 +89,10 @@ async function postResolution(alertRow, agentGetter) {
   const text = buildResolutionReplyText({ alert: pseudoAlert, kind: KIND });
 
   if (DRY_RUN) {
-    console.log(`--- DRY RUN resolution for alert ${alertRow.alert_id} ---\n${text}`);
-    recordAlertResolved({ alertId: alertRow.alert_id, replyUri: null });
+    console.log(`--- DRY RUN resolution for alert ${alertRow.alert_id} (DB write skipped) ---\n${text}`);
     return;
   }
 
-  // Original post is missing (dry-run or pre-feature) — mark resolved silently.
   if (!alertRow.post_uri) {
     recordAlertResolved({ alertId: alertRow.alert_id, replyUri: null });
     return;
@@ -130,8 +135,14 @@ async function main() {
 
   for (const alert of relevant) {
     const existing = getAlertPost(alert.id);
-    if (existing) {
-      recordAlertSeen({ alertId: alert.id, kind: KIND, routes: alert.trainLines.join(','), headline: alert.headline, postUri: null });
+    if (existing && existing.post_uri) {
+      if (!DRY_RUN) {
+        recordAlertSeen({
+          alertId: alert.id, kind: KIND,
+          routes: alert.trainLines.join(','),
+          headline: alert.headline, postUri: null,
+        });
+      }
       continue;
     }
     try {
@@ -141,9 +152,26 @@ async function main() {
     }
   }
 
+  if (alerts.length === 0) {
+    console.warn('CTA returned 0 active alerts — skipping resolution sweep this tick');
+    return;
+  }
+
   const unresolved = listUnresolvedAlerts(KIND);
   for (const row of unresolved) {
-    if (activeIds.has(row.alert_id)) continue;
+    if (activeIds.has(row.alert_id)) {
+      if (!DRY_RUN && row.clear_ticks > 0) resetAlertClearTicks(row.alert_id);
+      continue;
+    }
+    if (DRY_RUN) {
+      console.log(`--- DRY RUN would advance clear_ticks for alert ${row.alert_id} (DB write skipped) ---`);
+      continue;
+    }
+    const next = incrementAlertClearTicks(row.alert_id);
+    if (next < ALERT_CLEAR_TICKS) {
+      console.log(`Alert ${row.alert_id} missing tick ${next}/${ALERT_CLEAR_TICKS}`);
+      continue;
+    }
     try {
       await postResolution(row, agentGetter);
     } catch (e) {

@@ -15,13 +15,15 @@ const DEFAULT_LOOKBACK_MS = 20 * 60 * 1000;
 const DEFAULT_BIN_FT = 1320;    // 0.25 mi
 const DEFAULT_MIN_RUN_FT = 10560; // 2 mi
 const DEFAULT_MIN_COLD_MS = 15 * 60 * 1000;
+const DEFAULT_MIN_COVERAGE_FRAC = 0.5;
+const DEFAULT_MIN_SPAN_FRAC = 0.5;
 
 function detectDeadSegments({ line, observations, trainLines, stations, headwayMin, now, opts = {} }) {
   const lookbackMs = opts.lookbackMs || DEFAULT_LOOKBACK_MS;
   const binFt = opts.binFt || DEFAULT_BIN_FT;
   const minRunFt = opts.minRunFt || DEFAULT_MIN_RUN_FT;
-  // 15-min floor keeps short-headway lines (Red 5-min) from firing on routine
-  // spacing variance; 2× headway covers low-frequency lines.
+  const minCoverageFrac = opts.minCoverageFrac != null ? opts.minCoverageFrac : DEFAULT_MIN_COVERAGE_FRAC;
+  const minSpanFrac = opts.minSpanFrac != null ? opts.minSpanFrac : DEFAULT_MIN_SPAN_FRAC;
   const coldThresholdMs = Math.max(
     DEFAULT_MIN_COLD_MS,
     headwayMin != null ? 2 * headwayMin * 60 * 1000 : DEFAULT_MIN_COLD_MS,
@@ -33,6 +35,15 @@ function detectDeadSegments({ line, observations, trainLines, stations, headwayM
   const recent = opts.recentPositions || [];
   const sinceTs = now - lookbackMs;
   const fresh = recent.filter((p) => p.ts >= sinceTs);
+
+  if (fresh.length === 0) return [];
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+  for (const p of fresh) {
+    if (p.ts < minTs) minTs = p.ts;
+    if (p.ts > maxTs) maxTs = p.ts;
+  }
+  if (maxTs - minTs < lookbackMs * minSpanFrac) return [];
 
   const candidates = [];
   for (let branchIdx = 0; branchIdx < branches.length; branchIdx++) {
@@ -54,6 +65,10 @@ function detectDeadSegments({ line, observations, trainLines, stations, headwayM
 
     const zoneFt = terminalZoneFt(totalFt);
     const zoneBins = Math.ceil(zoneFt / (totalFt / numBins));
+
+    let coveredBins = 0;
+    for (const ts of lastSeenPerBin) if (ts > -Infinity) coveredBins++;
+    if (coveredBins / numBins < minCoverageFrac) continue;
 
     const coldBefore = now - coldThresholdMs;
     const cold = lastSeenPerBin.map((ts) => ts < coldBefore);
@@ -142,5 +157,7 @@ module.exports = {
   DEFAULT_LOOKBACK_MS,
   DEFAULT_BIN_FT,
   DEFAULT_MIN_RUN_FT,
+  DEFAULT_MIN_COVERAGE_FRAC,
+  DEFAULT_MIN_SPAN_FRAC,
   MAX_PERP_FT,
 };

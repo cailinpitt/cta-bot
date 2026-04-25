@@ -2,6 +2,11 @@
 // Posts when a candidate dead segment overlaps the previous tick's run by
 // ≥50% for MIN_CONSECUTIVE_TICKS. Clears state after CLEAR_TICKS_TO_RESET
 // clean ticks. Per-(line, direction) state lives in pulse_state.
+//
+// Cold-start guards (`MIN_DISTINCT_TS`, the detector's coverage/span gates)
+// stop a freshly-bootstrapped observations table from looking like a
+// system-wide outage. Set PULSE_DRY_RUN=1 to exercise the full detection
+// path without posting — recommended after any deploy that touches this code.
 
 require('../../src/shared/env');
 
@@ -15,8 +20,10 @@ const { expectedTrainHeadwayMin } = require('../../src/shared/gtfs');
 const { getRecentTrainPositions } = require('../../src/shared/observations');
 const { acquireCooldown } = require('../../src/shared/state');
 const {
-  getPulseState, upsertPulseState, clearPulseState, recordDisruption,
+  getPulseState, upsertPulseState, clearPulseState, recordDisruption, getDb,
 } = require('../../src/shared/history');
+const { LINE_TO_RAIL_ROUTE } = require('../../src/shared/ctaAlerts');
+const { rolloffOldObservations } = require('../../src/shared/observations');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
 
@@ -27,6 +34,7 @@ const MIN_CONSECUTIVE_TICKS = 2;
 const CLEAR_TICKS_TO_RESET = 3;
 const POST_COOLDOWN_MS = 90 * 60 * 1000;
 const MIN_HOUR = 5; // owl service edge cases — wait until daytime patterns kick in
+const MIN_DISTINCT_TS = 3;
 
 function chicagoHourNow(now = new Date()) {
   const h = new Intl.DateTimeFormat('en-US', {
@@ -59,7 +67,8 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     }
   }
 
-  const cooldownKey = `train_pulse_${line}_${direction}`;
+  const segmentTag = `${Math.round(candidate.runLoFt)}_${Math.round(candidate.runHiFt)}`;
+  const cooldownKey = `train_pulse_${line}_${direction}_${segmentTag}`;
   upsertPulseState({
     line, direction,
     runLoFt: candidate.runLoFt,
@@ -123,6 +132,15 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     return;
   }
 
+  clearPulseState(line, direction);
+
+  recordDisruption({
+    kind: 'train', line, direction,
+    fromStation: candidate.fromStation.name,
+    toStation: candidate.toStation.name,
+    source: 'observed', posted: false, postUri: null,
+  });
+
   let image;
   try {
     image = await renderDisruption({
@@ -136,7 +154,8 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   const alt = buildAltText(disruption);
 
   const agent = await agentGetter();
-  const result = await postWithImage(agent, text, image, alt);
+  const replyRef = await findOpenAlertReplyRef(agent, line);
+  const result = await postWithImage(agent, text, image, alt, replyRef);
   console.log(`Posted pulse ${line}/${direction}: ${result.url}`);
   recordDisruption({
     kind: 'train', line, direction,
@@ -160,6 +179,30 @@ function handleClear(line, direction, now) {
     clearTicks,
     lastSeenTs: now,
   });
+}
+
+async function findOpenAlertReplyRef(agent, line) {
+  const code = LINE_TO_RAIL_ROUTE[line];
+  if (!code) return null;
+  const row = getDb().prepare(`
+    SELECT post_uri FROM alert_posts
+    WHERE kind = 'train' AND resolved_ts IS NULL
+      AND post_uri IS NOT NULL
+      AND (',' || routes || ',') LIKE ?
+    ORDER BY first_seen_ts DESC LIMIT 1
+  `).get(`%,${code},%`);
+  if (!row || !row.post_uri) return null;
+  try {
+    const m = /^at:\/\/([^/]+)\/([^/]+)\/(.+)$/.exec(row.post_uri);
+    if (!m) return null;
+    const [, repo, collection, rkey] = m;
+    const { data: record } = await agent.com.atproto.repo.getRecord({ repo, collection, rkey });
+    const ref = { uri: row.post_uri, cid: record.cid };
+    return { root: ref, parent: ref };
+  } catch (e) {
+    console.warn(`Could not fetch open-alert ref for ${line}: ${e.message}`);
+    return null;
+  }
 }
 
 function priorToUpsertArgs(prior) {
@@ -187,7 +230,8 @@ async function main() {
     return;
   }
 
-  // Prime so the lookback window always includes a current snapshot.
+  rolloffOldObservations();
+
   try {
     await getAllTrainPositions();
   } catch (e) {
@@ -196,6 +240,16 @@ async function main() {
 
   const sinceTs = now - LOOKBACK_MS;
   const allRecent = getRecentTrainPositions(sinceTs);
+
+  if (allRecent.length === 0) {
+    console.log('pulse: no train observations in lookback window — skipping');
+    return;
+  }
+  const distinctTs = new Set(allRecent.map((r) => r.ts)).size;
+  if (distinctTs < MIN_DISTINCT_TS) {
+    console.log(`pulse: only ${distinctTs} distinct snapshot(s) in lookback (need ${MIN_DISTINCT_TS}) — warming up, skipping`);
+    return;
+  }
 
   let agent = null;
   const agentGetter = async () => {

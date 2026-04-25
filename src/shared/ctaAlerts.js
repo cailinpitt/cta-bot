@@ -13,6 +13,9 @@ const RAIL_ROUTE_TO_LINE = {
   Red: 'red', Blue: 'blue', Brn: 'brn', G: 'g',
   Org: 'org', P: 'p', Pink: 'pink', Y: 'y',
 };
+const LINE_TO_RAIL_ROUTE = Object.fromEntries(
+  Object.entries(RAIL_ROUTE_TO_LINE).map(([k, v]) => [v, k]),
+);
 
 async function fetchAlerts({ activeOnly = true, routeid = null } = {}) {
   const params = { outputType: 'JSON' };
@@ -39,8 +42,10 @@ function normalizeAlert(raw) {
   for (const s of services) {
     if (!s) continue;
     if (s.ServiceType === 'B' && s.ServiceId) busRoutes.push(String(s.ServiceId));
-    if (s.ServiceType === 'R' && s.ServiceId && RAIL_ROUTE_TO_LINE[s.ServiceId]) {
-      trainLines.push(RAIL_ROUTE_TO_LINE[s.ServiceId]);
+    if (s.ServiceType === 'R' && s.ServiceId) {
+      const mapped = RAIL_ROUTE_TO_LINE[s.ServiceId];
+      if (mapped) trainLines.push(mapped);
+      else console.warn(`Unknown rail ServiceId "${s.ServiceId}" on alert ${raw.AlertId}`);
     }
   }
   return {
@@ -162,4 +167,5 @@ module.exports = {
   MINOR_PATTERNS,
   MIN_SEVERITY,
   RAIL_ROUTE_TO_LINE,
+  LINE_TO_RAIL_ROUTE,
 };

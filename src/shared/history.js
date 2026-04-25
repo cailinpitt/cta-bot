@@ -80,7 +80,8 @@ function db() {
       last_seen_ts INTEGER NOT NULL,
       post_uri TEXT,
       resolved_ts INTEGER,
-      resolved_reply_uri TEXT
+      resolved_reply_uri TEXT,
+      clear_ticks INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_alert_posts_kind
       ON alert_posts(kind);
@@ -145,6 +146,10 @@ function db() {
   for (const [name, type] of [['lat', 'REAL'], ['lon', 'REAL'], ['pdist', 'REAL'], ['heading', 'INTEGER'], ['vehicle_ts', 'INTEGER']]) {
     if (!obsCols.includes(name)) _db.exec(`ALTER TABLE observations ADD COLUMN ${name} ${type}`);
   }
+  const alertCols = _db.prepare("PRAGMA table_info(alert_posts)").all().map((c) => c.name);
+  if (!alertCols.includes('clear_ticks')) {
+    _db.exec('ALTER TABLE alert_posts ADD COLUMN clear_ticks INTEGER NOT NULL DEFAULT 0');
+  }
 
   return _db;
 }
@@ -168,11 +173,17 @@ function getAlertPost(alertId) {
   return db().prepare('SELECT * FROM alert_posts WHERE alert_id = ?').get(alertId) || null;
 }
 
+const ALERT_CLEAR_TICKS = 2;
+
 function recordAlertSeen({ alertId, kind, routes, headline, postUri }, now = Date.now()) {
   const existing = getAlertPost(alertId);
   if (existing) {
-    db().prepare('UPDATE alert_posts SET last_seen_ts = ?, post_uri = COALESCE(?, post_uri) WHERE alert_id = ?')
-      .run(now, postUri || null, alertId);
+    db().prepare(`
+      UPDATE alert_posts
+      SET last_seen_ts = ?, post_uri = COALESCE(?, post_uri),
+          headline = COALESCE(?, headline), routes = COALESCE(?, routes)
+      WHERE alert_id = ?
+    `).run(now, postUri || null, headline || null, routes || null, alertId);
     return;
   }
   db().prepare(`
@@ -184,6 +195,16 @@ function recordAlertSeen({ alertId, kind, routes, headline, postUri }, now = Dat
 function recordAlertResolved({ alertId, replyUri }, now = Date.now()) {
   db().prepare('UPDATE alert_posts SET resolved_ts = ?, resolved_reply_uri = ? WHERE alert_id = ?')
     .run(now, replyUri || null, alertId);
+}
+
+function incrementAlertClearTicks(alertId) {
+  db().prepare('UPDATE alert_posts SET clear_ticks = clear_ticks + 1 WHERE alert_id = ?').run(alertId);
+  const row = db().prepare('SELECT clear_ticks FROM alert_posts WHERE alert_id = ?').get(alertId);
+  return row ? row.clear_ticks : 0;
+}
+
+function resetAlertClearTicks(alertId) {
+  db().prepare('UPDATE alert_posts SET clear_ticks = 0 WHERE alert_id = ?').run(alertId);
 }
 
 function listUnresolvedAlerts(kind) {
@@ -477,7 +498,10 @@ module.exports = {
   getAlertPost,
   recordAlertSeen,
   recordAlertResolved,
+  incrementAlertClearTicks,
+  resetAlertClearTicks,
   listUnresolvedAlerts,
+  ALERT_CLEAR_TICKS,
   recordDisruption,
   getPulseState,
   upsertPulseState,

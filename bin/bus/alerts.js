@@ -11,7 +11,9 @@ const {
   buildAlertPostText, buildResolutionReplyText,
 } = require('../../src/shared/alertPost');
 const {
-  getAlertPost, recordAlertSeen, recordAlertResolved, listUnresolvedAlerts,
+  getAlertPost, recordAlertSeen, recordAlertResolved,
+  incrementAlertClearTicks, resetAlertClearTicks,
+  listUnresolvedAlerts, ALERT_CLEAR_TICKS,
 } = require('../../src/shared/history');
 const busRoutes = require('../../src/bus/routes');
 
@@ -31,15 +33,16 @@ function isRelevant(alert) {
 
 async function postNewAlert(alert, agentGetter) {
   const text = buildAlertPostText({ alert, kind: KIND });
+  const routes = alert.busRoutes.join(',');
   if (DRY_RUN) {
-    console.log(`--- DRY RUN alert ${alert.id} ---\n${text}`);
-    recordAlertSeen({ alertId: alert.id, kind: KIND, routes: alert.busRoutes.join(','), headline: alert.headline, postUri: null });
+    console.log(`--- DRY RUN alert ${alert.id} (DB write skipped) ---\n${text}`);
     return;
   }
+  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: null });
   const agent = await agentGetter();
   const result = await postText(agent, text);
   console.log(`Posted alert ${alert.id}: ${result.url}`);
-  recordAlertSeen({ alertId: alert.id, kind: KIND, routes: alert.busRoutes.join(','), headline: alert.headline, postUri: result.uri });
+  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: result.uri });
 }
 
 function parseAtUri(uri) {
@@ -53,8 +56,7 @@ async function postResolution(alertRow, agentGetter) {
   const text = buildResolutionReplyText({ alert: pseudoAlert, kind: KIND });
 
   if (DRY_RUN) {
-    console.log(`--- DRY RUN resolution for alert ${alertRow.alert_id} ---\n${text}`);
-    recordAlertResolved({ alertId: alertRow.alert_id, replyUri: null });
+    console.log(`--- DRY RUN resolution for alert ${alertRow.alert_id} (DB write skipped) ---\n${text}`);
     return;
   }
   if (!alertRow.post_uri) {
@@ -92,8 +94,14 @@ async function main() {
 
   for (const alert of relevant) {
     const existing = getAlertPost(alert.id);
-    if (existing) {
-      recordAlertSeen({ alertId: alert.id, kind: KIND, routes: alert.busRoutes.join(','), headline: alert.headline, postUri: null });
+    if (existing && existing.post_uri) {
+      if (!DRY_RUN) {
+        recordAlertSeen({
+          alertId: alert.id, kind: KIND,
+          routes: alert.busRoutes.join(','),
+          headline: alert.headline, postUri: null,
+        });
+      }
       continue;
     }
     try {
@@ -103,9 +111,26 @@ async function main() {
     }
   }
 
+  if (alerts.length === 0) {
+    console.warn('CTA returned 0 active alerts — skipping resolution sweep this tick');
+    return;
+  }
+
   const unresolved = listUnresolvedAlerts(KIND);
   for (const row of unresolved) {
-    if (activeIds.has(row.alert_id)) continue;
+    if (activeIds.has(row.alert_id)) {
+      if (!DRY_RUN && row.clear_ticks > 0) resetAlertClearTicks(row.alert_id);
+      continue;
+    }
+    if (DRY_RUN) {
+      console.log(`--- DRY RUN would advance clear_ticks for alert ${row.alert_id} (DB write skipped) ---`);
+      continue;
+    }
+    const next = incrementAlertClearTicks(row.alert_id);
+    if (next < ALERT_CLEAR_TICKS) {
+      console.log(`Alert ${row.alert_id} missing tick ${next}/${ALERT_CLEAR_TICKS}`);
+      continue;
+    }
     try {
       await postResolution(row, agentGetter);
     } catch (e) {
