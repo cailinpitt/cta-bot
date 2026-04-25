@@ -12,6 +12,7 @@ const { expectedTrainHeadwayMin, expectedTrainTripMinutes, expectedTrainActiveTr
 const { getTrainObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginTrain, postText } = require('../../src/train/bluesky');
 const { runBin } = require('../../src/shared/runBin');
+const { logDropSummary } = require('../../src/shared/ghostsLog');
 const { findStationByDestination } = require('../../src/train/findStation');
 
 const WINDOW_MS = 60 * 60 * 1000;
@@ -52,6 +53,7 @@ async function main() {
   // Look up schedule at window midpoint; see bin/bus/ghosts.js for why.
   const lookupAt = new Date(now - WINDOW_MS / 2);
 
+  const drops = [];
   const events = await detectTrainGhosts({
     lines: ALL_LINES,
     getObservations: (line) => getTrainObservations(line, sinceTs),
@@ -60,10 +62,12 @@ async function main() {
     expectedDuration: (line, destStation) => expectedTrainTripMinutes(line, destStation, lookupAt),
     expectedActive: (line, destStation) => expectedTrainActiveTrips(line, destStation, lookupAt),
     isLoopLine: isTrainLoopLine,
+    onDrop: (d) => drops.push(d),
   });
 
   if (events.length === 0) {
     console.log('No ghost train events meet the threshold, staying silent');
+    logDropSummary(drops, 'train');
     return;
   }
 

@@ -11,6 +11,7 @@ const { expectedHeadwayMin, expectedTripMinutes, expectedActiveTrips, loadIndex 
 const { getBusObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginBus, postText } = require('../../src/bus/bluesky');
 const { runBin } = require('../../src/shared/runBin');
+const { logDropSummary } = require('../../src/shared/ghostsLog');
 
 const WINDOW_MS = 60 * 60 * 1000;
 
@@ -62,6 +63,7 @@ async function main() {
   // the prior wall-clock hour, so `now` would mis-bucket at rush-hour transitions.
   const lookupAt = new Date(now - WINDOW_MS / 2);
 
+  const drops = [];
   const events = await detectBusGhosts({
     routes: ghostRoutes,
     getObservations: (route) => getBusObservations(route, sinceTs),
@@ -69,10 +71,12 @@ async function main() {
     expectedHeadway: (route, pattern) => expectedHeadwayMin(route, pattern, lookupAt),
     expectedDuration: (route, pattern) => expectedTripMinutes(route, pattern, lookupAt),
     expectedActive: (route, pattern) => expectedActiveTrips(route, pattern, lookupAt),
+    onDrop: (d) => drops.push(d),
   });
 
   if (events.length === 0) {
     console.log('No ghost bus events meet the threshold, staying silent');
+    logDropSummary(drops, 'bus');
     return;
   }
 

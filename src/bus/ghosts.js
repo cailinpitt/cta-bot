@@ -28,12 +28,14 @@ async function detectBusGhosts({
   expectedHeadway,
   expectedDuration,
   expectedActive,
+  onDrop,
 }) {
   const events = [];
+  const drop = (reason, info) => { if (onDrop) onDrop({ reason, ...info }); };
 
   for (const route of routes) {
     const obs = getObservations(route);
-    if (obs.length === 0) continue;
+    if (obs.length === 0) { drop('no_observations', { route }); continue; }
 
     // Skip the whole route on any pattern resolution failure — expectedActive
     // still counts trips for that pid, so dropping observations alone would
@@ -53,6 +55,7 @@ async function detectBusGhosts({
     }
     if (failedPids.length > 0) {
       console.warn(`ghosts: skipping route ${route} — unresolved pids with observations: ${failedPids.join(', ')}`);
+      drop('pattern_fetch_failed', { route, failedPids });
       continue;
     }
 
@@ -67,17 +70,19 @@ async function detectBusGhosts({
     }
 
     for (const [direction, group] of byDir) {
+      const ctx = { route, direction };
       const headway = expectedHeadway(route, group.pattern);
       const duration = expectedDuration(route, group.pattern);
       const active = expectedActive(route, group.pattern);
-      if (active == null || active <= 0) continue;
+      if (active == null || active <= 0) { drop('no_schedule', { ...ctx, expectedActive: active }); continue; }
       // Headway/duration are display-only — null falls back to generic wording.
 
       // Sparse routes (active < 2) make ghost calls meaningless; one missing
       // bus isn't a story, two→zero is a gap (covered by the gaps bot).
-      if (active < 2) continue;
+      if (active < 2) { drop('sparse_route', { ...ctx, expectedActive: active }); continue; }
       if (active > MAX_EXPECTED_ACTIVE) {
         console.warn(`ghosts: ${route}/${direction} expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
+        drop('expected_cap_exceeded', { ...ctx, expectedActive: active });
         continue;
       }
 
@@ -86,22 +91,24 @@ async function detectBusGhosts({
         if (!perSnapshot.has(o.ts)) perSnapshot.set(o.ts, new Set());
         perSnapshot.get(o.ts).add(o.vehicle_id);
       }
-      if (perSnapshot.size < MIN_SNAPSHOTS) continue;
+      if (perSnapshot.size < MIN_SNAPSHOTS) { drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active }); continue; }
 
       const counts = [...perSnapshot.values()].map((s) => s.size);
       const observedActive = median(counts);
       const missing = active - observedActive;
-      if (missing < MISSING_ABS_THRESHOLD) continue;
-      if (missing / active < MISSING_PCT_THRESHOLD) continue;
-      if (observedActive < MIN_OBSERVED) continue;
+      const detail = { ...ctx, expectedActive: active, observedActive, missing, snapshots: perSnapshot.size };
+      if (missing < MISSING_ABS_THRESHOLD) { drop('below_abs_threshold', detail); continue; }
+      if (missing / active < MISSING_PCT_THRESHOLD) { drop('below_pct_threshold', detail); continue; }
+      if (observedActive < MIN_OBSERVED) { drop('too_few_observed', detail); continue; }
       // Wildly inconsistent counts usually indicate polling blackouts, not real ghosts.
       const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
-      if (stddev > observedActive) continue;
+      if (stddev > observedActive) { drop('noisy_polling', { ...detail, stddev }); continue; }
       // Ramp-up gate: a filled tail means the deficit is at the front of the
       // hour, not now. Real outages persist into the tail.
-      if (tailMedian(perSnapshot) >= RAMP_FILL_RATIO * active) continue;
+      const tail = tailMedian(perSnapshot);
+      if (tail >= RAMP_FILL_RATIO * active) { drop('ramp_up_filled', { ...detail, tailMedian: tail }); continue; }
 
       events.push({
         route,
