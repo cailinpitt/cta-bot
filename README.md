@@ -1,4 +1,4 @@
-# cta-bot
+# cta-insights
 
 Bluesky bots that turn CTA train and bus tracker data into Chicago-specific transit visualizations.
 
@@ -41,8 +41,8 @@ The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train
 
 1. **Clone and install**
    ```
-   git clone https://github.com/cailinpitt/cta-bot.git
-   cd cta-bot
+   git clone https://github.com/cailinpitt/cta-insights.git
+   cd cta-insights
    npm install
    ```
 
@@ -94,49 +94,49 @@ Everything is designed to be driven by cron. There's no long-running process —
 ```cron
 # --- Detection + posting ---
 # Bunching and gap detection poll frequently; each post is cooldown-gated by history.sqlite.
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/bunching.js      >> cron/bus-bunching.log 2>&1
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/gaps.js          >> cron/bus-gaps.log 2>&1
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/bunching.js    >> cron/train-bunching.log 2>&1
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/gaps.js        >> cron/train-gaps.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/bunching.js      >> cron/bus-bunching.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/gaps.js          >> cron/bus-gaps.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/bunching.js    >> cron/train-bunching.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/gaps.js        >> cron/train-gaps.log 2>&1
 
 # Speedmaps collect for ~1 hour per run — space them out so they don't all hit the API at once.
-30 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/speedmap.js       >> cron/bus-speedmap.log 2>&1
-45 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/speedmap.js     >> cron/train-speedmap.log 2>&1
+30 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/speedmap.js       >> cron/bus-speedmap.log 2>&1
+45 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/speedmap.js     >> cron/train-speedmap.log 2>&1
 
 # Train snapshot — live positions. Hourly is plenty.
-0 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/snapshot.js      >> cron/train-snapshot.log 2>&1
+0 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/snapshot.js      >> cron/train-snapshot.log 2>&1
 
 # Weekly recap — chronic bunching heatmap plus threaded gap-leaderboard reply.
-0 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/bus/recap.js --window week   >> cron/bus-recap.log 2>&1
-5 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/train/recap.js --window week >> cron/train-recap.log 2>&1
+0 9 * * 1 cd /path/to/cta-insights && /usr/bin/node bin/bus/recap.js --window week   >> cron/bus-recap.log 2>&1
+5 9 * * 1 cd /path/to/cta-insights && /usr/bin/node bin/train/recap.js --window week >> cron/train-recap.log 2>&1
 
 # --- Alerts ---
 # Republish significant CTA alerts and post threaded "cleared" replies. Run frequently
 # so the resolution-tick counter (3 consecutive misses) clears alerts within ~15 min.
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/alerts.js        >> cron/bus-alerts.log 2>&1
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/alerts.js      >> cron/train-alerts.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/alerts.js        >> cron/bus-alerts.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/alerts.js      >> cron/train-alerts.log 2>&1
 
 # Pulse — bot-detected dead segments on rail lines. Posts to the alerts account when a
 # ≥2 mi stretch goes cold for 15+ min, threaded under any open CTA alert for the same line.
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/pulse.js       >> cron/pulse.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/pulse.js       >> cron/pulse.log 2>&1
 
 # --- Observers (ghost detection data) ---
 # Bus observer — fetches ghost-candidate routes on a fixed 5-min cadence so every route
 # gets consistent coverage. Trains don't need one; getAllTrainPositions covers all 8 lines
 # per call and other train jobs already write observations.
-*/5 * * * * cd /path/to/cta-bot && /usr/bin/node scripts/observeGhosts.js >> cron/observe-ghosts.log 2>&1
+*/5 * * * * cd /path/to/cta-insights && /usr/bin/node scripts/observeGhosts.js >> cron/observe-ghosts.log 2>&1
 
 # --- Ghost rollups ---
 # Offset from other jobs to avoid API-bursting.
-7 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/ghosts.js          >> cron/ghosts.log 2>&1
-8 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/ghosts.js        >> cron/train-ghosts.log 2>&1
+7 * * * * cd /path/to/cta-insights && /usr/bin/node bin/bus/ghosts.js          >> cron/ghosts.log 2>&1
+8 * * * * cd /path/to/cta-insights && /usr/bin/node bin/train/ghosts.js        >> cron/train-ghosts.log 2>&1
 
 # --- Maintenance ---
 # GTFS index is date-specific (honors calendar_dates.txt), so refresh daily before other jobs wake up.
-15 3 * * * cd /path/to/cta-bot && /usr/bin/node scripts/fetch-gtfs.js     >> cron/fetch-gtfs.log 2>&1
+15 3 * * * cd /path/to/cta-insights && /usr/bin/node scripts/fetch-gtfs.js     >> cron/fetch-gtfs.log 2>&1
 
 # Traffic signals rarely move; monthly is plenty.
-0 4 1 * * cd /path/to/cta-bot && /usr/bin/node scripts/fetch-signals.js   >> cron/fetch-signals.log 2>&1
+0 4 1 * * cd /path/to/cta-insights && /usr/bin/node scripts/fetch-signals.js   >> cron/fetch-signals.log 2>&1
 ```
 
 ## Scripts reference
@@ -350,6 +350,6 @@ Reply: a square bar chart of headway gaps by line over the same window, with eac
 
 ## Contributing and issues
 
-Issues and PRs welcome at [github.com/cailinpitt/cta-bot](https://github.com/cailinpitt/cta-bot).
+Issues and PRs welcome at [github.com/cailinpitt/cta-insights](https://github.com/cailinpitt/cta-insights).
 
 CTA Bus and Train Tracker data © Chicago Transit Authority. Base maps © Mapbox, © OpenStreetMap contributors.

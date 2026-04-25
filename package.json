@@ -1,5 +1,5 @@
 {
-  "name": "cta-bot",
+  "name": "cta-insights",
   "version": "0.0.1",
   "description": "Bluesky bot that posts visualizations from CTA train and bus tracker APIs",
   "main": "index.js",
