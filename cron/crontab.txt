@@ -1,0 +1,40 @@
+# CTA bot crontab — source of truth.
+# Install: crontab cron/crontab.txt (replaces all jobs for this user).
+# To preserve non-cta-bot jobs, append this file's content into the live
+# crontab between # CTA-BOT-START / # CTA-BOT-END markers instead.
+#
+# All jobs run via bin/cron-run.sh <log-name> <script> [args...] which
+# handles cd, timestamping, and log redirection.
+
+R=/home/cailin/Development/cta-bot/bin/cron-run.sh
+
+# CTA-BOT-START
+
+# --- Trains ---
+*/5     *  *  *  *   $R train-pulse      bin/train/pulse.js
+*/10    *  *  *  *   $R train-bunching   bin/train/bunching.js
+*/10    *  *  *  *   $R train-alerts     bin/train/alerts.js
+5-59/10 *  *  *  *   $R train-gaps       bin/train/gaps.js
+0       */2 *  *  *  $R train-speedmap   bin/train/speedmap.js
+0       */3 *  *  *  $R train-snapshot   bin/train/snapshot.js
+8       *  *  *  *   $R train-ghosts     bin/train/ghosts.js
+
+# --- Buses ---
+*/10    *  *  *  *   $R bus-bunching     bin/bus/bunching.js
+*/10    *  *  *  *   $R bus-alerts       bin/bus/alerts.js
+5-59/10 *  *  *  *   $R bus-gaps         bin/bus/gaps.js
+0       */2 *  *  *  $R bus-speedmap     bin/bus/speedmap.js
+7       *  *  *  *   $R bus-ghosts       bin/bus/ghosts.js
+*/5     *  *  *  *   $R observe-ghosts   scripts/observeGhosts.js
+
+# --- Recaps ---
+20      10 *  *  0   $R bus-recap        bin/bus/recap.js   --window=week
+25      10 *  *  0   $R train-recap      bin/train/recap.js --window=week
+30      10 1  *  *   $R bus-recap        bin/bus/recap.js   --window=month
+35      10 1  *  *   $R train-recap      bin/train/recap.js --window=month
+
+# --- Reference data refresh ---
+15      3  *  *  *   $R fetch-gtfs       scripts/fetch-gtfs.js
+0       4  1  *  *   $R fetch-signals    scripts/fetch-signals.js
+
+# CTA-BOT-END
