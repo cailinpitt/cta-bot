@@ -4,10 +4,13 @@ Bluesky bots that turn CTA train and bus tracker data into Chicago-specific tran
 
 - **Bus**: [@ctabusinsights.bsky.social](https://bsky.app/profile/ctabusinsights.bsky.social)
 - **Train**: [@ctatraininsights.bsky.social](https://bsky.app/profile/ctatraininsights.bsky.social)
+- **Alerts**: dedicated alerts account republishing significant CTA service alerts (with threaded "cleared" replies)
 
 This README is written for operators running their own copy. If you just want to see the output, follow the accounts above. Scroll to the [Examples gallery](#examples-gallery) for sample posts.
 
 ## What it posts
+
+> Each major feature has a deep-dive in [`docs/`](docs/): [bunching](docs/BUNCHING.md), [gaps](docs/GAPS.md), [ghosting](docs/GHOSTING.md), [speedmaps](docs/SPEEDMAP.md), [alerts + pulse](docs/ALERTS.md).
 
 ### Bus (`@ctabusinsights`)
 - **Bunching** — clusters of buses on the same route/direction, as an annotated map. Reply includes a ~10-minute timelapse video of the cluster, with traffic signals annotated.
@@ -26,6 +29,7 @@ This README is written for operators running their own copy. If you just want to
 
 ### Both
 - **Historical callouts** — posts carry frequency and severity context from prior posts in `history.sqlite`, e.g. *"3rd Route 66 bunch reported today"* or *"tightest reported on this line in 30 days"*.
+- **Service alerts** — a dedicated alerts account combines two signals: (1) significant CTA-published alerts on tracked routes, with a threaded `✅ cleared` reply when CTA resolves them and a segment-dimmed map for rail alerts that name a station-to-station stretch; (2) **pulse**, a bot-side detector that infers a service suspension from live train positions when a ≥2-mile stretch of a line goes cold for 15+ min — often surfacing outages before CTA issues an alert, and threaded under the official alert when one appears. See [docs/ALERTS.md](docs/ALERTS.md) for the full logic.
 
 The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train bot covers all 8 L lines.
 
@@ -56,6 +60,8 @@ The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train
    | `BLUESKY_BUS_APP_PASSWORD` | Bus bot app password | bsky.app → Settings → App Passwords |
    | `BLUESKY_TRAIN_IDENTIFIER` | Train bot handle or DID | same |
    | `BLUESKY_TRAIN_APP_PASSWORD` | Train bot app password | same |
+   | `BLUESKY_ALERTS_IDENTIFIER` | Alerts bot handle or DID | same |
+   | `BLUESKY_ALERTS_APP_PASSWORD` | Alerts bot app password | same |
 
 4. **Build the GTFS index** — required before any gap or ghost detection runs.
    ```
@@ -100,6 +106,16 @@ Everything is designed to be driven by cron. There's no long-running process —
 0 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/bus/recap.js --window week   >> cron/bus-recap.log 2>&1
 5 9 * * 1 cd /path/to/cta-bot && /usr/bin/node bin/train/recap.js --window week >> cron/train-recap.log 2>&1
 
+# --- Alerts ---
+# Republish significant CTA alerts and post threaded "cleared" replies. Run frequently
+# so the resolution-tick counter (3 consecutive misses) clears alerts within ~15 min.
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/bus/alerts.js        >> cron/bus-alerts.log 2>&1
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/alerts.js      >> cron/train-alerts.log 2>&1
+
+# Pulse — bot-detected dead segments on rail lines. Posts to the alerts account when a
+# ≥2 mi stretch goes cold for 15+ min, threaded under any open CTA alert for the same line.
+*/5 * * * * cd /path/to/cta-bot && /usr/bin/node bin/train/pulse.js       >> cron/pulse.log 2>&1
+
 # --- Observers (ghost detection data) ---
 # Bus observer — fetches ghost-candidate routes on a fixed 5-min cadence so every route
 # gets consistent coverage. Trains don't need one; getAllTrainPositions covers all 8 lines
@@ -137,6 +153,10 @@ All bin scripts accept `--dry-run` (writes image under `assets/` instead of post
 | `npm run train-recap` / `:dry` | Train recap — bunching heatmap + threaded gap-leaderboard reply |
 | `npm run train-snapshot` / `:dry` | System-wide L snapshot |
 | `npm run train-ghosts` / `:dry` | Train ghost rollup (hourly) |
+| `node bin/bus/alerts.js` (`ALERTS_DRY_RUN=1` or `--dry-run` for dry) | Bus alert republishing + resolution replies |
+| `node bin/train/alerts.js` (`ALERTS_DRY_RUN=1` or `--dry-run` for dry) | Train alert republishing + resolution replies (with segment-dim map when applicable) |
+| `node bin/train/pulse.js` (`PULSE_DRY_RUN=1` or `--dry-run` for dry) | Bot-side rail disruption detector — flags ≥2 mi stretches with no trains for 15+ min |
+| `node bin/train/disruption.js …` (`--dry-run` for dry) | Manual disruption poster (operator passes CTA alert details as CLI args) |
 
 ### Observers / maintenance
 | Command | Description |
@@ -152,6 +172,14 @@ All bin scripts accept `--dry-run` (writes image under `assets/` instead of post
 | `npm run smoke` | Load each bin with `--check` — fast sanity check after edits. |
 
 ## How it works
+
+Each major feature has a deep-dive doc in [`docs/`](docs/):
+- [BUNCHING.md](docs/BUNCHING.md) — cluster detection for buses and trains
+- [GAPS.md](docs/GAPS.md) — long-gap detection vs. scheduled headway
+- [GHOSTING.md](docs/GHOSTING.md) — hourly missing-vehicle detection
+- [SPEEDMAP.md](docs/SPEEDMAP.md) — colored route speed maps
+- [ALERTS.md](docs/ALERTS.md) — CTA service alert republishing
+
 
 ### Data sources
 - **CTA Bus Tracker** and **CTA Train Tracker** APIs — live vehicle positions, polled by each script for its detection window.
