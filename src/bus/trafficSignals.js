@@ -1,5 +1,5 @@
 const Fs = require('fs-extra');
-const Path = require('path');
+const Path = require('node:path');
 const { haversineFt } = require('../shared/geo');
 
 const CACHE_PATH = Path.join(__dirname, '..', '..', 'data', 'signals', 'chicago.json');
@@ -25,9 +25,9 @@ function loadAll() {
 // Reads from the pre-fetched city-wide snapshot — never hits the network at
 // runtime, so an Overpass outage can't block a post.
 function fetchSignalsInBbox(bbox) {
-  return loadAll().filter((s) =>
-    s.lat >= bbox.minLat && s.lat <= bbox.maxLat
-    && s.lon >= bbox.minLon && s.lon <= bbox.maxLon,
+  return loadAll().filter(
+    (s) =>
+      s.lat >= bbox.minLat && s.lat <= bbox.maxLat && s.lon >= bbox.minLon && s.lon <= bbox.maxLon,
   );
 }
 
@@ -43,7 +43,8 @@ function perpDistFtToPolyline(point, linePts) {
     const dy = b.lat - ay;
     const lenSq = dx * dx + dy * dy;
     let t = 0;
-    if (lenSq > 0) t = Math.max(0, Math.min(1, ((point.lon - ax) * dx + (point.lat - ay) * dy) / lenSq));
+    if (lenSq > 0)
+      t = Math.max(0, Math.min(1, ((point.lon - ax) * dx + (point.lat - ay) * dy) / lenSq));
     const d = haversineFt(point, { lat: ay + t * dy, lon: ax + t * dx });
     if (d < best) best = d;
   }
@@ -78,9 +79,14 @@ function annotateSignalOrientations(signals, routePoints) {
       const dy = b.lat - a.lat;
       const lenSq = dx * dx + dy * dy;
       let t = 0;
-      if (lenSq > 0) t = Math.max(0, Math.min(1, ((s.lon - a.lon) * dx + (s.lat - a.lat) * dy) / lenSq));
+      if (lenSq > 0)
+        t = Math.max(0, Math.min(1, ((s.lon - a.lon) * dx + (s.lat - a.lat) * dy) / lenSq));
       const d = haversineFt(s, { lat: a.lat + t * dy, lon: a.lon + t * dx });
-      if (d < bestDist) { bestDist = d; bestSeg = { a, b }; bestT = t; }
+      if (d < bestDist) {
+        bestDist = d;
+        bestSeg = { a, b };
+        bestT = t;
+      }
     }
     if (!bestSeg) return { ...s, orientation: 'horizontal' };
     const cosLat = Math.cos((s.lat * Math.PI) / 180);
@@ -96,4 +102,9 @@ function annotateSignalOrientations(signals, routePoints) {
   });
 }
 
-module.exports = { fetchSignalsInBbox, filterSignalsOnRoute, dedupeNearbySignals, annotateSignalOrientations };
+module.exports = {
+  fetchSignalsInBbox,
+  filterSignalsOnRoute,
+  dedupeNearbySignals,
+  annotateSignalOrientations,
+};

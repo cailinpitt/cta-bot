@@ -9,8 +9,10 @@ const { renderHeatmap, renderGapChart } = require('../../src/map');
 const { loginTrain, postWithImage } = require('../../src/train/bluesky');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const {
-  buildPostText, buildAltText,
-  buildGapReplyText, buildGapReplyAlt,
+  buildPostText,
+  buildAltText,
+  buildGapReplyText,
+  buildGapReplyAlt,
 } = require('../../src/shared/recapPost');
 const trainLines = require('../../src/train/data/trainLines.json');
 
@@ -58,7 +60,9 @@ async function main() {
     }));
   const totalIncidents = points.reduce((sum, p) => sum + p.count, 0);
 
-  console.log(`  ${allPoints.length} total spots, ${points.length} above the ${minCount}-incident floor (${totalIncidents} incidents)`);
+  console.log(
+    `  ${allPoints.length} total spots, ${points.length} above the ${minCount}-incident floor (${totalIncidents} incidents)`,
+  );
   for (const p of points.slice(0, 5)) {
     console.log(`  ${p.count}× ${p.label} (bunches=${p.bunching}, gaps=${p.gap})`);
   }
@@ -69,12 +73,19 @@ async function main() {
   }
 
   const plotted = [...points].sort((a, b) => b.count - a.count).slice(0, RENDER_CAP);
-  const image = await renderHeatmap({ points: plotted, kind: 'train', trainLines, lineColors: LINE_COLORS });
+  const image = await renderHeatmap({
+    points: plotted,
+    kind: 'train',
+    trainLines,
+    lineColors: LINE_COLORS,
+  });
   const text = buildPostText({ mode: 'train', window, windowLabel, points, totalIncidents });
   const alt = buildAltText({ mode: 'train', window, windowLabel, points, totalIncidents });
 
   // Include zero-gap lines so the chart shows the whole system, not just offenders.
-  const gapCounts = new Map(loadGapLeaderboard('train', since, until).map((e) => [e.route, e.count]));
+  const gapCounts = new Map(
+    loadGapLeaderboard('train', since, until).map((e) => [e.route, e.count]),
+  );
   const gapEntries = LINE_ORDER.map((line) => ({ route: line, count: gapCounts.get(line) || 0 }));
   const totalGaps = gapEntries.reduce((s, e) => s + e.count, 0);
   const rankedGapEntries = [...gapEntries].sort((a, b) => b.count - a.count);
@@ -86,12 +97,32 @@ async function main() {
   let gapAlt = '';
   if (hasGapReply) {
     gapImage = await renderGapChart({
-      kind: 'train', entries: rankedGapEntries, window, windowLabel, totalGaps,
-      lineNames: LINE_NAMES, lineColors: LINE_COLORS,
+      kind: 'train',
+      entries: rankedGapEntries,
+      window,
+      windowLabel,
+      totalGaps,
+      lineNames: LINE_NAMES,
+      lineColors: LINE_COLORS,
     });
     const linesWithGaps = rankedGapEntries.filter((e) => e.count > 0).length;
-    gapText = buildGapReplyText({ mode: 'train', window, windowLabel, entries: rankedGapEntries, totalGaps, routeCount: linesWithGaps, formatRoute: formatTrainRoute });
-    gapAlt = buildGapReplyAlt({ mode: 'train', window, windowLabel, entries: rankedGapEntries, totalGaps, formatRoute: formatTrainRoute });
+    gapText = buildGapReplyText({
+      mode: 'train',
+      window,
+      windowLabel,
+      entries: rankedGapEntries,
+      totalGaps,
+      routeCount: linesWithGaps,
+      formatRoute: formatTrainRoute,
+    });
+    gapAlt = buildGapReplyAlt({
+      mode: 'train',
+      window,
+      windowLabel,
+      entries: rankedGapEntries,
+      totalGaps,
+      formatRoute: formatTrainRoute,
+    });
   }
 
   if (argv['dry-run']) {

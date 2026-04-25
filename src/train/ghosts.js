@@ -1,7 +1,15 @@
 // Compares median observed-active per snapshot against scheduled active-trip
 // count, grouped by (line, trDr). Mirrors detectBusGhosts.
 
-const { MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE, RAMP_FILL_RATIO, RAMP_TAIL_FRACTION } = require('../bus/ghosts');
+const {
+  MISSING_PCT_THRESHOLD,
+  MISSING_ABS_THRESHOLD,
+  MIN_SNAPSHOTS,
+  MIN_OBSERVED,
+  MAX_EXPECTED_ACTIVE,
+  RAMP_FILL_RATIO,
+  RAMP_TAIL_FRACTION,
+} = require('../bus/ghosts');
 const { median } = require('../shared/stats');
 
 function tailMedian(perSnapshot) {
@@ -25,22 +33,35 @@ async function detectTrainGhosts({
   onDrop,
 }) {
   const events = [];
-  const drop = (reason, info) => { if (onDrop) onDrop({ reason, ...info }); };
+  const drop = (reason, info) => {
+    if (onDrop) onDrop({ reason, ...info });
+  };
 
   for (const line of lines) {
     const obs = getObservations(line);
-    if (obs.length === 0) { drop('no_observations', { line }); continue; }
+    if (obs.length === 0) {
+      drop('no_observations', { line });
+      continue;
+    }
 
-    if (isLoopLine && isLoopLine(line)) {
+    if (isLoopLine?.(line)) {
       const ctx = { line, scope: 'line-wide' };
       const headway = expectedHeadway(line, null);
       const duration = expectedDuration(line, null);
       const active = expectedActive(line, null);
-      if (active == null || active <= 0) { drop('no_schedule', { ...ctx, expectedActive: active }); continue; }
+      if (active == null || active <= 0) {
+        drop('no_schedule', { ...ctx, expectedActive: active });
+        continue;
+      }
 
-      if (active < 2) { drop('sparse_route', { ...ctx, expectedActive: active }); continue; }
+      if (active < 2) {
+        drop('sparse_route', { ...ctx, expectedActive: active });
+        continue;
+      }
       if (active > MAX_EXPECTED_ACTIVE) {
-        console.warn(`ghosts: ${line} line-wide expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
+        console.warn(
+          `ghosts: ${line} line-wide expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`,
+        );
         drop('expected_cap_exceeded', { ...ctx, expectedActive: active });
         continue;
       }
@@ -50,21 +71,45 @@ async function detectTrainGhosts({
         if (!perSnapshot.has(o.ts)) perSnapshot.set(o.ts, new Set());
         perSnapshot.get(o.ts).add(o.vehicle_id);
       }
-      if (perSnapshot.size < MIN_SNAPSHOTS) { drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active }); continue; }
+      if (perSnapshot.size < MIN_SNAPSHOTS) {
+        drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active });
+        continue;
+      }
 
       const counts = [...perSnapshot.values()].map((s) => s.size);
       const observedActive = median(counts);
       const missing = active - observedActive;
-      const detail = { ...ctx, expectedActive: active, observedActive, missing, snapshots: perSnapshot.size };
-      if (missing < MISSING_ABS_THRESHOLD) { drop('below_abs_threshold', detail); continue; }
-      if (missing / active < MISSING_PCT_THRESHOLD) { drop('below_pct_threshold', detail); continue; }
-      if (observedActive < MIN_OBSERVED) { drop('too_few_observed', detail); continue; }
+      const detail = {
+        ...ctx,
+        expectedActive: active,
+        observedActive,
+        missing,
+        snapshots: perSnapshot.size,
+      };
+      if (missing < MISSING_ABS_THRESHOLD) {
+        drop('below_abs_threshold', detail);
+        continue;
+      }
+      if (missing / active < MISSING_PCT_THRESHOLD) {
+        drop('below_pct_threshold', detail);
+        continue;
+      }
+      if (observedActive < MIN_OBSERVED) {
+        drop('too_few_observed', detail);
+        continue;
+      }
       const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
-      if (stddev > observedActive) { drop('noisy_polling', { ...detail, stddev }); continue; }
+      if (stddev > observedActive) {
+        drop('noisy_polling', { ...detail, stddev });
+        continue;
+      }
       const tail = tailMedian(perSnapshot);
-      if (tail >= RAMP_FILL_RATIO * active) { drop('ramp_up_filled', { ...detail, tailMedian: tail }); continue; }
+      if (tail >= RAMP_FILL_RATIO * active) {
+        drop('ramp_up_filled', { ...detail, tailMedian: tail });
+        continue;
+      }
 
       events.push({
         line,
@@ -98,19 +143,34 @@ async function detectTrainGhosts({
       let destStation = null;
       for (const d of destinations) {
         const s = findStation(line, d);
-        if (s && s.isTerminal) { bestDest = d; destStation = s; break; }
+        if (s?.isTerminal) {
+          bestDest = d;
+          destStation = s;
+          break;
+        }
       }
-      if (!destStation) { drop('no_terminal_destination', { ...ctx, destinations }); continue; }
+      if (!destStation) {
+        drop('no_terminal_destination', { ...ctx, destinations });
+        continue;
+      }
       const sampleDest = bestDest;
       ctx.destination = sampleDest;
       const headway = expectedHeadway(line, destStation);
       const duration = expectedDuration(line, destStation);
       const active = expectedActive(line, destStation);
-      if (active == null || active <= 0) { drop('no_schedule', { ...ctx, expectedActive: active }); continue; }
+      if (active == null || active <= 0) {
+        drop('no_schedule', { ...ctx, expectedActive: active });
+        continue;
+      }
 
-      if (active < 2) { drop('sparse_route', { ...ctx, expectedActive: active }); continue; }
+      if (active < 2) {
+        drop('sparse_route', { ...ctx, expectedActive: active });
+        continue;
+      }
       if (active > MAX_EXPECTED_ACTIVE) {
-        console.warn(`ghosts: ${line}/${trDr} expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
+        console.warn(
+          `ghosts: ${line}/${trDr} expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`,
+        );
         drop('expected_cap_exceeded', { ...ctx, expectedActive: active });
         continue;
       }
@@ -120,21 +180,45 @@ async function detectTrainGhosts({
         if (!perSnapshot.has(o.ts)) perSnapshot.set(o.ts, new Set());
         perSnapshot.get(o.ts).add(o.vehicle_id);
       }
-      if (perSnapshot.size < MIN_SNAPSHOTS) { drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active }); continue; }
+      if (perSnapshot.size < MIN_SNAPSHOTS) {
+        drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active });
+        continue;
+      }
 
       const counts = [...perSnapshot.values()].map((s) => s.size);
       const observedActive = median(counts);
       const missing = active - observedActive;
-      const detail = { ...ctx, expectedActive: active, observedActive, missing, snapshots: perSnapshot.size };
-      if (missing < MISSING_ABS_THRESHOLD) { drop('below_abs_threshold', detail); continue; }
-      if (missing / active < MISSING_PCT_THRESHOLD) { drop('below_pct_threshold', detail); continue; }
-      if (observedActive < MIN_OBSERVED) { drop('too_few_observed', detail); continue; }
+      const detail = {
+        ...ctx,
+        expectedActive: active,
+        observedActive,
+        missing,
+        snapshots: perSnapshot.size,
+      };
+      if (missing < MISSING_ABS_THRESHOLD) {
+        drop('below_abs_threshold', detail);
+        continue;
+      }
+      if (missing / active < MISSING_PCT_THRESHOLD) {
+        drop('below_pct_threshold', detail);
+        continue;
+      }
+      if (observedActive < MIN_OBSERVED) {
+        drop('too_few_observed', detail);
+        continue;
+      }
       const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
-      if (stddev > observedActive) { drop('noisy_polling', { ...detail, stddev }); continue; }
+      if (stddev > observedActive) {
+        drop('noisy_polling', { ...detail, stddev });
+        continue;
+      }
       const tail = tailMedian(perSnapshot);
-      if (tail >= RAMP_FILL_RATIO * active) { drop('ramp_up_filled', { ...detail, tailMedian: tail }); continue; }
+      if (tail >= RAMP_FILL_RATIO * active) {
+        drop('ramp_up_filled', { ...detail, tailMedian: tail });
+        continue;
+      }
 
       events.push({
         line,

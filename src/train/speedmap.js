@@ -1,7 +1,6 @@
 const { getAllTrainPositions } = require('./api');
 const { haversineFt, cumulativeDistances } = require('../shared/geo');
 
-
 const FEET_PER_DEG_LAT = 364567;
 
 // 70 mph cap covers the 55–65 cruise speed on Red/Blue. >3 min dt usually
@@ -39,14 +38,14 @@ function offsetPolyline(points, offsetFt) {
     const dxFt = dLon * lonFt;
     const dyFt = dLat * FEET_PER_DEG_LAT;
     const len = Math.sqrt(dxFt * dxFt + dyFt * dyFt);
-    if (len === 0) { out.push([lat, lon]); continue; }
+    if (len === 0) {
+      out.push([lat, lon]);
+      continue;
+    }
     // Perpendicular = tangent rotated 90° CCW: (dx,dy) → (-dy, dx).
     const perpDxFt = (-dyFt / len) * offsetFt;
     const perpDyFt = (dxFt / len) * offsetFt;
-    out.push([
-      lat + perpDyFt / FEET_PER_DEG_LAT,
-      lon + perpDxFt / lonFt,
-    ]);
+    out.push([lat + perpDyFt / FEET_PER_DEG_LAT, lon + perpDxFt / lonFt]);
   }
   return out;
 }
@@ -200,16 +199,28 @@ function computeTrainSamples(tracks, linePoints, cumDist, opts = {}) {
         const p1 = positions[i - 1];
         const p2 = positions[i];
         const dt = p2.t - p1.t;
-        if (dt <= 0 || dt > maxDtMs) { stats.dropped++; continue; }
+        if (dt <= 0 || dt > maxDtMs) {
+          stats.dropped++;
+          continue;
+        }
 
         const s1 = snapToLineWithPerp(p1.lat, p1.lon, linePoints, cumDist);
         const s2 = snapToLineWithPerp(p2.lat, p2.lon, linePoints, cumDist);
-        if (s1.perpDist > maxPerpFt || s2.perpDist > maxPerpFt) { stats.offLine++; continue; }
+        if (s1.perpDist > maxPerpFt || s2.perpDist > maxPerpFt) {
+          stats.offLine++;
+          continue;
+        }
 
         const dft = Math.abs(s2.cumDist - s1.cumDist);
-        if (dft < minAlongFt) { stats.stationary++; continue; }
+        if (dft < minAlongFt) {
+          stats.stationary++;
+          continue;
+        }
         const mph = (dft / (dt / 1000)) * (3600 / 5280);
-        if (mph > maxMph) { stats.dropped++; continue; }
+        if (mph > maxMph) {
+          stats.dropped++;
+          continue;
+        }
 
         const startFt = Math.min(s1.cumDist, s2.cumDist);
         const endFt = Math.max(s1.cumDist, s2.cumDist);

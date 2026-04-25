@@ -8,8 +8,10 @@ const { renderHeatmap, renderGapChart } = require('../../src/map');
 const { loginBus, postWithImage } = require('../../src/bus/bluesky');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const {
-  buildPostText, buildAltText,
-  buildGapReplyText, buildGapReplyAlt,
+  buildPostText,
+  buildAltText,
+  buildGapReplyText,
+  buildGapReplyAlt,
 } = require('../../src/shared/recapPost');
 
 const GAP_CHART_CAP = 10;
@@ -50,7 +52,9 @@ async function main() {
     .map((p) => ({ ...p, routesLabel: formatBusRoutes(p.routes) }));
   const totalIncidents = points.reduce((sum, p) => sum + p.count, 0);
 
-  console.log(`  ${allPoints.length} total spots, ${points.length} above the ${minCount}-incident floor (${totalIncidents} incidents)`);
+  console.log(
+    `  ${allPoints.length} total spots, ${points.length} above the ${minCount}-incident floor (${totalIncidents} incidents)`,
+  );
   for (const p of points.slice(0, 5)) {
     console.log(`  ${p.count}× ${p.label} (bunches=${p.bunching}, gaps=${p.gap})`);
   }
@@ -74,9 +78,31 @@ async function main() {
   let gapText = '';
   let gapAlt = '';
   if (hasGapReply) {
-    gapImage = await renderGapChart({ kind: 'bus', entries: gapEntries, window, windowLabel, totalGaps, formatRoute: formatBusRoute });
-    gapText = buildGapReplyText({ mode: 'bus', window, windowLabel, entries: gapEntries, totalGaps, routeCount: gapEntriesAll.length, formatRoute: formatBusRoute });
-    gapAlt = buildGapReplyAlt({ mode: 'bus', window, windowLabel, entries: gapEntries, totalGaps, formatRoute: formatBusRoute });
+    gapImage = await renderGapChart({
+      kind: 'bus',
+      entries: gapEntries,
+      window,
+      windowLabel,
+      totalGaps,
+      formatRoute: formatBusRoute,
+    });
+    gapText = buildGapReplyText({
+      mode: 'bus',
+      window,
+      windowLabel,
+      entries: gapEntries,
+      totalGaps,
+      routeCount: gapEntriesAll.length,
+      formatRoute: formatBusRoute,
+    });
+    gapAlt = buildGapReplyAlt({
+      mode: 'bus',
+      window,
+      windowLabel,
+      entries: gapEntries,
+      totalGaps,
+      formatRoute: formatBusRoute,
+    });
   }
 
   if (argv['dry-run']) {

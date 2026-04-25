@@ -3,7 +3,12 @@
 // This formats the `onDrop` payload from src/{bus,train}/ghosts.js into a
 // grouped breakdown of what got filtered out.
 
-const { MAX_EXPECTED_ACTIVE, MISSING_ABS_THRESHOLD, MISSING_PCT_THRESHOLD, MIN_OBSERVED } = require('../bus/ghosts');
+const {
+  MAX_EXPECTED_ACTIVE,
+  MISSING_ABS_THRESHOLD,
+  MISSING_PCT_THRESHOLD,
+  MIN_OBSERVED,
+} = require('../bus/ghosts');
 
 const DROP_REASONS = {
   no_observations: 'no observations in the window',
@@ -31,9 +36,10 @@ const VERBOSE_REASONS = new Set([
 ]);
 
 function describeDrop(d, kind) {
-  const where = kind === 'bus'
-    ? `Route ${d.route}${d.direction ? ` ${d.direction}` : ''}`
-    : `${d.line}${d.scope === 'line-wide' ? ' (line-wide)' : d.trDr ? `/${d.trDr}` : ''}${d.destination ? ` → ${d.destination}` : ''}`;
+  const where =
+    kind === 'bus'
+      ? `Route ${d.route}${d.direction ? ` ${d.direction}` : ''}`
+      : `${d.line}${d.scope === 'line-wide' ? ' (line-wide)' : d.trDr ? `/${d.trDr}` : ''}${d.destination ? ` → ${d.destination}` : ''}`;
   const num = (v, p = 1) => (typeof v === 'number' ? v.toFixed(p) : v);
   const bits = [];
   if (d.observedActive != null && d.expectedActive != null) {

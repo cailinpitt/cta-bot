@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPostText, buildAltText, buildClearPostText, evidenceLine } = require('../../src/shared/disruption');
+const {
+  buildPostText,
+  buildAltText,
+  buildClearPostText,
+  evidenceLine,
+} = require('../../src/shared/disruption');
 
 function observed(overrides = {}) {
   return {
@@ -87,10 +92,13 @@ test('buildClearPostText (CTA alert open) acknowledges the open alert', () => {
 });
 
 test('buildClearPostText stays under 300 graphemes for typical segments', () => {
-  const text = buildClearPostText({
-    line: 'blue',
-    suspendedSegment: { from: "O'Hare", to: 'Forest Park' },
-  }, { ctaAlertOpen: true });
+  const text = buildClearPostText(
+    {
+      line: 'blue',
+      suspendedSegment: { from: "O'Hare", to: 'Forest Park' },
+    },
+    { ctaAlertOpen: true },
+  );
   assert.ok(text.length < 300, `text was ${text.length} chars: ${text}`);
 });
 

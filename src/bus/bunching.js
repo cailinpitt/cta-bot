@@ -26,7 +26,10 @@ function detectAllBunching(vehicles, now = new Date()) {
       }
       let j = i + 1;
       let maxGap = sorted[j].pdist - sorted[i].pdist;
-      while (j + 1 < sorted.length && sorted[j + 1].pdist - sorted[j].pdist <= BUNCHING_THRESHOLD_FT) {
+      while (
+        j + 1 < sorted.length &&
+        sorted[j + 1].pdist - sorted[j].pdist <= BUNCHING_THRESHOLD_FT
+      ) {
         maxGap = Math.max(maxGap, sorted[j + 1].pdist - sorted[j].pdist);
         j++;
       }

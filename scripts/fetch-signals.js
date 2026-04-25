@@ -3,7 +3,7 @@
 // mirror fails so cron surfaces it.
 
 const Fs = require('fs-extra');
-const Path = require('path');
+const Path = require('node:path');
 const axios = require('axios');
 
 const OVERPASS_URLS = [
@@ -15,7 +15,7 @@ const OVERPASS_URLS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
-const BBOX = { minLat: 41.60, maxLat: 42.10, minLon: -87.95, maxLon: -87.50 };
+const BBOX = { minLat: 41.6, maxLat: 42.1, minLon: -87.95, maxLon: -87.5 };
 const OUT_PATH = Path.join(__dirname, '..', 'data', 'signals', 'chicago.json');
 
 async function main() {

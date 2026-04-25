@@ -46,4 +46,10 @@ function terminalZoneFt(lengthFt) {
   return Math.min(TERMINAL_ZONE_CAP_FT, lengthFt * 0.1);
 }
 
-module.exports = { haversineFt, cumulativeDistances, bearing, terminalZoneFt, TERMINAL_ZONE_CAP_FT };
+module.exports = {
+  haversineFt,
+  cumulativeDistances,
+  bearing,
+  terminalZoneFt,
+  TERMINAL_ZONE_CAP_FT,
+};

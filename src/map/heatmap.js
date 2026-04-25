@@ -1,11 +1,7 @@
 const sharp = require('sharp');
 const { encode } = require('../shared/polyline');
 const { fitZoom, project } = require('../shared/projection');
-const {
-  STYLE, WIDTH, HEIGHT,
-  requireMapboxToken, fetchMapboxStatic,
-  xmlEscape,
-} = require('./common');
+const { STYLE, WIDTH, HEIGHT, requireMapboxToken, fetchMapboxStatic } = require('./common');
 
 // Explicit citywide bbox so circle projection is deterministic. North reaches
 // Linden/Dempster-Skokie; south reaches 95th/Dan Ryan.
@@ -51,21 +47,22 @@ function buildCircles(points, centerLat, centerLon, zoom, width, height, radiusF
 
 async function renderLoopInset({ points, trainLines, lineColors }) {
   const inBbox = (lat, lon) =>
-    lat >= LOOP_BBOX.minLat && lat <= LOOP_BBOX.maxLat &&
-    lon >= LOOP_BBOX.minLon && lon <= LOOP_BBOX.maxLon;
+    lat >= LOOP_BBOX.minLat &&
+    lat <= LOOP_BBOX.maxLat &&
+    lon >= LOOP_BBOX.minLon &&
+    lon <= LOOP_BBOX.maxLon;
   const loopPoints = points.filter((p) => inBbox(p.lat, p.lon));
 
   // Concentric rings so all five Loop-sharing lines stay visible.
   const RING_ORDER = ['brn', 'g', 'org', 'p', 'pink'];
   const ringIdx = Object.fromEntries(RING_ORDER.map((l, i) => [l, i]));
   const overlays = [];
-  const entries = Object.entries(trainLines)
-    .sort(([a], [b]) => (ringIdx[a] ?? -1) - (ringIdx[b] ?? -1));
+  const entries = Object.entries(trainLines).sort(
+    ([a], [b]) => (ringIdx[a] ?? -1) - (ringIdx[b] ?? -1),
+  );
   for (const [line, segments] of entries) {
     const color = lineColors[line] || 'ffffff';
-    const width = line in ringIdx
-      ? 4 + (RING_ORDER.length - 1 - ringIdx[line]) * 2
-      : 4;
+    const width = line in ringIdx ? 4 + (RING_ORDER.length - 1 - ringIdx[line]) * 2 : 4;
     for (const pts of segments) {
       if (!pts || pts.length < 2) continue;
       overlays.push(`path-${width}+${color}-0.85(${encodeURIComponent(encode(pts))})`);
@@ -83,7 +80,15 @@ async function renderLoopInset({ points, trainLines, lineColors }) {
 
   // Smaller radius so a count-7 dot doesn't swallow the Loop rectangle.
   const insetRadius = (count) => Math.round(8 + 8 * Math.log2(count + 1));
-  const circles = buildCircles(loopPoints, centerLat, centerLon, zoom, LOOP_INSET_SIZE, LOOP_INSET_SIZE, insetRadius);
+  const circles = buildCircles(
+    loopPoints,
+    centerLat,
+    centerLon,
+    zoom,
+    LOOP_INSET_SIZE,
+    LOOP_INSET_SIZE,
+    insetRadius,
+  );
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${LOOP_INSET_SIZE}" height="${LOOP_INSET_SIZE}">
     ${circles.join('\n')}

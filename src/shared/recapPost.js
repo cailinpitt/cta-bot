@@ -34,9 +34,7 @@ function buildPostText({ mode, window, windowLabel, points, totalIncidents }) {
 }
 
 function formatBullet(p) {
-  return p.routesLabel
-    ? `${p.label} — ${p.routesLabel} (${p.count})`
-    : `${p.label} (${p.count})`;
+  return p.routesLabel ? `${p.label} — ${p.routesLabel} (${p.count})` : `${p.label} (${p.count})`;
 }
 
 function buildAltText({ mode, window, windowLabel, points, totalIncidents }) {
@@ -53,7 +51,15 @@ function buildAltText({ mode, window, windowLabel, points, totalIncidents }) {
   return `Heatmap of Chicago showing where ${subject} bunched ${inPhrase}: ${bunches} near ${locs}, with red circles sized by frequency. Top spots: ${top}.`;
 }
 
-function buildGapReplyText({ mode, window, windowLabel, entries, totalGaps, routeCount, formatRoute }) {
+function buildGapReplyText({
+  mode,
+  window,
+  windowLabel,
+  entries,
+  totalGaps,
+  routeCount,
+  formatRoute,
+}) {
   const label = windowLabel || WINDOW_LABELS[window] || window;
   const lines = [`⏰ Headway gaps, ${label}`];
   if (totalGaps === 0 || entries.length === 0) {
@@ -78,7 +84,8 @@ function buildGapReplyAlt({ mode, window, windowLabel, entries, totalGaps, forma
   if (totalGaps === 0 || entries.length === 0) {
     return `Chart showing no headway gaps recorded across ${subject} ${inPhrase}.`;
   }
-  const top = entries.slice(0, 3)
+  const top = entries
+    .slice(0, 3)
     .map((e) => `${formatRoute ? formatRoute(e.route) : e.route} (${e.count})`)
     .join(', ');
   return `Horizontal bar chart of headway gaps by ${mode === 'bus' ? 'route' : 'line'} ${inPhrase}: ${totalGaps} total gaps. Worst: ${top}.`;

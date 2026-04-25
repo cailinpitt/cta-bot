@@ -5,7 +5,13 @@ const _ = require('lodash');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { names: routeNames, speedmap: speedmapRoutes } = require('../../src/bus/routes');
-const { collect, computeSamples, pickTargetPid, binSamples, summarize } = require('../../src/bus/speedmap');
+const {
+  collect,
+  computeSamples,
+  pickTargetPid,
+  binSamples,
+  summarize,
+} = require('../../src/bus/speedmap');
 const { loadPattern } = require('../../src/bus/patterns');
 const { renderSpeedmap } = require('../../src/map');
 const { loginBus, postWithImage } = require('../../src/bus/bluesky');
@@ -55,7 +61,9 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Speedmap for route ${route} (${routeNames[route]}), ${durationMin}min window, poll every ${POLL_INTERVAL_MS / 1000}s`);
+  console.log(
+    `Speedmap for route ${route} (${routeNames[route]}), ${durationMin}min window, poll every ${POLL_INTERVAL_MS / 1000}s`,
+  );
 
   const startTime = new Date();
   const tracks = await collect(route, durationMs, POLL_INTERVAL_MS);
@@ -63,7 +71,9 @@ async function main() {
 
   const { byPid: samplesByPid, stats: sampleStats } = computeSamples(tracks);
   if (sampleStats.restarts > 0 || sampleStats.dropped > 0) {
-    console.log(`Sample filter: ${sampleStats.restarts} pattern restart(s), ${sampleStats.dropped} out-of-range pair(s)`);
+    console.log(
+      `Sample filter: ${sampleStats.restarts} pattern restart(s), ${sampleStats.dropped} out-of-range pair(s)`,
+    );
   }
   const targetPid = pickTargetPid(samplesByPid);
   if (!targetPid) {
@@ -74,7 +84,10 @@ async function main() {
         route,
         direction: null,
         avgMph: null,
-        pctRed: 0, pctOrange: 0, pctYellow: 0, pctGreen: 0,
+        pctRed: 0,
+        pctOrange: 0,
+        pctYellow: 0,
+        pctGreen: 0,
         binSpeeds: [],
         posted: false,
       });
@@ -83,13 +96,17 @@ async function main() {
   }
 
   const samples = samplesByPid.get(targetPid);
-  console.log(`Target pid ${targetPid} with ${samples.length} samples across ${tracks.size} vehicles`);
+  console.log(
+    `Target pid ${targetPid} with ${samples.length} samples across ${tracks.size} vehicles`,
+  );
 
   const pattern = await loadPattern(targetPid);
   const binSpeeds = binSamples(samples, pattern.lengthFt, NUM_BINS);
   const summary = summarize(binSpeeds);
 
-  console.log(`Avg ${summary.avg?.toFixed(1)} mph · red=${summary.red} orange=${summary.orange} yellow=${summary.yellow} green=${summary.green}`);
+  console.log(
+    `Avg ${summary.avg?.toFixed(1)} mph · red=${summary.red} orange=${summary.orange} yellow=${summary.yellow} green=${summary.green}`,
+  );
 
   const callouts = history.speedmapCallouts({
     kind: 'bus',
@@ -103,7 +120,10 @@ async function main() {
   const alt = buildAltText(route, pattern, summary);
 
   if (argv['dry-run']) {
-    const outPath = writeDryRunAsset(image, `speedmap-${route}-${pattern.direction.toLowerCase()}-${targetPid}-${Date.now()}.jpg`);
+    const outPath = writeDryRunAsset(
+      image,
+      `speedmap-${route}-${pattern.direction.toLowerCase()}-${targetPid}-${Date.now()}.jpg`,
+    );
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }

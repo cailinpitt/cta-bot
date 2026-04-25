@@ -2,8 +2,16 @@ const { acquireCooldown } = require('./state');
 
 // Returns { agent, primary } on post, null on cooldown-race loss.
 async function commitAndPost({
-  cooldownKeys, cooldownTtlMs, recordSkip, agentLogin, image, text, alt, recordPosted,
-  postWithImage, postText,
+  cooldownKeys,
+  cooldownTtlMs,
+  recordSkip,
+  agentLogin,
+  image,
+  text,
+  alt,
+  recordPosted,
+  postWithImage,
+  postText,
 }) {
   if (!acquireCooldown(cooldownKeys, Date.now(), cooldownTtlMs || null)) {
     console.log('Lost cooldown race to another instance, skipping post');

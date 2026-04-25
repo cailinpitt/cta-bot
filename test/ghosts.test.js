@@ -7,7 +7,13 @@ const { detectTrainGhosts } = require('../src/train/ghosts');
 // Build a synthetic observation stream: `snapshots` polling timestamps, and at
 // each one, `vidsPerSnapshot` distinct vids sharing `pid`. Used to shape
 // observed_active to a desired value.
-function buildObs({ pid, snapshots, vidsPerSnapshot, startTs = 1_700_000_000_000, intervalMs = 5 * 60 * 1000 }) {
+function buildObs({
+  pid,
+  snapshots,
+  vidsPerSnapshot,
+  startTs = 1_700_000_000_000,
+  intervalMs = 5 * 60 * 1000,
+}) {
   const rows = [];
   for (let i = 0; i < snapshots; i++) {
     const ts = startTs + i * intervalMs;
@@ -18,11 +24,18 @@ function buildObs({ pid, snapshots, vidsPerSnapshot, startTs = 1_700_000_000_000
   return rows;
 }
 
-function mkPattern(label, route = '66') { return { pid: `p-${label}-${route}`, direction: label, route }; }
+function mkPattern(label, route = '66') {
+  return { pid: `p-${label}-${route}`, direction: label, route };
+}
 
 // Build an observation stream where each snapshot has a specific count. Used
 // for ramp-up / tail-median tests where shape-over-time matters.
-function buildObsShaped({ pid, countsPerSnapshot, startTs = 1_700_000_000_000, intervalMs = 5 * 60 * 1000 }) {
+function buildObsShaped({
+  pid,
+  countsPerSnapshot,
+  startTs = 1_700_000_000_000,
+  intervalMs = 5 * 60 * 1000,
+}) {
   const rows = [];
   for (let i = 0; i < countsPerSnapshot.length; i++) {
     const ts = startTs + i * intervalMs;
@@ -100,7 +113,10 @@ test('merges observations from multiple pids when they resolve to the same direc
   // merged snapshot should show 4 distinct vids.
   const rows = [
     ...buildObs({ pid: 'p-weekday', snapshots: 12, vidsPerSnapshot: 2 }),
-    ...buildObs({ pid: 'p-express', snapshots: 12, vidsPerSnapshot: 2 }).map((r, i) => ({ ...r, vehicle_id: `x${i % 2}` })),
+    ...buildObs({ pid: 'p-express', snapshots: 12, vidsPerSnapshot: 2 }).map((r, i) => ({
+      ...r,
+      vehicle_id: `x${i % 2}`,
+    })),
   ];
   const events = await detectBusGhosts({
     routes: ['66'],
@@ -131,8 +147,12 @@ test('skips when expected active count is below 2 (too sparse to be newsworthy)'
 test('skips routes where expectedActive is null (no schedule data for this hour)', async () => {
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 1 });
   const events = await detectBusGhosts({
-    routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 10, expectedDuration: () => 60, expectedActive: () => null,
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 10,
+    expectedDuration: () => 60,
+    expectedActive: () => null,
   });
   assert.equal(events.length, 0);
 });
@@ -169,12 +189,21 @@ test('buildRollupPost uses singular "route" when exactly 1 is dropped', () => {
 
 // Synthetic train observations: N snapshots, with a configurable number of
 // distinct vehicles on each of two Train Tracker directions (trDr=1, trDr=5).
-function buildTrainObs({ snapshots, vidsTrDr1, vidsTrDr5, destination = 'Loop', startTs = 1_700_000_000_000, intervalMs = 5 * 60 * 1000 }) {
+function buildTrainObs({
+  snapshots,
+  vidsTrDr1,
+  vidsTrDr5,
+  destination = 'Loop',
+  startTs = 1_700_000_000_000,
+  intervalMs = 5 * 60 * 1000,
+}) {
   const rows = [];
   for (let i = 0; i < snapshots; i++) {
     const ts = startTs + i * intervalMs;
-    for (let v = 0; v < vidsTrDr1; v++) rows.push({ ts, direction: '1', vehicle_id: `a${v}`, destination });
-    for (let v = 0; v < vidsTrDr5; v++) rows.push({ ts, direction: '5', vehicle_id: `b${v}`, destination: '54th/Cermak' });
+    for (let v = 0; v < vidsTrDr1; v++)
+      rows.push({ ts, direction: '1', vehicle_id: `a${v}`, destination });
+    for (let v = 0; v < vidsTrDr5; v++)
+      rows.push({ ts, direction: '5', vehicle_id: `b${v}`, destination: '54th/Cermak' });
   }
   return rows;
 }
@@ -224,7 +253,12 @@ test('bi-directional lines still split by trDr', async () => {
   // Blue Line Forest Park: expected 14, observed 9 → missing 5 on just the
   // trDr=5 side. isLoopLine returns false, so the existing per-trDr grouping
   // runs and fires a ghost for one direction while the other passes.
-  const obs = buildTrainObs({ snapshots: 12, vidsTrDr1: 14, vidsTrDr5: 9, destination: 'Forest Park' });
+  const obs = buildTrainObs({
+    snapshots: 12,
+    vidsTrDr1: 14,
+    vidsTrDr5: 9,
+    destination: 'Forest Park',
+  });
   const events = await detectTrainGhosts({
     lines: ['blue'],
     getObservations: () => obs,
@@ -241,7 +275,12 @@ test('bi-directional lines still split by trDr', async () => {
 });
 
 test('bi-directional line: skips direction whose destinations are all short-turns', async () => {
-  const obs = buildTrainObs({ snapshots: 12, vidsTrDr1: 14, vidsTrDr5: 9, destination: 'UIC-Halsted' });
+  const obs = buildTrainObs({
+    snapshots: 12,
+    vidsTrDr1: 14,
+    vidsTrDr5: 9,
+    destination: 'UIC-Halsted',
+  });
   const events = await detectTrainGhosts({
     lines: ['blue'],
     getObservations: () => obs,
@@ -260,7 +299,7 @@ test('bi-directional line: prefers a terminal destination when mixed with short-
   for (let i = 0; i < obs.length; i++) {
     obs[i].destination = i % 2 === 0 ? 'UIC-Halsted' : 'Forest Park';
   }
-  const findStation = (line, dest) => {
+  const findStation = (_line, dest) => {
     if (dest === 'Forest Park') return { lat: 41.87, lon: -87.81, isTerminal: true };
     return { lat: 41.87, lon: -87.65, isTerminal: false };
   };
@@ -280,7 +319,10 @@ test('bi-directional line: prefers a terminal destination when mixed with short-
 test('skips a route entirely when any observed pid fails pattern resolution', async () => {
   const obs = [
     ...buildObs({ pid: 'good', snapshots: 12, vidsPerSnapshot: 3 }),
-    ...buildObs({ pid: 'broken', snapshots: 12, vidsPerSnapshot: 3 }).map((r, i) => ({ ...r, vehicle_id: `x${i % 3}` })),
+    ...buildObs({ pid: 'broken', snapshots: 12, vidsPerSnapshot: 3 }).map((r, i) => ({
+      ...r,
+      vehicle_id: `x${i % 3}`,
+    })),
   ];
   const events = await detectBusGhosts({
     routes: ['66'],
@@ -311,27 +353,55 @@ test('skips a route when a pid resolves to a pattern with no direction label', a
 
 test('bus formatLine: ratio > 3 drops effective-headway estimate and says "scheduled every"', () => {
   const { formatLine } = require('../bin/bus/ghosts');
-  const out = formatLine({ route: '22', direction: 'Northbound', missing: 9, expectedActive: 10, observedActive: 1, headway: 10 });
+  const out = formatLine({
+    route: '22',
+    direction: 'Northbound',
+    missing: 9,
+    expectedActive: 10,
+    observedActive: 1,
+    headway: 10,
+  });
   assert.match(out, /scheduled every ~10 min$/);
   assert.doesNotMatch(out, /instead of/);
 });
 
 test('bus formatLine: ratio <= 3 keeps effective-headway estimate', () => {
   const { formatLine } = require('../bin/bus/ghosts');
-  const out = formatLine({ route: '22', direction: 'Northbound', missing: 4, expectedActive: 10, observedActive: 6, headway: 10 });
+  const out = formatLine({
+    route: '22',
+    direction: 'Northbound',
+    missing: 4,
+    expectedActive: 10,
+    observedActive: 6,
+    headway: 10,
+  });
   assert.match(out, /every ~17 min instead of ~10$/);
 });
 
 test('train formatLine: ratio > 3 drops effective-headway estimate', () => {
   const { formatLine } = require('../bin/train/ghosts');
-  const out = formatLine({ line: 'red', destination: 'Howard', missing: 10, expectedActive: 12, observedActive: 1, headway: 8 });
+  const out = formatLine({
+    line: 'red',
+    destination: 'Howard',
+    missing: 10,
+    expectedActive: 12,
+    observedActive: 1,
+    headway: 8,
+  });
   assert.match(out, /scheduled every ~8 min$/);
   assert.doesNotMatch(out, /instead of/);
 });
 
 test('train formatLine: ratio <= 3 keeps effective-headway estimate', () => {
   const { formatLine } = require('../bin/train/ghosts');
-  const out = formatLine({ line: 'red', destination: 'Howard', missing: 4, expectedActive: 12, observedActive: 8, headway: 8 });
+  const out = formatLine({
+    line: 'red',
+    destination: 'Howard',
+    missing: 4,
+    expectedActive: 12,
+    observedActive: 8,
+    headway: 8,
+  });
   assert.match(out, /every ~12 min instead of ~8$/);
 });
 
@@ -340,8 +410,12 @@ test('sanity gate: MIN_OBSERVED blocks events when observed drops below 2', asyn
   // passes the main thresholds but fails the observed-floor sanity gate.
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 1 });
   const events = await detectBusGhosts({
-    routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6, expectedDuration: () => 60, expectedActive: () => 10,
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 6,
+    expectedDuration: () => 60,
+    expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -349,8 +423,12 @@ test('sanity gate: MIN_OBSERVED blocks events when observed drops below 2', asyn
 test('sanity gate: MIN_SNAPSHOTS=8 blocks coverage below 8 snapshots', async () => {
   const obs = buildObs({ pid: 'p1', snapshots: 7, vidsPerSnapshot: 3 });
   const events = await detectBusGhosts({
-    routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6, expectedDuration: () => 60, expectedActive: () => 10,
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 6,
+    expectedDuration: () => 60,
+    expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -358,8 +436,12 @@ test('sanity gate: MIN_SNAPSHOTS=8 blocks coverage below 8 snapshots', async () 
 test('sanity gate: MAX_EXPECTED_ACTIVE cap blocks absurd schedules', async () => {
   const obs = buildObs({ pid: 'p1', snapshots: 12, vidsPerSnapshot: 10 });
   const events = await detectBusGhosts({
-    routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 0.5, expectedDuration: () => 60, expectedActive: () => 120,
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 0.5,
+    expectedDuration: () => 60,
+    expectedActive: () => 120,
   });
   assert.equal(events.length, 0);
 });
@@ -375,8 +457,12 @@ test('sanity gate: stddev > observed blocks noisy/bimodal polling windows', asyn
     }
   }
   const events = await detectBusGhosts({
-    routes: ['66'], getObservations: () => obs, getPattern: async () => mkPattern('Eastbound'),
-    expectedHeadway: () => 6, expectedDuration: () => 60, expectedActive: () => 10,
+    routes: ['66'],
+    getObservations: () => obs,
+    getPattern: async () => mkPattern('Eastbound'),
+    expectedHeadway: () => 6,
+    expectedDuration: () => 60,
+    expectedActive: () => 10,
   });
   assert.equal(events.length, 0);
 });
@@ -404,7 +490,10 @@ test('ramp-up gate: suppresses when tail-of-window median reaches expected (pipe
   // Expected 12 (duration 60 / headway 5). Counts ramp from 2 → 12 across 12 snapshots.
   // Full-window median = 7 (would normally fire: 5 missing, 42%), but the tail median
   // (last 3 of 12) = 11 ≥ 0.8 × 12 = 9.6, so the pipeline is filling, not ghosting.
-  const obs = buildObsShaped({ pid: 'p1', countsPerSnapshot: [2,3,4,5,6,7,8,9,10,11,11,12] });
+  const obs = buildObsShaped({
+    pid: 'p1',
+    countsPerSnapshot: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12],
+  });
   const events = await detectBusGhosts({
     routes: ['66'],
     getObservations: () => obs,
@@ -418,7 +507,10 @@ test('ramp-up gate: suppresses when tail-of-window median reaches expected (pipe
 
 test('ramp-up gate: still fires when tail remains well below expected (real outage)', async () => {
   // Expected 12. Counts dropped and stayed dropped: median 5, tail median 5. 5 < 0.8 × 12 = 9.6 → fires.
-  const obs = buildObsShaped({ pid: 'p1', countsPerSnapshot: [5,5,5,6,5,5,5,6,5,5,5,5] });
+  const obs = buildObsShaped({
+    pid: 'p1',
+    countsPerSnapshot: [5, 5, 5, 6, 5, 5, 5, 6, 5, 5, 5, 5],
+  });
   const events = await detectBusGhosts({
     routes: ['66'],
     getObservations: () => obs,
@@ -433,7 +525,10 @@ test('ramp-up gate: still fires when tail remains well below expected (real outa
 
 test('ramp-up gate: fires on mid-window outage even if tail partially recovers (below 80% threshold)', async () => {
   // Expected 12. Outage mid-window, partial recovery to 9 at tail. 9 < 0.8 × 12 = 9.6 → still fires.
-  const obs = buildObsShaped({ pid: 'p1', countsPerSnapshot: [12,12,4,3,3,3,4,5,6,8,9,9] });
+  const obs = buildObsShaped({
+    pid: 'p1',
+    countsPerSnapshot: [12, 12, 4, 3, 3, 3, 4, 5, 6, 8, 9, 9],
+  });
   const events = await detectBusGhosts({
     routes: ['66'],
     getObservations: () => obs,
@@ -450,7 +545,7 @@ test('ramp-up gate applies to trains too (loop line)', async () => {
   // Tail median 8 ≥ 0.8 × 9 = 7.2 → suppressed.
   const rows = [];
   const ts0 = 1_700_000_000_000;
-  const counts = [1,2,3,4,5,6,7,7,8,8,8,8];
+  const counts = [1, 2, 3, 4, 5, 6, 7, 7, 8, 8, 8, 8];
   for (let i = 0; i < counts.length; i++) {
     const ts = ts0 + i * 5 * 60 * 1000;
     for (let v = 0; v < counts[i]; v++) {

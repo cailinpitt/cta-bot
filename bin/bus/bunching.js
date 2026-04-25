@@ -8,7 +8,12 @@ const { bunching: bunchingRoutes } = require('../../src/bus/routes');
 const { detectAllBunching } = require('../../src/bus/bunching');
 const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
 const { renderBunchingMap } = require('../../src/map');
-const { fetchSignalsInBbox, filterSignalsOnRoute, dedupeNearbySignals, annotateSignalOrientations } = require('../../src/bus/trafficSignals');
+const {
+  fetchSignalsInBbox,
+  filterSignalsOnRoute,
+  dedupeNearbySignals,
+  annotateSignalOrientations,
+} = require('../../src/bus/trafficSignals');
 const { captureBunchingVideo } = require('../../src/bus/bunchingVideo');
 const { loginBus, postWithImage, postWithVideo, postText } = require('../../src/bus/bluesky');
 const { isOnCooldown } = require('../../src/shared/state');
@@ -16,7 +21,12 @@ const { commitAndPost } = require('../../src/shared/postDetection');
 const { terminalZoneFt: terminalZoneFor } = require('../../src/shared/geo');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
-const { buildPostText, buildAltText, buildVideoPostText, buildVideoAltText } = require('../../src/bus/bunchingPost');
+const {
+  buildPostText,
+  buildAltText,
+  buildVideoPostText,
+  buildVideoAltText,
+} = require('../../src/bus/bunchingPost');
 
 const BUS_BUNCHING_DAILY_CAP = 3;
 
@@ -24,7 +34,9 @@ async function main() {
   setup();
   const routes = bunchingRoutes;
   const { vehicles, now, source } = await getVehiclesCachedOrFresh(routes);
-  console.log(`Got ${vehicles.length} vehicles (${source}, snapshot ${new Date(now).toISOString()})`);
+  console.log(
+    `Got ${vehicles.length} vehicles (${source}, snapshot ${new Date(now).toISOString()})`,
+  );
 
   const bunches = detectAllBunching(vehicles, now);
   if (bunches.length === 0) {
@@ -34,7 +46,9 @@ async function main() {
 
   console.log(`Found ${bunches.length} candidate bunch(es); picking best available:`);
   for (const b of bunches) {
-    console.log(`  route ${b.route} pid ${b.pid} — ${b.vehicles.length} buses, span ${b.spanFt} ft, maxGap ${b.maxGapFt} ft`);
+    console.log(
+      `  route ${b.route} pid ${b.pid} — ${b.vehicles.length} buses, span ${b.spanFt} ft, maxGap ${b.maxGapFt} ft`,
+    );
   }
 
   let bunch = null;
@@ -56,11 +70,12 @@ async function main() {
     const inStartZone = firstBus.pdist < terminalZoneFt;
     const inEndZone = candidatePattern.lengthFt - lastBus.pdist < terminalZoneFt;
     if (isAtStartTerminalStop || isAtEndTerminalStop || inStartZone || inEndZone) {
-      const reason = isAtStartTerminalStop || isAtEndTerminalStop
-        ? `nearest stop "${stop.stopName}" is a terminal`
-        : inStartZone
-          ? `within ${Math.round(terminalZoneFt)}ft of start terminal`
-          : `within ${Math.round(terminalZoneFt)}ft of end terminal`;
+      const reason =
+        isAtStartTerminalStop || isAtEndTerminalStop
+          ? `nearest stop "${stop.stopName}" is a terminal`
+          : inStartZone
+            ? `within ${Math.round(terminalZoneFt)}ft of start terminal`
+            : `within ${Math.round(terminalZoneFt)}ft of end terminal`;
       console.log(`  skip pid ${candidate.pid}: ${reason}`);
       continue;
     }
@@ -90,7 +105,9 @@ async function main() {
         cap: BUS_BUNCHING_DAILY_CAP,
       });
       if (!capAllows) {
-        console.log(`  skip pid ${candidate.pid}: route ${candidate.route} at daily cap (${BUS_BUNCHING_DAILY_CAP}) and not more severe than today's posts`);
+        console.log(
+          `  skip pid ${candidate.pid}: route ${candidate.route} at daily cap (${BUS_BUNCHING_DAILY_CAP}) and not more severe than today's posts`,
+        );
         history.recordBunching({
           kind: 'bus',
           route: candidate.route,
@@ -114,7 +131,9 @@ async function main() {
     return;
   }
 
-  console.log(`Posting: route ${bunch.route} pid ${bunch.pid} — ${bunch.vehicles.length} buses, ${bunch.spanFt} ft`);
+  console.log(
+    `Posting: route ${bunch.route} pid ${bunch.pid} — ${bunch.vehicles.length} buses, ${bunch.spanFt} ft`,
+  );
 
   const stop = chosenStop;
 
@@ -140,7 +159,9 @@ async function main() {
   const bboxSignals = await fetchSignalsInBbox(patternBbox);
   const onRoute = filterSignalsOnRoute(bboxSignals, pattern.points);
   const signals = annotateSignalOrientations(dedupeNearbySignals(onRoute), pattern.points);
-  console.log(`Signals: ${bboxSignals.length} in pattern bbox → ${onRoute.length} on route → ${signals.length} after dedupe`);
+  console.log(
+    `Signals: ${bboxSignals.length} in pattern bbox → ${onRoute.length} on route → ${signals.length} after dedupe`,
+  );
   let image;
   try {
     image = await renderBunchingMap(bunch, pattern, signals);
@@ -153,20 +174,35 @@ async function main() {
   const alt = buildAltText(bunch, pattern, stop);
 
   if (argv['dry-run']) {
-    const outPath = writeDryRunAsset(image, `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.jpg`);
+    const outPath = writeDryRunAsset(
+      image,
+      `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.jpg`,
+    );
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     if (argv.video) {
       const ticks = argv.ticks ? parseInt(argv.ticks, 10) : undefined;
       const tickMs = argv['tick-ms'] ? parseInt(argv['tick-ms'], 10) : undefined;
       const interpolate = argv.interpolate ? parseInt(argv.interpolate, 10) : undefined;
-      console.log(`\nCapturing video (ticks=${ticks || 'default'}, tickMs=${tickMs || 'default'}, interpolate=${interpolate || 'default'})...`);
-      const result = await captureBunchingVideo(bunch, pattern, { ticks, tickMs, interpolate, signals });
+      console.log(
+        `\nCapturing video (ticks=${ticks || 'default'}, tickMs=${tickMs || 'default'}, interpolate=${interpolate || 'default'})...`,
+      );
+      const result = await captureBunchingVideo(bunch, pattern, {
+        ticks,
+        tickMs,
+        interpolate,
+        signals,
+      });
       if (!result) {
         console.log('Video capture produced <2 frames, skipped');
       } else {
-        const videoPath = writeDryRunAsset(result.buffer, `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.mp4`);
+        const videoPath = writeDryRunAsset(
+          result.buffer,
+          `bunching-${bunch.route}-${pattern.direction.toLowerCase()}-${bunch.pid}-${Date.now()}.mp4`,
+        );
         console.log(`Video: ${videoPath}`);
-        console.log(`  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, span ${result.initialSpanFt}ft → ${result.finalSpanFt ?? '?'}ft`);
+        console.log(
+          `  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, span ${result.initialSpanFt}ft → ${result.finalSpanFt ?? '?'}ft`,
+        );
       }
     }
     return;
@@ -184,9 +220,13 @@ async function main() {
     cooldownKeys: [bunch.pid, `route:${bunch.route}`],
     recordSkip: () => history.recordBunching({ ...baseEvent, posted: false }),
     agentLogin: loginBus,
-    image, text, alt,
-    recordPosted: (primary) => history.recordBunching({ ...baseEvent, posted: true, postUri: primary.uri }),
-    postWithImage, postText,
+    image,
+    text,
+    alt,
+    recordPosted: (primary) =>
+      history.recordBunching({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage,
+    postText,
   });
   if (!result) return;
   const { agent, primary } = result;

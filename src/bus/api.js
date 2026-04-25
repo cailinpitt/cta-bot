@@ -5,10 +5,14 @@ const { withRetry } = require('../shared/retry');
 const BUS_BASE = 'https://www.ctabustracker.com/bustime/api/v3';
 
 async function get(endpoint, params) {
-  const { data } = await withRetry(() => axios.get(`${BUS_BASE}/${endpoint}`, {
-    params: { key: process.env.CTA_BUS_KEY, format: 'json', ...params },
-    timeout: 15000,
-  }), { label: `CTA bus ${endpoint}` });
+  const { data } = await withRetry(
+    () =>
+      axios.get(`${BUS_BASE}/${endpoint}`, {
+        params: { key: process.env.CTA_BUS_KEY, format: 'json', ...params },
+        timeout: 15000,
+      }),
+    { label: `CTA bus ${endpoint}` },
+  );
   const body = data['bustime-response'];
   if (body.error) {
     // "No data found" just means a route has no active vehicles (e.g. express
@@ -45,16 +49,30 @@ function parseVehicle(v) {
 // without a tz library by round-tripping through Intl.DateTimeFormat.
 function parseBusTime(s) {
   const [d, t] = s.split(' ');
-  const y = +d.slice(0, 4), mo = +d.slice(4, 6), da = +d.slice(6, 8);
+  const y = +d.slice(0, 4),
+    mo = +d.slice(4, 6),
+    da = +d.slice(6, 8);
   const [h, mi, se] = t.split(':').map(Number);
   const utcGuess = Date.UTC(y, mo - 1, da, h, mi, se);
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
   }).formatToParts(new Date(utcGuess));
   const get = (k) => +parts.find((p) => p.type === k).value;
-  const seenAsUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  const seenAsUtc = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second'),
+  );
   const offset = utcGuess - seenAsUtc;
   return new Date(utcGuess + offset);
 }
@@ -118,4 +136,10 @@ async function getVehiclesCachedOrFresh(routes, { maxStaleMs = 4 * 60 * 1000 } =
   return { vehicles, now: new Date(), source: 'fetch' };
 }
 
-module.exports = { getVehicles, getVehiclesCachedOrFresh, getPattern, getPredictions, parseBusTime };
+module.exports = {
+  getVehicles,
+  getVehiclesCachedOrFresh,
+  getPattern,
+  getPredictions,
+  parseBusTime,
+};

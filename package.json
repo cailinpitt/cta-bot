@@ -40,8 +40,20 @@
     "train-ghosts": "node bin/train/ghosts.js",
     "train-ghosts:dry": "node bin/train/ghosts.js --dry-run",
     "test": "node --test test/*.test.js test/**/*.test.js",
-    "smoke": "for f in bin/bus/*.js bin/train/*.js; do node \"$f\" --check || exit 1; done"
+    "smoke": "for f in bin/bus/*.js bin/train/*.js; do node \"$f\" --check || exit 1; done",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,json}": "biome check --write --no-errors-on-unmatched"
   },
   "author": "Cailin Pitt <cailinpitt1@gmail.com> (https://cailinpitt.com)",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.13",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0"
+  }
 }

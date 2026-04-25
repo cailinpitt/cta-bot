@@ -10,19 +10,20 @@
 const { buildLineBranches, snapToLineWithPerp } = require('./speedmap');
 const { terminalZoneFt } = require('../shared/geo');
 
-const MAX_PERP_FT = 1500;       // reject projections from off-branch trains
+const MAX_PERP_FT = 1500; // reject projections from off-branch trains
 const DEFAULT_LOOKBACK_MS = 20 * 60 * 1000;
-const DEFAULT_BIN_FT = 1320;    // 0.25 mi
+const DEFAULT_BIN_FT = 1320; // 0.25 mi
 const DEFAULT_MIN_RUN_FT = 10560; // 2 mi
 const DEFAULT_MIN_COLD_MS = 15 * 60 * 1000;
 const DEFAULT_MIN_COVERAGE_FRAC = 0.5;
 const DEFAULT_MIN_SPAN_FRAC = 0.5;
 
-function detectDeadSegments({ line, observations, trainLines, stations, headwayMin, now, opts = {} }) {
+function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts = {} }) {
   const lookbackMs = opts.lookbackMs || DEFAULT_LOOKBACK_MS;
   const binFt = opts.binFt || DEFAULT_BIN_FT;
   const minRunFt = opts.minRunFt || DEFAULT_MIN_RUN_FT;
-  const minCoverageFrac = opts.minCoverageFrac != null ? opts.minCoverageFrac : DEFAULT_MIN_COVERAGE_FRAC;
+  const minCoverageFrac =
+    opts.minCoverageFrac != null ? opts.minCoverageFrac : DEFAULT_MIN_COVERAGE_FRAC;
   const minSpanFrac = opts.minSpanFrac != null ? opts.minSpanFrac : DEFAULT_MIN_SPAN_FRAC;
   const coldThresholdMs = Math.max(
     DEFAULT_MIN_COLD_MS,

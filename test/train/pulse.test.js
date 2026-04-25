@@ -31,7 +31,8 @@ test('flags a long cold stretch in the middle of the line', () => {
   const candidates = detectDeadSegments({
     line: 'red',
     observations: [],
-    trainLines, stations,
+    trainLines,
+    stations,
     headwayMin: 7,
     now,
     opts: { recentPositions: recent, minRunFt: 5000, minCoverageFrac: 0, minSpanFrac: 0 },
@@ -39,7 +40,10 @@ test('flags a long cold stretch in the middle of the line', () => {
 
   assert.ok(candidates.length >= 1, 'should flag a candidate');
   const c = candidates[0];
-  assert.ok(c.runLoFt > 20000 && c.runHiFt < 55000, `run bounds unexpected: ${c.runLoFt}-${c.runHiFt}`);
+  assert.ok(
+    c.runLoFt > 20000 && c.runHiFt < 55000,
+    `run bounds unexpected: ${c.runLoFt}-${c.runHiFt}`,
+  );
   assert.ok(c.fromStation && c.toStation);
 });
 
@@ -53,7 +57,8 @@ test('does not flag when trains are distributed across the line', () => {
   const candidates = detectDeadSegments({
     line: 'red',
     observations: [],
-    trainLines, stations,
+    trainLines,
+    stations,
     headwayMin: 7,
     now,
     opts: { recentPositions: recent, minCoverageFrac: 0, minSpanFrac: 0 },
@@ -64,14 +69,12 @@ test('does not flag when trains are distributed across the line', () => {
 test('does not flag full-line cold-start with sparse observations', () => {
   const now = 1_700_000_000_000;
   const stations = buildStations();
-  const recent = [
-    position(2000, now - 1 * 60 * 1000),
-    position(4000, now - 1 * 60 * 1000),
-  ];
+  const recent = [position(2000, now - 1 * 60 * 1000), position(4000, now - 1 * 60 * 1000)];
   const candidates = detectDeadSegments({
     line: 'red',
     observations: [],
-    trainLines, stations,
+    trainLines,
+    stations,
     headwayMin: 7,
     now,
     opts: { recentPositions: recent, minSpanFrac: 0 },
@@ -89,7 +92,8 @@ test('does not flag when fresh observations span less than half lookback', () =>
   const candidates = detectDeadSegments({
     line: 'red',
     observations: [],
-    trainLines, stations,
+    trainLines,
+    stations,
     headwayMin: 7,
     now,
     opts: { recentPositions: recent, minCoverageFrac: 0 },
@@ -112,7 +116,8 @@ test('flags a real outage when coverage and span gates are met', () => {
   const candidates = detectDeadSegments({
     line: 'red',
     observations: [],
-    trainLines, stations,
+    trainLines,
+    stations,
     headwayMin: 7,
     now,
     opts: { recentPositions: recent, minRunFt: 5000 },
@@ -132,7 +137,8 @@ test('ignores terminal zones at both ends', () => {
   const candidates = detectDeadSegments({
     line: 'red',
     observations: [],
-    trainLines, stations,
+    trainLines,
+    stations,
     headwayMin: 7,
     now,
     opts: { recentPositions: recent, minRunFt: 5000, minCoverageFrac: 0, minSpanFrac: 0 },

@@ -19,7 +19,16 @@ const BAR_GAP = 18;
 
 const WINDOW_LABELS = { week: 'this week', month: 'this month' };
 
-function renderGapChart({ kind, entries, window, windowLabel = null, lineNames = null, lineColors = null, totalGaps, formatRoute = null }) {
+function renderGapChart({
+  kind,
+  entries,
+  window,
+  windowLabel = null,
+  lineNames = null,
+  lineColors = null,
+  totalGaps,
+  formatRoute = null,
+}) {
   const title = kind === 'train' ? '⏰ Headway gaps by line' : '⏰ Headway gaps by route';
   const label = windowLabel || WINDOW_LABELS[window] || window;
   const subtitle = `${totalGaps} gap${totalGaps === 1 ? '' : 's'}, ${label}`;
@@ -33,24 +42,27 @@ function renderGapChart({ kind, entries, window, windowLabel = null, lineNames =
   const barMaxW = SIZE - PAD_X - barX - COUNT_LABEL_W;
   const maxCount = Math.max(1, ...entries.map((e) => e.count));
 
-  const bars = entries.map((e, i) => {
-    const y = chartTop + i * (rowHeight + BAR_GAP);
-    const w = Math.max(6, (e.count / maxCount) * barMaxW);
-    const color = kind === 'train' && lineColors?.[e.route]
-      ? `#${lineColors[e.route]}`
-      : '#ff2a6d';
-    const labelText = formatRoute
-      ? formatRoute(e.route)
-      : (kind === 'train' && lineNames?.[e.route] ? lineNames[e.route] : e.route);
-    const labelY = y + rowHeight / 2 + 10;
-    const countX = barX + w + 16;
-    const barRadius = Math.min(10, rowHeight / 2);
-    return [
-      `<text x="${barX - 16}" y="${labelY}" fill="${TEXT}" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="600">${xmlEscape(labelText)}</text>`,
-      `<rect x="${barX}" y="${y}" width="${w}" height="${rowHeight}" rx="${barRadius}" fill="${color}"/>`,
-      `<text x="${countX}" y="${labelY}" fill="${TEXT}" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="700">${e.count}</text>`,
-    ].join('');
-  }).join('\n');
+  const bars = entries
+    .map((e, i) => {
+      const y = chartTop + i * (rowHeight + BAR_GAP);
+      const w = Math.max(6, (e.count / maxCount) * barMaxW);
+      const color =
+        kind === 'train' && lineColors?.[e.route] ? `#${lineColors[e.route]}` : '#ff2a6d';
+      const labelText = formatRoute
+        ? formatRoute(e.route)
+        : kind === 'train' && lineNames?.[e.route]
+          ? lineNames[e.route]
+          : e.route;
+      const labelY = y + rowHeight / 2 + 10;
+      const countX = barX + w + 16;
+      const barRadius = Math.min(10, rowHeight / 2);
+      return [
+        `<text x="${barX - 16}" y="${labelY}" fill="${TEXT}" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="600">${xmlEscape(labelText)}</text>`,
+        `<rect x="${barX}" y="${y}" width="${w}" height="${rowHeight}" rx="${barRadius}" fill="${color}"/>`,
+        `<text x="${countX}" y="${labelY}" fill="${TEXT}" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="700">${e.count}</text>`,
+      ].join('');
+    })
+    .join('\n');
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}">
     <rect width="${SIZE}" height="${SIZE}" fill="${BG}"/>

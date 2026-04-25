@@ -3,12 +3,27 @@
 
 const FRESH = new Date('2026-04-18T12:00:00Z').getTime();
 
-function bus({ vid = '1', pid = '100', route = '22', pdist, tmstmp = FRESH, lat = 41.9, lon = -87.65 }) {
+function bus({
+  vid = '1',
+  pid = '100',
+  route = '22',
+  pdist,
+  tmstmp = FRESH,
+  lat = 41.9,
+  lon = -87.65,
+}) {
   return { vid, pid, route, pdist, tmstmp, lat, lon };
 }
 
 function train({
-  rn = '101', line = 'red', trDr = '1', lat, lon, heading = 0, destination = 'Howard', nextStation = 'Fullerton',
+  rn = '101',
+  line = 'red',
+  trDr = '1',
+  lat,
+  lon,
+  heading = 0,
+  destination = 'Howard',
+  nextStation = 'Fullerton',
 }) {
   return { rn, line, trDr, lat, lon, heading, destination, nextStation };
 }

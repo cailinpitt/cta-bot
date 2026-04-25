@@ -64,4 +64,3 @@ function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new
 }
 
 module.exports = { detectAllGaps, RATIO_THRESHOLD, ABSOLUTE_MIN_MIN, TYPICAL_SPEED_FT_PER_MIN };
-

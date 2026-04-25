@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const Path = require('path');
+const Path = require('node:path');
 const Fs = require('fs-extra');
 
 // Point the DB at a temp file so this test doesn't touch the real history.sqlite.
@@ -19,7 +19,7 @@ delete require.cache[obsPath];
 // Monkey-patch the path constant by intercepting better-sqlite3.
 const Database = require('better-sqlite3');
 const realDB = new Database(TMP);
-const origPrepare = Database.prototype.prepare;
+const _origPrepare = Database.prototype.prepare;
 // (we can't easily intercept the path; instead just rely on the fact that the
 // real DB module reads from src/../state/history.sqlite — for an isolated
 // integration test we'd refactor. Skipping the hard isolation: this test
@@ -28,7 +28,11 @@ realDB.close();
 Fs.removeSync(TMP);
 
 const { getDb } = require('../../src/shared/history');
-const { recordBusObservations, getLatestBusSnapshot, rolloffOldObservations } = require('../../src/shared/observations');
+const {
+  recordBusObservations,
+  getLatestBusSnapshot,
+  rolloffOldObservations,
+} = require('../../src/shared/observations');
 
 function clearBusObs() {
   getDb().prepare("DELETE FROM observations WHERE kind = 'bus' AND route LIKE 'TEST_%'").run();
@@ -44,18 +48,50 @@ test('getLatestBusSnapshot returns Vehicle-shaped rows from the most recent ts',
   clearBusObs();
   const now = Date.now();
   // Older snapshot — should NOT be returned
-  recordBusObservations([{
-    vid: 'a', route: 'TEST_1', pid: '100', destination: 'X',
-    lat: 41.9, lon: -87.6, pdist: 1000, heading: 90,
-    tmstmp: new Date(now - 6 * 60 * 1000),
-  }], now - 5 * 60 * 1000);
+  recordBusObservations(
+    [
+      {
+        vid: 'a',
+        route: 'TEST_1',
+        pid: '100',
+        destination: 'X',
+        lat: 41.9,
+        lon: -87.6,
+        pdist: 1000,
+        heading: 90,
+        tmstmp: new Date(now - 6 * 60 * 1000),
+      },
+    ],
+    now - 5 * 60 * 1000,
+  );
   // Newer snapshot — should be returned
-  recordBusObservations([
-    { vid: 'b', route: 'TEST_1', pid: '100', destination: 'X',
-      lat: 41.91, lon: -87.61, pdist: 2000, heading: 92, tmstmp: new Date(now - 30 * 1000) },
-    { vid: 'c', route: 'TEST_2', pid: '200', destination: 'Y',
-      lat: 41.92, lon: -87.62, pdist: 3000, heading: 180, tmstmp: new Date(now - 60 * 1000) },
-  ], now - 30 * 1000);
+  recordBusObservations(
+    [
+      {
+        vid: 'b',
+        route: 'TEST_1',
+        pid: '100',
+        destination: 'X',
+        lat: 41.91,
+        lon: -87.61,
+        pdist: 2000,
+        heading: 92,
+        tmstmp: new Date(now - 30 * 1000),
+      },
+      {
+        vid: 'c',
+        route: 'TEST_2',
+        pid: '200',
+        destination: 'Y',
+        lat: 41.92,
+        lon: -87.62,
+        pdist: 3000,
+        heading: 180,
+        tmstmp: new Date(now - 60 * 1000),
+      },
+    ],
+    now - 30 * 1000,
+  );
 
   const result = getLatestBusSnapshot(['TEST_1', 'TEST_2'], 4 * 60 * 1000, now);
   assert.ok(result, 'expected a snapshot');
@@ -74,11 +110,22 @@ test('getLatestBusSnapshot returns Vehicle-shaped rows from the most recent ts',
 test('getLatestBusSnapshot returns null when snapshot exceeds maxStaleMs', () => {
   clearBusObs();
   const now = Date.now();
-  recordBusObservations([{
-    vid: 'd', route: 'TEST_3', pid: '300', destination: 'Z',
-    lat: 41.9, lon: -87.6, pdist: 500, heading: 0,
-    tmstmp: new Date(now - 10 * 60 * 1000),
-  }], now - 10 * 60 * 1000);
+  recordBusObservations(
+    [
+      {
+        vid: 'd',
+        route: 'TEST_3',
+        pid: '300',
+        destination: 'Z',
+        lat: 41.9,
+        lon: -87.6,
+        pdist: 500,
+        heading: 0,
+        tmstmp: new Date(now - 10 * 60 * 1000),
+      },
+    ],
+    now - 10 * 60 * 1000,
+  );
   const result = getLatestBusSnapshot(['TEST_3'], 4 * 60 * 1000, now);
   assert.equal(result, null);
   clearBusObs();
@@ -88,10 +135,12 @@ test('getLatestBusSnapshot ignores rows with null pdist (legacy / pre-migration)
   clearBusObs();
   const now = Date.now();
   // Insert a row WITHOUT pdist via direct SQL — simulates pre-migration data.
-  getDb().prepare(`
+  getDb()
+    .prepare(`
     INSERT INTO observations (ts, kind, route, direction, vehicle_id, destination)
     VALUES (?, 'bus', ?, ?, ?, ?)
-  `).run(now - 60 * 1000, 'TEST_4', '400', 'e', 'W');
+  `)
+    .run(now - 60 * 1000, 'TEST_4', '400', 'e', 'W');
   const result = getLatestBusSnapshot(['TEST_4'], 4 * 60 * 1000, now);
   assert.equal(result, null);
   clearBusObs();

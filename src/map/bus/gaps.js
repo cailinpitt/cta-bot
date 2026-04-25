@@ -3,11 +3,20 @@ const { encode } = require('../../shared/polyline');
 const { cumulativeDistances, haversineFt, bearing } = require('../../shared/geo');
 const { fitZoom, project } = require('../../shared/projection');
 const {
-  STYLE, WIDTH, HEIGHT,
-  ROUTE_HALO_COLOR, ROUTE_HALO_STROKE, ROUTE_CORE_COLOR, ROUTE_CORE_STROKE,
-  TWEMOJI_BUS_INNER, TWEMOJI_HOUSE_INNER, TWEMOJI_FLAG_INNER,
+  STYLE,
+  WIDTH,
+  HEIGHT,
+  ROUTE_HALO_COLOR,
+  ROUTE_HALO_STROKE,
+  ROUTE_CORE_COLOR,
+  ROUTE_CORE_STROKE,
+  TWEMOJI_BUS_INNER,
+  TWEMOJI_HOUSE_INNER,
+  TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
-  buildDirectionArrow, requireMapboxToken, fetchMapboxStatic,
+  buildDirectionArrow,
+  requireMapboxToken,
+  fetchMapboxStatic,
 } = require('../common');
 
 // Magenta highlight for the segment *between* the two bounding buses — that's
@@ -30,7 +39,10 @@ function sliceBetweenVehicles(pattern, a, b) {
     let bestDist = haversineFt(v, pattern.points[0]);
     for (let i = 1; i < pattern.points.length; i++) {
       const d = haversineFt(v, pattern.points[i]);
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
     }
     return { idx: bestIdx, cum: cum[bestIdx] };
   }
@@ -104,7 +116,15 @@ async function renderGapMap(gap, pattern) {
   const baseMap = await fetchGapBaseMap(view);
   const vehicles = [gap.leading, gap.trailing];
   const markerElements = vehicles.map((v) => {
-    const { x, y } = project(v.lat, v.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    const { x, y } = project(
+      v.lat,
+      v.lon,
+      view.centerLat,
+      view.centerLon,
+      view.zoom,
+      WIDTH,
+      HEIGHT,
+    );
     const iconSize = BUS_MARKER_RADIUS * 1.6;
     const iconX = x - iconSize / 2;
     const iconY = y - iconSize / 2;
@@ -116,9 +136,20 @@ async function renderGapMap(gap, pattern) {
   const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, view.bearingDeg)];
 
   const terminalElements = [];
-  for (const [point, glyph] of [[view.origin, TWEMOJI_HOUSE_INNER], [view.terminal, TWEMOJI_FLAG_INNER]]) {
+  for (const [point, glyph] of [
+    [view.origin, TWEMOJI_HOUSE_INNER],
+    [view.terminal, TWEMOJI_FLAG_INNER],
+  ]) {
     if (!point) continue;
-    const { x, y } = project(point.lat, point.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    const { x, y } = project(
+      point.lat,
+      point.lon,
+      view.centerLat,
+      view.centerLon,
+      view.zoom,
+      WIDTH,
+      HEIGHT,
+    );
     if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) continue;
     terminalElements.push(...buildTerminalMarker(x, y, TERMINAL_MARKER_RADIUS, glyph));
   }

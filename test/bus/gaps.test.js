@@ -10,7 +10,9 @@ const patternFor = () => pattern;
 // A gap is flagged when gapMin >= ABSOLUTE_MIN_MIN AND ratio >= 2.5. With a
 // 10-min headway, pair distance must exceed max(ABSOLUTE_MIN_MIN, 2.5*10) = 25 min
 // of travel time. 25 min × 880 ft/min = 22000 ft.
-const MIN_QUALIFYING_FT = Math.ceil(Math.max(ABSOLUTE_MIN_MIN, 2.5 * 10) * TYPICAL_SPEED_FT_PER_MIN);
+const MIN_QUALIFYING_FT = Math.ceil(
+  Math.max(ABSOLUTE_MIN_MIN, 2.5 * 10) * TYPICAL_SPEED_FT_PER_MIN,
+);
 
 test('flags a pair beyond threshold with leading/trailing assigned by pdist', () => {
   const a = bus({ vid: '1', pdist: 10000 });

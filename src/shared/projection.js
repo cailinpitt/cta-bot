@@ -24,7 +24,7 @@ function fitZoom(bbox, widthPx, heightPx, paddingPx = 60) {
 }
 
 function project(lat, lon, centerLat, centerLon, zoom, widthPx, heightPx) {
-  const worldSize = TILE_SIZE * Math.pow(2, zoom);
+  const worldSize = TILE_SIZE * 2 ** zoom;
   const px = lonToX(lon) * worldSize;
   const py = latToY(lat) * worldSize;
   const cpx = lonToX(centerLon) * worldSize;

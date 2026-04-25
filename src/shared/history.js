@@ -1,4 +1,4 @@
-const Path = require('path');
+const Path = require('node:path');
 const Fs = require('fs-extra');
 const Database = require('better-sqlite3');
 
@@ -134,19 +134,37 @@ function db() {
   `);
 
   // Column migrations for DBs that predate the current schema.
-  const speedmapCols = _db.prepare("PRAGMA table_info(speedmap_runs)").all().map((c) => c.name);
+  const speedmapCols = _db
+    .prepare('PRAGMA table_info(speedmap_runs)')
+    .all()
+    .map((c) => c.name);
   if (!speedmapCols.includes('pct_purple')) {
     _db.exec('ALTER TABLE speedmap_runs ADD COLUMN pct_purple REAL');
   }
-  const cooldownCols = _db.prepare("PRAGMA table_info(cooldowns)").all().map((c) => c.name);
+  const cooldownCols = _db
+    .prepare('PRAGMA table_info(cooldowns)')
+    .all()
+    .map((c) => c.name);
   if (!cooldownCols.includes('expires_at')) {
     _db.exec('ALTER TABLE cooldowns ADD COLUMN expires_at INTEGER');
   }
-  const obsCols = _db.prepare("PRAGMA table_info(observations)").all().map((c) => c.name);
-  for (const [name, type] of [['lat', 'REAL'], ['lon', 'REAL'], ['pdist', 'REAL'], ['heading', 'INTEGER'], ['vehicle_ts', 'INTEGER']]) {
+  const obsCols = _db
+    .prepare('PRAGMA table_info(observations)')
+    .all()
+    .map((c) => c.name);
+  for (const [name, type] of [
+    ['lat', 'REAL'],
+    ['lon', 'REAL'],
+    ['pdist', 'REAL'],
+    ['heading', 'INTEGER'],
+    ['vehicle_ts', 'INTEGER'],
+  ]) {
     if (!obsCols.includes(name)) _db.exec(`ALTER TABLE observations ADD COLUMN ${name} ${type}`);
   }
-  const alertCols = _db.prepare("PRAGMA table_info(alert_posts)").all().map((c) => c.name);
+  const alertCols = _db
+    .prepare('PRAGMA table_info(alert_posts)')
+    .all()
+    .map((c) => c.name);
   if (!alertCols.includes('clear_ticks')) {
     _db.exec('ALTER TABLE alert_posts ADD COLUMN clear_ticks INTEGER NOT NULL DEFAULT 0');
   }
@@ -166,7 +184,9 @@ function rolloffOld(now = Date.now()) {
   db().prepare('DELETE FROM disruption_events WHERE ts < ?').run(cutoff);
   // Alerts only roll off after they've been resolved for 90d — preserves the
   // post URI so resolution replies can still thread to the original.
-  db().prepare('DELETE FROM alert_posts WHERE resolved_ts IS NOT NULL AND resolved_ts < ?').run(cutoff);
+  db()
+    .prepare('DELETE FROM alert_posts WHERE resolved_ts IS NOT NULL AND resolved_ts < ?')
+    .run(cutoff);
 }
 
 function getAlertPost(alertId) {
@@ -178,27 +198,34 @@ const ALERT_CLEAR_TICKS = 2;
 function recordAlertSeen({ alertId, kind, routes, headline, postUri }, now = Date.now()) {
   const existing = getAlertPost(alertId);
   if (existing) {
-    db().prepare(`
+    db()
+      .prepare(`
       UPDATE alert_posts
       SET last_seen_ts = ?, post_uri = COALESCE(?, post_uri),
           headline = COALESCE(?, headline), routes = COALESCE(?, routes)
       WHERE alert_id = ?
-    `).run(now, postUri || null, headline || null, routes || null, alertId);
+    `)
+      .run(now, postUri || null, headline || null, routes || null, alertId);
     return;
   }
-  db().prepare(`
+  db()
+    .prepare(`
     INSERT INTO alert_posts (alert_id, kind, routes, headline, first_seen_ts, last_seen_ts, post_uri)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(alertId, kind, routes || null, headline || null, now, now, postUri || null);
+  `)
+    .run(alertId, kind, routes || null, headline || null, now, now, postUri || null);
 }
 
 function recordAlertResolved({ alertId, replyUri }, now = Date.now()) {
-  db().prepare('UPDATE alert_posts SET resolved_ts = ?, resolved_reply_uri = ? WHERE alert_id = ?')
+  db()
+    .prepare('UPDATE alert_posts SET resolved_ts = ?, resolved_reply_uri = ? WHERE alert_id = ?')
     .run(now, replyUri || null, alertId);
 }
 
 function incrementAlertClearTicks(alertId) {
-  db().prepare('UPDATE alert_posts SET clear_ticks = clear_ticks + 1 WHERE alert_id = ?').run(alertId);
+  db()
+    .prepare('UPDATE alert_posts SET clear_ticks = clear_ticks + 1 WHERE alert_id = ?')
+    .run(alertId);
   const row = db().prepare('SELECT clear_ticks FROM alert_posts WHERE alert_id = ?').get(alertId);
   return row ? row.clear_ticks : 0;
 }
@@ -211,7 +238,10 @@ function listUnresolvedAlerts(kind) {
   return db().prepare('SELECT * FROM alert_posts WHERE kind = ? AND resolved_ts IS NULL').all(kind);
 }
 
-function getRecentPulsePost({ kind, line, direction, withinMs = 3 * 60 * 60 * 1000 }, now = Date.now()) {
+function getRecentPulsePost(
+  { kind, line, direction, withinMs = 3 * 60 * 60 * 1000 },
+  now = Date.now(),
+) {
   const params = [kind, line, now - withinMs];
   let sql = `
     SELECT id, ts, from_station, to_station, direction, post_uri FROM disruption_events
@@ -219,9 +249,16 @@ function getRecentPulsePost({ kind, line, direction, withinMs = 3 * 60 * 60 * 10
       AND posted = 1 AND post_uri IS NOT NULL
       AND ts >= ?
   `;
-  if (direction) { sql += ' AND direction = ?'; params.push(direction); }
+  if (direction) {
+    sql += ' AND direction = ?';
+    params.push(direction);
+  }
   sql += ' ORDER BY ts DESC LIMIT 1';
-  return db().prepare(sql).get(...params) || null;
+  return (
+    db()
+      .prepare(sql)
+      .get(...params) || null
+  );
 }
 
 function hasObservedClearSince({ kind, line, direction, sinceTs }) {
@@ -231,45 +268,75 @@ function hasObservedClearSince({ kind, line, direction, sinceTs }) {
     WHERE kind = ? AND line = ? AND source = 'observed-clear'
       AND posted = 1 AND ts >= ?
   `;
-  if (direction) { sql += ' AND direction = ?'; params.push(direction); }
+  if (direction) {
+    sql += ' AND direction = ?';
+    params.push(direction);
+  }
   sql += ' LIMIT 1';
-  return !!db().prepare(sql).get(...params);
+  return !!db()
+    .prepare(sql)
+    .get(...params);
 }
 
 function ctaAlertPostedSince({ kind, ctaRouteCode, sinceTs }) {
-  const row = db().prepare(`
+  const row = db()
+    .prepare(`
     SELECT alert_id FROM alert_posts
     WHERE kind = ? AND post_uri IS NOT NULL
       AND first_seen_ts >= ?
       AND (',' || routes || ',') LIKE ?
     LIMIT 1
-  `).get(kind, sinceTs, `%,${ctaRouteCode},%`);
+  `)
+    .get(kind, sinceTs, `%,${ctaRouteCode},%`);
   return !!row;
 }
 
-function recordDisruption({
-  kind, line, direction, fromStation, toStation, source, posted, postUri,
-}, now = Date.now()) {
-  db().prepare(`
+function recordDisruption(
+  { kind, line, direction, fromStation, toStation, source, posted, postUri },
+  now = Date.now(),
+) {
+  db()
+    .prepare(`
     INSERT INTO disruption_events
       (ts, kind, line, direction, from_station, to_station, source, posted, post_uri)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    now, kind, line, direction || null,
-    fromStation || null, toStation || null, source, posted ? 1 : 0, postUri || null,
-  );
+  `)
+    .run(
+      now,
+      kind,
+      line,
+      direction || null,
+      fromStation || null,
+      toStation || null,
+      source,
+      posted ? 1 : 0,
+      postUri || null,
+    );
 }
 
 function getPulseState(line, direction) {
-  return db().prepare('SELECT * FROM pulse_state WHERE line = ? AND direction = ?')
-    .get(line, direction) || null;
+  return (
+    db()
+      .prepare('SELECT * FROM pulse_state WHERE line = ? AND direction = ?')
+      .get(line, direction) || null
+  );
 }
 
 function upsertPulseState({
-  line, direction, runLoFt, runHiFt, fromStation, toStation,
-  startedTs, lastSeenTs, consecutiveTicks, clearTicks, postedCooldownKey,
+  line,
+  direction,
+  runLoFt,
+  runHiFt,
+  fromStation,
+  toStation,
+  startedTs,
+  lastSeenTs,
+  consecutiveTicks,
+  clearTicks,
+  postedCooldownKey,
 }) {
-  db().prepare(`
+  db()
+    .prepare(`
     INSERT INTO pulse_state
       (line, direction, run_lo_ft, run_hi_ft, from_station, to_station,
        started_ts, last_seen_ts, consecutive_ticks, clear_ticks, posted_cooldown_key)
@@ -284,15 +351,20 @@ function upsertPulseState({
       consecutive_ticks = excluded.consecutive_ticks,
       clear_ticks = excluded.clear_ticks,
       posted_cooldown_key = excluded.posted_cooldown_key
-  `).run(
-    line, direction,
-    runLoFt == null ? null : Math.round(runLoFt),
-    runHiFt == null ? null : Math.round(runHiFt),
-    fromStation || null, toStation || null,
-    startedTs || null, lastSeenTs || null,
-    consecutiveTicks || 0, clearTicks || 0,
-    postedCooldownKey || null,
-  );
+  `)
+    .run(
+      line,
+      direction,
+      runLoFt == null ? null : Math.round(runLoFt),
+      runHiFt == null ? null : Math.round(runHiFt),
+      fromStation || null,
+      toStation || null,
+      startedTs || null,
+      lastSeenTs || null,
+      consecutiveTicks || 0,
+      clearTicks || 0,
+      postedCooldownKey || null,
+    );
 }
 
 function clearPulseState(line, direction) {
@@ -305,44 +377,87 @@ function chicagoStartOfDay(ts) {
   const d = new Date(ts);
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
   }).formatToParts(d);
   const get = (t) => parts.find((p) => p.type === t).value;
-  const y = get('year'), m = get('month'), day = get('day');
-  const h = get('hour'), mi = get('minute'), s = get('second');
+  const y = get('year'),
+    m = get('month'),
+    day = get('day');
+  const h = get('hour'),
+    mi = get('minute'),
+    s = get('second');
   const asUtc = Date.UTC(+y, +m - 1, +day, +h, +mi, +s);
   const offsetMs = d.getTime() - asUtc; // negative for CT (UTC-5/6)
   return Date.UTC(+y, +m - 1, +day) + offsetMs;
 }
 
-function recordBunching({
-  kind, route, direction, vehicleCount, severityFt, nearStop, posted, postUri,
-}, now = Date.now()) {
-  db().prepare(`
+function recordBunching(
+  { kind, route, direction, vehicleCount, severityFt, nearStop, posted, postUri },
+  now = Date.now(),
+) {
+  db()
+    .prepare(`
     INSERT INTO bunching_events
       (ts, kind, route, direction, vehicle_count, severity_ft, near_stop, posted, post_uri)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(now, kind, route, direction || null, vehicleCount, Math.round(severityFt), nearStop || null, posted ? 1 : 0, postUri || null);
+  `)
+    .run(
+      now,
+      kind,
+      route,
+      direction || null,
+      vehicleCount,
+      Math.round(severityFt),
+      nearStop || null,
+      posted ? 1 : 0,
+      postUri || null,
+    );
 }
 
-function recordSpeedmap({
-  kind, route, direction, avgMph, pctRed, pctOrange, pctYellow, pctPurple, pctGreen, binSpeeds, posted, postUri,
-}, now = Date.now()) {
-  db().prepare(`
+function recordSpeedmap(
+  {
+    kind,
+    route,
+    direction,
+    avgMph,
+    pctRed,
+    pctOrange,
+    pctYellow,
+    pctPurple,
+    pctGreen,
+    binSpeeds,
+    posted,
+    postUri,
+  },
+  now = Date.now(),
+) {
+  db()
+    .prepare(`
     INSERT INTO speedmap_runs
       (ts, kind, route, direction, avg_mph, pct_red, pct_orange, pct_yellow, pct_purple, pct_green, bin_speeds_json, posted, post_uri)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    now, kind, route, direction || null,
-    avgMph == null ? null : avgMph,
-    pctRed, pctOrange, pctYellow,
-    pctPurple == null ? null : pctPurple,
-    pctGreen,
-    JSON.stringify(binSpeeds || []),
-    posted ? 1 : 0,
-    postUri || null,
-  );
+  `)
+    .run(
+      now,
+      kind,
+      route,
+      direction || null,
+      avgMph == null ? null : avgMph,
+      pctRed,
+      pctOrange,
+      pctYellow,
+      pctPurple == null ? null : pctPurple,
+      pctGreen,
+      JSON.stringify(binSpeeds || []),
+      posted ? 1 : 0,
+      postUri || null,
+    );
 }
 
 // Must be called BEFORE recordBunching writes the current event, otherwise
@@ -353,10 +468,12 @@ function recordSpeedmap({
 function bunchingCallouts({ kind, route, routeLabel, vehicleCount, severityFt }, now = Date.now()) {
   const out = [];
   const startOfDay = chicagoStartOfDay(now);
-  const todayCount = db().prepare(`
+  const todayCount = db()
+    .prepare(`
     SELECT COUNT(*) AS c FROM bunching_events
     WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
-  `).get(kind, route, startOfDay).c;
+  `)
+    .get(kind, route, startOfDay).c;
   const nth = todayCount + 1;
   if (nth >= 2) {
     const label = routeLabel ? `${routeLabel} bunch` : 'bunch';
@@ -367,11 +484,13 @@ function bunchingCallouts({ kind, route, routeLabel, vehicleCount, severityFt },
   const windowDays = 30;
   const windowStart = now - windowDays * DAY_MS;
   if (kind === 'bus') {
-    const row = db().prepare(`
+    const row = db()
+      .prepare(`
       SELECT MAX(vehicle_count) AS maxVc, MAX(severity_ft) AS maxSpan, COUNT(*) AS c
       FROM bunching_events
       WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ? AND ts < ?
-    `).get(kind, route, windowStart, startOfDay);
+    `)
+      .get(kind, route, windowStart, startOfDay);
     if (row.c >= 3) {
       const beatsCount = vehicleCount > row.maxVc;
       const tiesCountBeatsSpan = vehicleCount === row.maxVc && severityFt > row.maxSpan;
@@ -380,11 +499,13 @@ function bunchingCallouts({ kind, route, routeLabel, vehicleCount, severityFt },
       }
     }
   } else if (kind === 'train') {
-    const row = db().prepare(`
+    const row = db()
+      .prepare(`
       SELECT MIN(severity_ft) AS minDist, COUNT(*) AS c
       FROM bunching_events
       WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ? AND ts < ?
-    `).get(kind, route, windowStart, startOfDay);
+    `)
+      .get(kind, route, windowStart, startOfDay);
     if (row.c >= 3 && severityFt < row.minDist) {
       out.push(`tightest reported on this line in ${windowDays} days`);
     }
@@ -398,11 +519,13 @@ function speedmapCallouts({ kind, route, avgMph }, now = Date.now()) {
   const out = [];
   const windowDays = 14;
   const windowStart = now - windowDays * DAY_MS;
-  const row = db().prepare(`
+  const row = db()
+    .prepare(`
     SELECT MIN(avg_mph) AS minAvg, MAX(avg_mph) AS maxAvg, COUNT(*) AS c
     FROM speedmap_runs
     WHERE kind = ? AND route = ? AND posted = 1 AND avg_mph IS NOT NULL AND ts >= ?
-  `).get(kind, route, windowStart);
+  `)
+    .get(kind, route, windowStart);
   if (row.c < 3) return out;
   if (avgMph < row.minAvg) {
     out.push(`slowest reported in ${windowDays} days`);
@@ -412,23 +535,29 @@ function speedmapCallouts({ kind, route, avgMph }, now = Date.now()) {
   return out;
 }
 
-function recordGap({
-  kind, route, direction, gapFt, gapMin, expectedMin, ratio, nearStop, posted, postUri,
-}, now = Date.now()) {
-  db().prepare(`
+function recordGap(
+  { kind, route, direction, gapFt, gapMin, expectedMin, ratio, nearStop, posted, postUri },
+  now = Date.now(),
+) {
+  db()
+    .prepare(`
     INSERT INTO gap_events
       (ts, kind, route, direction, gap_ft, gap_min, expected_min, ratio, near_stop, posted, post_uri)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    now, kind, route, direction || null,
-    Math.round(gapFt),
-    Math.round(gapMin * 10) / 10,
-    Math.round(expectedMin * 10) / 10,
-    Math.round(ratio * 100) / 100,
-    nearStop || null,
-    posted ? 1 : 0,
-    postUri || null,
-  );
+  `)
+    .run(
+      now,
+      kind,
+      route,
+      direction || null,
+      Math.round(gapFt),
+      Math.round(gapMin * 10) / 10,
+      Math.round(expectedMin * 10) / 10,
+      Math.round(ratio * 100) / 100,
+      nearStop || null,
+      posted ? 1 : 0,
+      postUri || null,
+    );
 }
 
 // Severity uses ratio (observed/expected) to normalize across high- and
@@ -436,10 +565,12 @@ function recordGap({
 function gapCallouts({ kind, route, routeLabel, ratio }, now = Date.now()) {
   const out = [];
   const startOfDay = chicagoStartOfDay(now);
-  const todayCount = db().prepare(`
+  const todayCount = db()
+    .prepare(`
     SELECT COUNT(*) AS c FROM gap_events
     WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
-  `).get(kind, route, startOfDay).c;
+  `)
+    .get(kind, route, startOfDay).c;
   const nth = todayCount + 1;
   if (nth >= 2) {
     const label = routeLabel ? `${routeLabel} gap` : 'gap';
@@ -448,11 +579,13 @@ function gapCallouts({ kind, route, routeLabel, ratio }, now = Date.now()) {
 
   const windowDays = 30;
   const windowStart = now - windowDays * DAY_MS;
-  const row = db().prepare(`
+  const row = db()
+    .prepare(`
     SELECT MAX(ratio) AS maxRatio, COUNT(*) AS c
     FROM gap_events
     WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ? AND ts < ?
-  `).get(kind, route, windowStart, startOfDay);
+  `)
+    .get(kind, route, windowStart, startOfDay);
   if (row.c >= 3 && ratio > row.maxRatio) {
     out.push(`biggest gap vs schedule on this route in ${windowDays} days`);
   }
@@ -473,11 +606,13 @@ function formatCallouts(callouts) {
 // Soft cap: a chronically-bad route gets `cap` posts/day, but a strictly-more-
 // severe escalation ("3-bus pileup → 6") still gets through.
 function bunchingCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
-  const events = db().prepare(`
+  const events = db()
+    .prepare(`
     SELECT vehicle_count AS vc, severity_ft AS sev
     FROM bunching_events
     WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
-  `).all(kind, route, chicagoStartOfDay(now));
+  `)
+    .all(kind, route, chicagoStartOfDay(now));
   if (events.length < cap) return true;
   return events.every((ev) => {
     if (kind === 'bus') {
@@ -490,10 +625,12 @@ function bunchingCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
 }
 
 function gapCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
-  const events = db().prepare(`
+  const events = db()
+    .prepare(`
     SELECT ratio FROM gap_events
     WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
-  `).all(kind, route, chicagoStartOfDay(now));
+  `)
+    .all(kind, route, chicagoStartOfDay(now));
   if (events.length < cap) return true;
   return events.every((ev) => candidate.ratio > ev.ratio);
 }
@@ -503,18 +640,23 @@ function gapCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
 // influences the rotation.
 function leastRecentlyPostedSpeedmapRoute(kind, candidates) {
   if (!candidates || candidates.length === 0) return null;
-  const rows = db().prepare(`
+  const rows = db()
+    .prepare(`
     SELECT route, MAX(ts) AS lastTs
     FROM speedmap_runs
     WHERE kind = ? AND posted = 1
     GROUP BY route
-  `).all(kind);
+  `)
+    .all(kind);
   const lastTsByRoute = new Map(rows.map((r) => [r.route, r.lastTs]));
   let best = null;
   let bestTs = Infinity;
   for (const route of candidates) {
     const ts = lastTsByRoute.has(route) ? lastTsByRoute.get(route) : -Infinity;
-    if (ts < bestTs) { bestTs = ts; best = route; }
+    if (ts < bestTs) {
+      bestTs = ts;
+      best = route;
+    }
   }
   return best;
 }

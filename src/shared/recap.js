@@ -3,7 +3,7 @@
 // location one. Only posted=1 rows count — cooldown-suppressed duplicates
 // would inflate counts on chronically-bad routes.
 
-const Path = require('path');
+const Path = require('node:path');
 const Fs = require('fs-extra');
 const { getDb } = require('./history');
 const trainStations = require('../train/data/trainStations.json');
@@ -99,10 +99,13 @@ function bucket(events, resolve) {
 
 function loadEvents(kind, since, until) {
   const db = getDb();
-  return db.prepare(`
+  return db
+    .prepare(`
     SELECT route, direction, near_stop FROM bunching_events
     WHERE kind = ? AND posted = 1 AND ts >= ? AND ts < ? AND near_stop IS NOT NULL
-  `).all(kind, since, until).map((r) => ({ ...r, source: 'bunching' }));
+  `)
+    .all(kind, since, until)
+    .map((r) => ({ ...r, source: 'bunching' }));
 }
 
 function loadBusHeatmap(since, until) {
@@ -117,12 +120,14 @@ function loadTrainHeatmap(since, until) {
 
 function loadGapLeaderboard(kind, since, until) {
   const db = getDb();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT route, COUNT(*) AS count FROM gap_events
     WHERE kind = ? AND posted = 1 AND ts >= ? AND ts < ? AND route IS NOT NULL
     GROUP BY route
     ORDER BY count DESC
-  `).all(kind, since, until);
+  `)
+    .all(kind, since, until);
   return rows.map((r) => ({ route: r.route, count: r.count }));
 }
 
@@ -132,11 +137,20 @@ function ctWallTimeAsUtcMs(year, month, day, hour) {
   for (const offsetHours of [5, 6]) {
     const candidate = Date.UTC(year, month - 1, day, offsetHours, 0, 0);
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago', hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit',
+      timeZone: 'America/Chicago',
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
     }).formatToParts(new Date(candidate));
     const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
-    if (get('year') === year && get('month') === month && get('day') === day && get('hour') === hour) {
+    if (
+      get('year') === year &&
+      get('month') === month &&
+      get('day') === day &&
+      get('hour') === hour
+    ) {
       return candidate;
     }
   }
@@ -146,13 +160,28 @@ function ctWallTimeAsUtcMs(year, month, day, hour) {
 function ctDateParts(ms) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
-    year: 'numeric', month: '2-digit', day: '2-digit',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(new Date(ms));
   const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
   return { year: get('year'), month: get('month'), day: get('day') };
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 // `month` covers the prior calendar month in CT (e.g. on May 1, all of
 // April). Matches how readers think about "monthly recap" better than a
@@ -188,7 +217,9 @@ function formatRangeLabel(start, end) {
   const startStr = `${MONTH_NAMES[start.month - 1]} ${start.day}`;
   if (sameMonth) return `${startStr} – ${end.day}`;
   const endStr = `${MONTH_NAMES[end.month - 1]} ${end.day}`;
-  return sameYear ? `${startStr} – ${endStr}` : `${startStr}, ${start.year} – ${endStr}, ${end.year}`;
+  return sameYear
+    ? `${startStr} – ${endStr}`
+    : `${startStr}, ${start.year} – ${endStr}, ${end.year}`;
 }
 
 module.exports = {

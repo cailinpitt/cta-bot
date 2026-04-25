@@ -4,10 +4,15 @@ const { cumulativeDistances } = require('../../shared/geo');
 const { colorForBusSpeed, colorForTrainSpeed } = require('../../bus/speedmap');
 const { offsetPolyline } = require('../../train/speedmap');
 const {
-  STYLE, WIDTH, HEIGHT,
+  STYLE,
+  WIDTH,
+  HEIGHT,
   ROUTE_HALO_COLOR,
-  SPEEDMAP_SEGMENT_STROKE, SPEEDMAP_HALO_STROKE,
-  sliceIntoSegments, requireMapboxToken, fetchMapboxStatic,
+  SPEEDMAP_SEGMENT_STROKE,
+  SPEEDMAP_HALO_STROKE,
+  sliceIntoSegments,
+  requireMapboxToken,
+  fetchMapboxStatic,
 } = require('../common');
 
 // Perpendicular offset for each direction's ribbon. At the typical speedmap
@@ -44,12 +49,14 @@ async function renderSpeedmap(pattern, binSpeeds) {
  * (train-line polyline shape). Branched lines (Green) pass multiple; all
  * other lines pass a single-element array.
  */
-async function renderTrainSpeedmap(branches, lineColor) {
+async function renderTrainSpeedmap(branches, _lineColor) {
   const overlays = [];
 
   for (const branch of branches) {
     const { points, cumDist, binSpeedsByDir } = branch;
-    overlays.push(`path-${SPEEDMAP_HALO_STROKE}+${ROUTE_HALO_COLOR}(${encodeURIComponent(encode(points))})`);
+    overlays.push(
+      `path-${SPEEDMAP_HALO_STROKE}+${ROUTE_HALO_COLOR}(${encodeURIComponent(encode(points))})`,
+    );
 
     const dirs = Object.keys(binSpeedsByDir);
     const offsetFor = (i) => {

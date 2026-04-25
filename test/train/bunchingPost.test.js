@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPostText, buildAltText, buildVideoPostText, buildVideoAltText } = require('../../src/train/bunchingPost');
+const {
+  buildPostText,
+  buildAltText,
+  buildVideoPostText,
+  buildVideoAltText,
+} = require('../../src/train/bunchingPost');
 
 const bunch = {
   line: 'red',

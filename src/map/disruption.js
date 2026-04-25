@@ -2,8 +2,11 @@ const sharp = require('sharp');
 const { encode } = require('../shared/polyline');
 const { fitZoom, project } = require('../shared/projection');
 const {
-  STYLE, WIDTH, HEIGHT,
-  requireMapboxToken, fetchMapboxStatic,
+  STYLE,
+  WIDTH,
+  HEIGHT,
+  requireMapboxToken,
+  fetchMapboxStatic,
   xmlEscape,
 } = require('./common');
 const { LINE_NAMES } = require('../train/api');
@@ -11,16 +14,19 @@ const { LINE_NAMES } = require('../train/api');
 // Equirectangular — fine for ranking nearest vertex over central Chicago.
 function latLonDistMeters([lat, lon], loc) {
   const dLat = (lat - loc.lat) * 111320;
-  const dLon = (lon - loc.lon) * 111320 * Math.cos(loc.lat * Math.PI / 180);
+  const dLon = (lon - loc.lon) * 111320 * Math.cos((loc.lat * Math.PI) / 180);
   return Math.hypot(dLat, dLon);
 }
 
-function findNearestIndex(poly, loc) {
+function _findNearestIndex(poly, loc) {
   let best = 0;
   let bestD = Infinity;
   for (let i = 0; i < poly.length; i++) {
     const d = latLonDistMeters(poly[i], loc);
-    if (d < bestD) { bestD = d; best = i; }
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
   }
   return { index: best, distMeters: bestD };
 }
@@ -30,7 +36,7 @@ function findNearestIndex(poly, loc) {
 // can't handle round-trip polylines (Purple's Linden→Howard→Loop→Howard→Linden).
 function splitSegments(segments, fromLoc, toLoc) {
   // Equirectangular pixel space at Chicago's latitude (lon ≈ 0.74×lat).
-  const cosLat = Math.cos(fromLoc.lat * Math.PI / 180);
+  const cosLat = Math.cos((fromLoc.lat * Math.PI) / 180);
   const toXY = ([lat, lon]) => ({ x: lon * cosLat, y: lat });
   const A = toXY([fromLoc.lat, fromLoc.lon]);
   const B = toXY([toLoc.lat, toLoc.lon]);
@@ -76,8 +82,12 @@ function splitSegments(segments, fromLoc, toLoc) {
       } else {
         // Boundary crossing (t=0 or t=1) — emit an interpolated vertex on both sides.
         const tTarget = currentIsSuspended
-          ? (prevT < t ? T_MAX : T_MIN)
-          : (prevT < t ? T_MIN : T_MAX);
+          ? prevT < t
+            ? T_MAX
+            : T_MIN
+          : prevT < t
+            ? T_MIN
+            : T_MAX;
         const boundary = interpolateAt(prevPt, pt, prevT, t, tTarget);
         current.push(boundary);
         flush();
@@ -118,7 +128,8 @@ async function renderDisruption({ disruption, trainLines, lineColors, trains = [
 
   const fromLoc = resolveStation(stations, line, suspendedSegment.from);
   const toLoc = resolveStation(stations, line, suspendedSegment.to);
-  if (!fromLoc) throw new Error(`Could not resolve station "${suspendedSegment.from}" on line ${line}`);
+  if (!fromLoc)
+    throw new Error(`Could not resolve station "${suspendedSegment.from}" on line ${line}`);
   if (!toLoc) throw new Error(`Could not resolve station "${suspendedSegment.to}" on line ${line}`);
 
   const { active, suspended } = splitSegments(segments, fromLoc, toLoc);
@@ -172,7 +183,10 @@ async function renderDisruption({ disruption, trainLines, lineColors, trains = [
 }
 
 function bboxOf(points) {
-  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  let minLat = Infinity,
+    maxLat = -Infinity,
+    minLon = Infinity,
+    maxLon = -Infinity;
   for (const [lat, lon] of points) {
     if (lat < minLat) minLat = lat;
     if (lat > maxLat) maxLat = lat;
@@ -188,8 +202,8 @@ function paddedBbox(bbox, fracMargin, minSpanDeg) {
   const lonSpan = Math.max(bbox.maxLon - bbox.minLon, minSpanDeg);
   const centerLat = (bbox.minLat + bbox.maxLat) / 2;
   const centerLon = (bbox.minLon + bbox.maxLon) / 2;
-  const padLat = latSpan * (1 + fracMargin) / 2;
-  const padLon = lonSpan * (1 + fracMargin) / 2;
+  const padLat = (latSpan * (1 + fracMargin)) / 2;
+  const padLon = (lonSpan * (1 + fracMargin)) / 2;
   return {
     minLat: centerLat - padLat,
     maxLat: centerLat + padLat,
@@ -214,10 +228,11 @@ function stationLabel(name, px) {
   // keepout or go off the top edge.
   const above = Math.round(px.y - h - 14);
   const below = Math.round(px.y + 14);
-  const wouldHitTitle = above < TITLE_KEEPOUT.y + TITLE_KEEPOUT.h
-    && xPill < TITLE_KEEPOUT.x + TITLE_KEEPOUT.w
-    && xPill + approxW > TITLE_KEEPOUT.x;
-  const y = (above < 8 || wouldHitTitle) ? below : above;
+  const wouldHitTitle =
+    above < TITLE_KEEPOUT.y + TITLE_KEEPOUT.h &&
+    xPill < TITLE_KEEPOUT.x + TITLE_KEEPOUT.w &&
+    xPill + approxW > TITLE_KEEPOUT.x;
+  const y = above < 8 || wouldHitTitle ? below : above;
 
   return [
     `<rect x="${xPill}" y="${y}" width="${Math.round(approxW)}" height="${Math.round(h)}" fill="#000" fill-opacity="0.82" rx="8"/>`,

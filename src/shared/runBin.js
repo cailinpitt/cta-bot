@@ -1,5 +1,5 @@
 const Fs = require('fs-extra');
-const Path = require('path');
+const Path = require('node:path');
 const { pruneOldAssets } = require('./cleanup');
 const history = require('./history');
 

@@ -60,7 +60,8 @@ async function postWithVideo(agent, text, videoBuffer, altText, replyRef = null)
     });
     if (uploadResponse.ok) break;
     const errBody = await uploadResponse.json().catch(() => ({}));
-    if (attempt >= 3) throw new Error(`Video upload failed after 3 attempts: ${JSON.stringify(errBody)}`);
+    if (attempt >= 3)
+      throw new Error(`Video upload failed after 3 attempts: ${JSON.stringify(errBody)}`);
     await sleep(1000 * attempt);
   }
 
@@ -74,7 +75,9 @@ async function postWithVideo(agent, text, videoBuffer, altText, replyRef = null)
     if (++polls > MAX_POLL_ATTEMPTS) throw new Error('Video processing timed out');
     await sleep(2000);
     try {
-      const { data: status } = await videoServiceAgent.app.bsky.video.getJobStatus({ jobId: jobStatus.jobId });
+      const { data: status } = await videoServiceAgent.app.bsky.video.getJobStatus({
+        jobId: jobStatus.jobId,
+      });
       const state = status.jobStatus.state;
       const progress = status.jobStatus.progress;
       const label = progress ? `${state}: ${progress}%` : state;
@@ -83,9 +86,13 @@ async function postWithVideo(agent, text, videoBuffer, altText, replyRef = null)
         lastLogged = label;
       }
       if (status.jobStatus.blob) blob = status.jobStatus.blob;
-      else if (state === 'JOB_STATE_FAILED') throw new Error(`Video processing failed: ${status.jobStatus.error || 'unknown'}`);
+      else if (state === 'JOB_STATE_FAILED')
+        throw new Error(`Video processing failed: ${status.jobStatus.error || 'unknown'}`);
     } catch (e) {
-      if (e.message && e.message.includes('already_exists')) { blob = e.blob || jobStatus.blob; break; }
+      if (e.message?.includes('already_exists')) {
+        blob = e.blob || jobStatus.blob;
+        break;
+      }
       throw e;
     }
   }
@@ -129,9 +136,7 @@ async function resolveReplyRef(agent, parentUri) {
   try {
     const { data: record } = await agent.com.atproto.repo.getRecord({ repo, collection, rkey });
     const parent = { uri: parentUri, cid: record.cid };
-    const root = record.value && record.value.reply && record.value.reply.root
-      ? record.value.reply.root
-      : parent;
+    const root = record.value?.reply?.root ? record.value.reply.root : parent;
     return { root, parent };
   } catch (_) {
     return null;

@@ -7,7 +7,14 @@ const TYPICAL_TRAIN_SPEED_FT_PER_MIN = 2200;
 const RATIO_THRESHOLD = 2.5;
 const ABSOLUTE_MIN_MIN = 10;
 
-function detectAllTrainGaps(trains, trainLines, stations, stationsByName, expectedHeadwayForLine, now = Date.now()) {
+function detectAllTrainGaps(
+  trains,
+  trainLines,
+  stations,
+  stationsByName,
+  expectedHeadwayForLine,
+  _now = Date.now(),
+) {
   const groups = new Map();
   for (const t of trains) {
     if (!t.trDr) continue;
@@ -74,7 +81,10 @@ function detectAllTrainGaps(trains, trainLines, stations, stationsByName, expect
       let bestDelta = Infinity;
       for (const { station, trackDist } of onLine) {
         const delta = Math.abs(trackDist - midTrack);
-        if (delta < bestDelta) { bestDelta = delta; nearStation = station; }
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          nearStation = station;
+        }
       }
 
       gaps.push({

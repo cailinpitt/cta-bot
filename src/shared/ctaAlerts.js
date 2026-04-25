@@ -10,8 +10,14 @@ const { withRetry } = require('./retry');
 const BASE = 'http://lapi.transitchicago.com/api/1.0/alerts.aspx';
 
 const RAIL_ROUTE_TO_LINE = {
-  Red: 'red', Blue: 'blue', Brn: 'brn', G: 'g',
-  Org: 'org', P: 'p', Pink: 'pink', Y: 'y',
+  Red: 'red',
+  Blue: 'blue',
+  Brn: 'brn',
+  G: 'g',
+  Org: 'org',
+  P: 'p',
+  Pink: 'pink',
+  Y: 'y',
 };
 const LINE_TO_RAIL_ROUTE = Object.fromEntries(
   Object.entries(RAIL_ROUTE_TO_LINE).map(([k, v]) => [v, k]),
@@ -21,21 +27,22 @@ async function fetchAlerts({ activeOnly = true, routeid = null } = {}) {
   const params = { outputType: 'JSON' };
   if (activeOnly) params.activeonly = 'true';
   if (routeid) params.routeid = routeid;
-  const { data } = await withRetry(() => axios.get(BASE, { params, timeout: 15000 }),
-    { label: 'CTA alerts' });
+  const { data } = await withRetry(() => axios.get(BASE, { params, timeout: 15000 }), {
+    label: 'CTA alerts',
+  });
   return parseAlerts(data);
 }
 
 function parseAlerts(data) {
   // CTAAlerts.Alert is missing when zero, an object when one, an array otherwise.
-  const raw = data && data.CTAAlerts && data.CTAAlerts.Alert;
+  const raw = data?.CTAAlerts?.Alert;
   const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
   return arr.map(normalizeAlert).filter(Boolean);
 }
 
 function normalizeAlert(raw) {
-  if (!raw || !raw.AlertId) return null;
-  const impactedRaw = raw.ImpactedService && raw.ImpactedService.Service;
+  if (!raw?.AlertId) return null;
+  const impactedRaw = raw.ImpactedService?.Service;
   const services = Array.isArray(impactedRaw) ? impactedRaw : impactedRaw ? [impactedRaw] : [];
   const busRoutes = [];
   const trainLines = [];
@@ -60,14 +67,19 @@ function normalizeAlert(raw) {
     eventEnd: raw.EventEnd ? parseCtaDate(raw.EventEnd) : null,
     busRoutes,
     trainLines,
-    url: raw.AlertURL && raw.AlertURL['#cdata-section'] ? raw.AlertURL['#cdata-section'] : (raw.AlertURL || null),
+    url: raw.AlertURL?.['#cdata-section'] ? raw.AlertURL['#cdata-section'] : raw.AlertURL || null,
   };
 }
 
 function cleanText(s) {
   if (s == null) return null;
-  const str = typeof s === 'string' ? s : (s['#cdata-section'] || s.toString());
-  return str.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  const str = typeof s === 'string' ? s : s['#cdata-section'] || s.toString();
+  return str
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // CTA returns dates like "20260424 12:45:00" as America/Chicago wall time.
@@ -81,9 +93,14 @@ function parseCtaDate(s) {
   for (const offsetHours of [5, 6]) {
     const candidate = asUtc + offsetHours * 3600 * 1000;
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago', hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone: 'America/Chicago',
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     }).formatToParts(new Date(candidate));
     const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
     if (get('year') === +y && get('month') === +mo && get('day') === +d && get('hour') === +h) {
@@ -144,9 +161,10 @@ const MINOR_PATTERNS = [
 ];
 
 function isSignificantAlert(alert) {
-  if (!alert || !alert.major) return false;
+  if (!alert?.major) return false;
   const text = [alert.headline, alert.shortDescription, alert.fullDescription]
-    .filter(Boolean).join(' \n ');
+    .filter(Boolean)
+    .join(' \n ');
   if (!text) return false;
 
   // Minor-wins: "No trains stopping at Belmont (elevator construction)" looks

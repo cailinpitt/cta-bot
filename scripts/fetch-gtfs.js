@@ -1,12 +1,12 @@
 // Builds a headway index for gap detection. Bot runtime reads the precomputed
 // JSON so it doesn't re-parse GTFS on every invocation.
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
 const axios = require('axios');
 const Fs = require('fs-extra');
-const Path = require('path');
-const { exec, spawn } = require('child_process');
-const { promisify } = require('util');
-const readline = require('readline');
+const Path = require('node:path');
+const { exec, spawn } = require('node:child_process');
+const { promisify } = require('node:util');
+const readline = require('node:readline');
 
 const execAsync = promisify(exec);
 
@@ -35,7 +35,9 @@ async function downloadGtfs() {
 }
 
 async function readFromZip(filename) {
-  const { stdout } = await execAsync(`unzip -p "${ZIP_PATH}" "${filename}"`, { maxBuffer: 512 * 1024 * 1024 });
+  const { stdout } = await execAsync(`unzip -p "${ZIP_PATH}" "${filename}"`, {
+    maxBuffer: 512 * 1024 * 1024,
+  });
   return stdout;
 }
 
@@ -58,13 +60,18 @@ function parseCsvLine(line) {
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
     if (inQuotes) {
-      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-      else if (c === '"') { inQuotes = false; }
-      else cur += c;
+      if (c === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (c === '"') {
+        inQuotes = false;
+      } else cur += c;
     } else {
       if (c === '"') inQuotes = true;
-      else if (c === ',') { out.push(cur); cur = ''; }
-      else cur += c;
+      else if (c === ',') {
+        out.push(cur);
+        cur = '';
+      } else cur += c;
     }
   }
   out.push(cur);
@@ -100,7 +107,12 @@ function median(arr) {
 
 // Coarse day_type bucket — Sat/Sun stay separate since headways differ a lot.
 function dayTypeFor(cal) {
-  const weekday = cal.monday === '1' && cal.tuesday === '1' && cal.wednesday === '1' && cal.thursday === '1' && cal.friday === '1';
+  const weekday =
+    cal.monday === '1' &&
+    cal.tuesday === '1' &&
+    cal.wednesday === '1' &&
+    cal.thursday === '1' &&
+    cal.friday === '1';
   const sat = cal.saturday === '1';
   const sun = cal.sunday === '1';
   if (weekday && !sat && !sun) return 'weekday';
@@ -157,12 +169,17 @@ function computeBusDominantOrigin(tripMeta, firstStopId, { log = false } = {}) {
     let total = 0;
     for (const [stopId, n] of c) {
       total += n;
-      if (n > bestCount) { bestCount = n; best = stopId; }
+      if (n > bestCount) {
+        bestCount = n;
+        best = stopId;
+      }
     }
     if (best && bestCount / total >= BUS_DOMINANCE_THRESHOLD) {
       dominant.set(k, best);
     } else if (log) {
-      console.log(`bus ${k}: no dominant origin (top=${bestCount}/${total}, ${c.size} origins) — keeping all`);
+      console.log(
+        `bus ${k}: no dominant origin (top=${bestCount}/${total}, ${c.size} origins) — keeping all`,
+      );
     }
   }
   return dominant;
@@ -184,11 +201,23 @@ async function main() {
   try {
     calendarDates = parseCsv(await readFromZip('calendar_dates.txt'));
   } catch (e) {
-    console.warn(`  could not read calendar_dates.txt: ${e.message} — proceeding without exceptions`);
+    console.warn(
+      `  could not read calendar_dates.txt: ${e.message} — proceeding without exceptions`,
+    );
   }
-  const todayDow = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' }).format(today);
-  const { serviceDayType, addForToday, removeForToday } = resolveServiceDayTypes({ calendars, calendarDates, todayStr, todayDow });
-  console.log(`  ${serviceDayType.size} service_ids active on ${todayStr} (+${addForToday.size} added / -${removeForToday.size} removed via calendar_dates)`);
+  const todayDow = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'short',
+  }).format(today);
+  const { serviceDayType, addForToday, removeForToday } = resolveServiceDayTypes({
+    calendars,
+    calendarDates,
+    todayStr,
+    todayDow,
+  });
+  console.log(
+    `  ${serviceDayType.size} service_ids active on ${todayStr} (+${addForToday.size} added / -${removeForToday.size} removed via calendar_dates)`,
+  );
 
   console.log('Reading trips.txt...');
   const trips = parseCsv(await readFromZip('trips.txt'));
@@ -220,9 +249,9 @@ async function main() {
   // Per trip: first-stop departure (min stop_sequence) and last-stop id (max).
   const firstDeparture = new Map(); // trip_id → seconds
   const firstSeq = new Map();
-  const firstStopId = new Map();   // trip_id → stop_id (origin)
-  const lastStopId = new Map();    // trip_id → stop_id
-  const lastArrival = new Map();   // trip_id → seconds (last-stop arrival)
+  const firstStopId = new Map(); // trip_id → stop_id (origin)
+  const lastStopId = new Map(); // trip_id → stop_id
+  const lastArrival = new Map(); // trip_id → seconds (last-stop arrival)
   const lastSeq = new Map();
 
   let header = null;
@@ -300,7 +329,10 @@ async function main() {
     let best = null;
     let bestCount = -1;
     for (const [stopId, c] of counts) {
-      if (c > bestCount) { bestCount = c; best = stopId; }
+      if (c > bestCount) {
+        bestCount = c;
+        best = stopId;
+      }
     }
     if (best) railDominantOrigin.set(k, best);
   }
@@ -417,7 +449,6 @@ async function main() {
         bucket[route][dir].durations[dayType][hour] = Math.round(medDur * 10) / 10;
       }
     }
-
   }
 
   // Active-trip counts emit separately — hours with zero starts can still
@@ -426,7 +457,7 @@ async function main() {
     const [route, dir, dayType, hourStr] = key.split('|');
     const hour = parseInt(hourStr, 10);
     const bucket = routeMode.get(route) === 'rail' ? out.lines : out.routes;
-    if (!bucket[route] || !bucket[route][dir]) continue;
+    if (!bucket[route]?.[dir]) continue;
     if (!bucket[route][dir].activeByHour) bucket[route][dir].activeByHour = {};
     if (!bucket[route][dir].activeByHour[dayType]) bucket[route][dir].activeByHour[dayType] = {};
     bucket[route][dir].activeByHour[dayType][hour] = Math.round(count * 10) / 10;
@@ -437,10 +468,17 @@ async function main() {
   const bytes = Fs.statSync(OUT_PATH).size;
   const routeCount = Object.keys(out.routes).length;
   const lineCount = Object.keys(out.lines).length;
-  console.log(`Wrote ${OUT_PATH} (${(bytes / 1024).toFixed(1)} KB, ${routeCount} bus routes, ${lineCount} rail lines)`);
+  console.log(
+    `Wrote ${OUT_PATH} (${(bytes / 1024).toFixed(1)} KB, ${routeCount} bus routes, ${lineCount} rail lines)`,
+  );
 }
 
-module.exports = { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD, resolveServiceDayTypes, dayTypeFor };
+module.exports = {
+  computeBusDominantOrigin,
+  BUS_DOMINANCE_THRESHOLD,
+  resolveServiceDayTypes,
+  dayTypeFor,
+};
 
 if (require.main === module) {
   main().catch((e) => {

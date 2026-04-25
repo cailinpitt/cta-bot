@@ -4,7 +4,7 @@ const { buildPostText, buildAltText } = require('../../src/shared/recapPost');
 
 const points = [
   { label: 'Foster & Marine Drive', lat: 41.97, lon: -87.64, count: 7, bunching: 1, gap: 6 },
-  { label: 'Michigan & Delaware', lat: 41.90, lon: -87.62, count: 6, bunching: 0, gap: 6 },
+  { label: 'Michigan & Delaware', lat: 41.9, lon: -87.62, count: 6, bunching: 0, gap: 6 },
   { label: 'Western & Pershing', lat: 41.82, lon: -87.69, count: 3, bunching: 3, gap: 0 },
   { label: 'Clark & Grand', lat: 41.89, lon: -87.63, count: 2, bunching: 2, gap: 0 },
 ];

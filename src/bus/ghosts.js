@@ -4,11 +4,11 @@
 
 const MISSING_PCT_THRESHOLD = 0.25;
 const MISSING_ABS_THRESHOLD = 3;
-const MIN_SNAPSHOTS = 8;             // tolerates ≤4 dropped polls in a ~12-poll window
-const MIN_OBSERVED = 2;              // observed=0/1 is either a schedule bug or a gap (already covered)
-const MAX_EXPECTED_ACTIVE = 30;      // sanity ceiling — most likely a bad GTFS bucket
-const RAMP_FILL_RATIO = 0.8;         // tail median ≥ this × expected → pipeline is filling, not ghosting
-const RAMP_TAIL_FRACTION = 0.25;     // tail = last 25%, min 3
+const MIN_SNAPSHOTS = 8; // tolerates ≤4 dropped polls in a ~12-poll window
+const MIN_OBSERVED = 2; // observed=0/1 is either a schedule bug or a gap (already covered)
+const MAX_EXPECTED_ACTIVE = 30; // sanity ceiling — most likely a bad GTFS bucket
+const RAMP_FILL_RATIO = 0.8; // tail median ≥ this × expected → pipeline is filling, not ghosting
+const RAMP_TAIL_FRACTION = 0.25; // tail = last 25%, min 3
 
 const { median } = require('../shared/stats');
 
@@ -31,11 +31,16 @@ async function detectBusGhosts({
   onDrop,
 }) {
   const events = [];
-  const drop = (reason, info) => { if (onDrop) onDrop({ reason, ...info }); };
+  const drop = (reason, info) => {
+    if (onDrop) onDrop({ reason, ...info });
+  };
 
   for (const route of routes) {
     const obs = getObservations(route);
-    if (obs.length === 0) { drop('no_observations', { route }); continue; }
+    if (obs.length === 0) {
+      drop('no_observations', { route });
+      continue;
+    }
 
     // Skip the whole route on any pattern resolution failure — expectedActive
     // still counts trips for that pid, so dropping observations alone would
@@ -46,7 +51,7 @@ async function detectBusGhosts({
     for (const pid of pids) {
       try {
         const p = await getPattern(pid);
-        if (p && p.direction) patternByPid.set(pid, p);
+        if (p?.direction) patternByPid.set(pid, p);
         else failedPids.push(pid);
       } catch (e) {
         failedPids.push(pid);
@@ -54,7 +59,9 @@ async function detectBusGhosts({
       }
     }
     if (failedPids.length > 0) {
-      console.warn(`ghosts: skipping route ${route} — unresolved pids with observations: ${failedPids.join(', ')}`);
+      console.warn(
+        `ghosts: skipping route ${route} — unresolved pids with observations: ${failedPids.join(', ')}`,
+      );
       drop('pattern_fetch_failed', { route, failedPids });
       continue;
     }
@@ -74,14 +81,22 @@ async function detectBusGhosts({
       const headway = expectedHeadway(route, group.pattern);
       const duration = expectedDuration(route, group.pattern);
       const active = expectedActive(route, group.pattern);
-      if (active == null || active <= 0) { drop('no_schedule', { ...ctx, expectedActive: active }); continue; }
+      if (active == null || active <= 0) {
+        drop('no_schedule', { ...ctx, expectedActive: active });
+        continue;
+      }
       // Headway/duration are display-only — null falls back to generic wording.
 
       // Sparse routes (active < 2) make ghost calls meaningless; one missing
       // bus isn't a story, two→zero is a gap (covered by the gaps bot).
-      if (active < 2) { drop('sparse_route', { ...ctx, expectedActive: active }); continue; }
+      if (active < 2) {
+        drop('sparse_route', { ...ctx, expectedActive: active });
+        continue;
+      }
       if (active > MAX_EXPECTED_ACTIVE) {
-        console.warn(`ghosts: ${route}/${direction} expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`);
+        console.warn(
+          `ghosts: ${route}/${direction} expectedActive=${active.toFixed(1)} exceeds cap (${MAX_EXPECTED_ACTIVE}) — skipping, likely schedule-index bug`,
+        );
         drop('expected_cap_exceeded', { ...ctx, expectedActive: active });
         continue;
       }
@@ -91,24 +106,48 @@ async function detectBusGhosts({
         if (!perSnapshot.has(o.ts)) perSnapshot.set(o.ts, new Set());
         perSnapshot.get(o.ts).add(o.vehicle_id);
       }
-      if (perSnapshot.size < MIN_SNAPSHOTS) { drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active }); continue; }
+      if (perSnapshot.size < MIN_SNAPSHOTS) {
+        drop('too_few_snapshots', { ...ctx, snapshots: perSnapshot.size, expectedActive: active });
+        continue;
+      }
 
       const counts = [...perSnapshot.values()].map((s) => s.size);
       const observedActive = median(counts);
       const missing = active - observedActive;
-      const detail = { ...ctx, expectedActive: active, observedActive, missing, snapshots: perSnapshot.size };
-      if (missing < MISSING_ABS_THRESHOLD) { drop('below_abs_threshold', detail); continue; }
-      if (missing / active < MISSING_PCT_THRESHOLD) { drop('below_pct_threshold', detail); continue; }
-      if (observedActive < MIN_OBSERVED) { drop('too_few_observed', detail); continue; }
+      const detail = {
+        ...ctx,
+        expectedActive: active,
+        observedActive,
+        missing,
+        snapshots: perSnapshot.size,
+      };
+      if (missing < MISSING_ABS_THRESHOLD) {
+        drop('below_abs_threshold', detail);
+        continue;
+      }
+      if (missing / active < MISSING_PCT_THRESHOLD) {
+        drop('below_pct_threshold', detail);
+        continue;
+      }
+      if (observedActive < MIN_OBSERVED) {
+        drop('too_few_observed', detail);
+        continue;
+      }
       // Wildly inconsistent counts usually indicate polling blackouts, not real ghosts.
       const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
       const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
       const stddev = Math.sqrt(variance);
-      if (stddev > observedActive) { drop('noisy_polling', { ...detail, stddev }); continue; }
+      if (stddev > observedActive) {
+        drop('noisy_polling', { ...detail, stddev });
+        continue;
+      }
       // Ramp-up gate: a filled tail means the deficit is at the front of the
       // hour, not now. Real outages persist into the tail.
       const tail = tailMedian(perSnapshot);
-      if (tail >= RAMP_FILL_RATIO * active) { drop('ramp_up_filled', { ...detail, tailMedian: tail }); continue; }
+      if (tail >= RAMP_FILL_RATIO * active) {
+        drop('ramp_up_filled', { ...detail, tailMedian: tail });
+        continue;
+      }
 
       events.push({
         route,
@@ -127,4 +166,13 @@ async function detectBusGhosts({
   return events;
 }
 
-module.exports = { detectBusGhosts, MISSING_PCT_THRESHOLD, MISSING_ABS_THRESHOLD, MIN_SNAPSHOTS, MIN_OBSERVED, MAX_EXPECTED_ACTIVE, RAMP_FILL_RATIO, RAMP_TAIL_FRACTION };
+module.exports = {
+  detectBusGhosts,
+  MISSING_PCT_THRESHOLD,
+  MISSING_ABS_THRESHOLD,
+  MIN_SNAPSHOTS,
+  MIN_OBSERVED,
+  MAX_EXPECTED_ACTIVE,
+  RAMP_FILL_RATIO,
+  RAMP_TAIL_FRACTION,
+};

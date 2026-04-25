@@ -13,7 +13,7 @@ function encodeSigned(value) {
 }
 
 function encode(points, precision = 5) {
-  const factor = Math.pow(10, precision);
+  const factor = 10 ** precision;
   let lastLat = 0;
   let lastLon = 0;
   let out = '';

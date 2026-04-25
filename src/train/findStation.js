@@ -6,7 +6,7 @@ const DESTINATION_ALIASES = {
   '95th/dan ryan': '95th/Dan Ryan',
   '95th': '95th/Dan Ryan',
   '54th/cermak': '54th/Cermak',
-  'loop': null,
+  loop: null,
   'see train': null,
 };
 
@@ -38,7 +38,9 @@ function findStationByDestination(line, destination, stations = trainStations) {
   const missKey = `${line}|${norm}`;
   if (!_loggedMisses.has(missKey)) {
     _loggedMisses.add(missKey);
-    console.warn(`findStation: unresolved destination '${destination}' on line '${line}' — consider adding to DESTINATION_ALIASES`);
+    console.warn(
+      `findStation: unresolved destination '${destination}' on line '${line}' — consider adding to DESTINATION_ALIASES`,
+    );
   }
   return null;
 }

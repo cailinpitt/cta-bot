@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dedicated bus observer — keeps ghost-detection coverage consistent
 // independent of when bunching/gaps happen to poll.
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
 
 const { getVehicles } = require('../src/bus/api');
 const { ghosts: ghostRoutes } = require('../src/bus/routes');

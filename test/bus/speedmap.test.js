@@ -14,11 +14,18 @@ function tracks(entries) {
 
 test('computeSamples turns pdist deltas into mph', () => {
   // 880 ft in 60s = 10 mph (since 880 ft/min = 10 mph).
-  const { byPid } = computeSamples(tracks([
-    { vid: '1', pid: 'A', points: [
-      { t: 0, pdist: 0 }, { t: 60_000, pdist: 880 },
-    ]},
-  ]));
+  const { byPid } = computeSamples(
+    tracks([
+      {
+        vid: '1',
+        pid: 'A',
+        points: [
+          { t: 0, pdist: 0 },
+          { t: 60_000, pdist: 880 },
+        ],
+      },
+    ]),
+  );
   const samples = byPid.get('A');
   assert.equal(samples.length, 1);
   assert.ok(Math.abs(samples[0].mph - 10) < 0.01);
@@ -26,22 +33,36 @@ test('computeSamples turns pdist deltas into mph', () => {
 });
 
 test('computeSamples skips pattern restarts (pdist decrease)', () => {
-  const { byPid, stats } = computeSamples(tracks([
-    { vid: '1', pid: 'A', points: [
-      { t: 0, pdist: 50000 }, { t: 60_000, pdist: 100 }, // restart
-      { t: 120_000, pdist: 1000 }, // valid pair with previous
-    ]},
-  ]));
+  const { byPid, stats } = computeSamples(
+    tracks([
+      {
+        vid: '1',
+        pid: 'A',
+        points: [
+          { t: 0, pdist: 50000 },
+          { t: 60_000, pdist: 100 }, // restart
+          { t: 120_000, pdist: 1000 }, // valid pair with previous
+        ],
+      },
+    ]),
+  );
   assert.equal(stats.restarts, 1);
   assert.equal(byPid.get('A').length, 1); // only the second pair survives
 });
 
 test('computeSamples drops pairs beyond maxDtMs', () => {
-  const { byPid, stats } = computeSamples(tracks([
-    { vid: '1', pid: 'A', points: [
-      { t: 0, pdist: 0 }, { t: 10 * 60_000, pdist: 500 },
-    ]},
-  ]));
+  const { byPid, stats } = computeSamples(
+    tracks([
+      {
+        vid: '1',
+        pid: 'A',
+        points: [
+          { t: 0, pdist: 0 },
+          { t: 10 * 60_000, pdist: 500 },
+        ],
+      },
+    ]),
+  );
   assert.equal(stats.dropped, 1);
   assert.equal(byPid.get('A'), undefined);
 });
@@ -49,11 +70,18 @@ test('computeSamples drops pairs beyond maxDtMs', () => {
 test('computeSamples drops out-of-range speeds', () => {
   // 5280 ft in 60s = 60 mph — right at the cap, which is inclusive-upper on
   // the drop check. A higher value should be dropped.
-  const { byPid, stats } = computeSamples(tracks([
-    { vid: '1', pid: 'A', points: [
-      { t: 0, pdist: 0 }, { t: 60_000, pdist: 10000 }, // ~113 mph — absurd
-    ]},
-  ]));
+  const { byPid, stats } = computeSamples(
+    tracks([
+      {
+        vid: '1',
+        pid: 'A',
+        points: [
+          { t: 0, pdist: 0 },
+          { t: 60_000, pdist: 10000 }, // ~113 mph — absurd
+        ],
+      },
+    ]),
+  );
   assert.equal(stats.dropped, 1);
   assert.equal(byPid.get('A'), undefined);
 });
@@ -74,7 +102,7 @@ test('binSamples averages per bucket, null for empty buckets', () => {
     { pdist: 75, mph: 30 }, // bucket 3
   ];
   const bins = binSamples(samples, 100, 4); // buckets of 25 ft
-  assert.equal(bins[0], 15);    // avg of 10, 20
+  assert.equal(bins[0], 15); // avg of 10, 20
   assert.equal(bins[1], null);
   assert.equal(bins[2], null);
   assert.equal(bins[3], 30);
@@ -82,10 +110,10 @@ test('binSamples averages per bucket, null for empty buckets', () => {
 
 test('summarize counts bins by color band and computes avg', () => {
   const { avg, red, orange, yellow, green } = summarize([null, 3, 7, 12, 20]);
-  assert.equal(red, 1);     // 3
-  assert.equal(orange, 1);  // 7 (5 ≤ s < 10)
-  assert.equal(yellow, 1);  // 12
-  assert.equal(green, 1);   // 20
+  assert.equal(red, 1); // 3
+  assert.equal(orange, 1); // 7 (5 ≤ s < 10)
+  assert.equal(yellow, 1); // 12
+  assert.equal(green, 1); // 20
   assert.equal(avg, (3 + 7 + 12 + 20) / 4);
 });
 

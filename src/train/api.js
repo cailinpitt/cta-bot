@@ -7,25 +7,37 @@ const ALL_LINES = ['red', 'blue', 'brn', 'g', 'org', 'p', 'pink', 'y'];
 
 // Official CTA line colors (hex without leading #) for Mapbox overlays and post text.
 const LINE_COLORS = {
-  red:  'c60c30',
+  red: 'c60c30',
   blue: '00a1de',
-  brn:  '62361b',
-  g:    '009b3a',
-  org:  'f9461c',
-  p:    '522398',
+  brn: '62361b',
+  g: '009b3a',
+  org: 'f9461c',
+  p: '522398',
   pink: 'e27ea6',
-  y:    'f9e300',
+  y: 'f9e300',
 };
 
 const LINE_NAMES = {
-  red: 'Red', blue: 'Blue', brn: 'Brown', g: 'Green',
-  org: 'Orange', p: 'Purple', pink: 'Pink', y: 'Yellow',
+  red: 'Red',
+  blue: 'Blue',
+  brn: 'Brown',
+  g: 'Green',
+  org: 'Orange',
+  p: 'Purple',
+  pink: 'Pink',
+  y: 'Yellow',
 };
 
 // Unicode has no pink square; 🩷 (pink heart) is the closest color-block stand-in.
 const LINE_EMOJI = {
-  red: '🟥', blue: '🟦', brn: '🟫', g: '🟩',
-  org: '🟧', p: '🟪', pink: '🩷', y: '🟨',
+  red: '🟥',
+  blue: '🟦',
+  brn: '🟫',
+  g: '🟩',
+  org: '🟧',
+  p: '🟪',
+  pink: '🩷',
+  y: '🟨',
 };
 
 function parseTrain(line, raw) {
@@ -33,7 +45,7 @@ function parseTrain(line, raw) {
     line,
     rn: raw.rn,
     destination: raw.destNm,
-    trDr: raw.trDr,            // Direction code — '1' or '5'. Use with destination for context.
+    trDr: raw.trDr, // Direction code — '1' or '5'. Use with destination for context.
     nextStation: raw.nextStaNm,
     approaching: raw.isApp === '1',
     delayed: raw.isDly === '1',
@@ -50,10 +62,14 @@ function isInChicagoland(lat, lon) {
 }
 
 async function getAllTrainPositions(lines = ALL_LINES) {
-  const { data } = await withRetry(() => axios.get(`${BASE}/ttpositions.aspx`, {
-    params: { key: process.env.CTA_TRAIN_KEY, rt: lines.join(','), outputType: 'JSON' },
-    timeout: 15000,
-  }), { label: 'CTA train positions' });
+  const { data } = await withRetry(
+    () =>
+      axios.get(`${BASE}/ttpositions.aspx`, {
+        params: { key: process.env.CTA_TRAIN_KEY, rt: lines.join(','), outputType: 'JSON' },
+        timeout: 15000,
+      }),
+    { label: 'CTA train positions' },
+  );
   const body = data.ctatt;
   if (body.errCd !== '0') throw new Error(`Train API error ${body.errCd}: ${body.errNm}`);
 
@@ -101,4 +117,11 @@ function shortStationName(name) {
   return name.replace(TRAILING_PARENS, '');
 }
 
-module.exports = { getAllTrainPositions, LINE_COLORS, LINE_NAMES, LINE_EMOJI, ALL_LINES, shortStationName };
+module.exports = {
+  getAllTrainPositions,
+  LINE_COLORS,
+  LINE_NAMES,
+  LINE_EMOJI,
+  ALL_LINES,
+  shortStationName,
+};

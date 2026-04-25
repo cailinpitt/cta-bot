@@ -12,13 +12,15 @@ require('../../src/shared/env');
 const { setup, runBin } = require('../../src/shared/runBin');
 const { fetchAlerts, isSignificantAlert } = require('../../src/shared/ctaAlerts');
 const { loginAlerts, postText } = require('../../src/shared/bluesky');
+const { buildAlertPostText, buildResolutionReplyText } = require('../../src/shared/alertPost');
 const {
-  buildAlertPostText, buildResolutionReplyText,
-} = require('../../src/shared/alertPost');
-const {
-  getAlertPost, recordAlertSeen, recordAlertResolved,
-  incrementAlertClearTicks, resetAlertClearTicks,
-  listUnresolvedAlerts, ALERT_CLEAR_TICKS,
+  getAlertPost,
+  recordAlertSeen,
+  recordAlertResolved,
+  incrementAlertClearTicks,
+  resetAlertClearTicks,
+  listUnresolvedAlerts,
+  ALERT_CLEAR_TICKS,
 } = require('../../src/shared/history');
 const busRoutes = require('../../src/bus/routes');
 
@@ -28,7 +30,10 @@ const KIND = 'bus';
 // Filter to routes the bot actively tracks; CTA's bus alert volume is huge
 // and most of it concerns routes followers don't care about.
 const TRACKED = new Set([
-  ...busRoutes.bunching, ...busRoutes.gaps, ...busRoutes.speedmap, ...busRoutes.ghosts,
+  ...busRoutes.bunching,
+  ...busRoutes.gaps,
+  ...busRoutes.speedmap,
+  ...busRoutes.ghosts,
 ]);
 
 function isRelevant(alert) {
@@ -43,11 +48,23 @@ async function postNewAlert(alert, agentGetter) {
     console.log(`--- DRY RUN alert ${alert.id} (DB write skipped) ---\n${text}`);
     return;
   }
-  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: null });
+  recordAlertSeen({
+    alertId: alert.id,
+    kind: KIND,
+    routes,
+    headline: alert.headline,
+    postUri: null,
+  });
   const agent = await agentGetter();
   const result = await postText(agent, text);
   console.log(`Posted alert ${alert.id}: ${result.url}`);
-  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: result.uri });
+  recordAlertSeen({
+    alertId: alert.id,
+    kind: KIND,
+    routes,
+    headline: alert.headline,
+    postUri: result.uri,
+  });
 }
 
 function parseAtUri(uri) {
@@ -61,7 +78,9 @@ async function postResolution(alertRow, agentGetter) {
   const text = buildResolutionReplyText({ alert: pseudoAlert, kind: KIND });
 
   if (DRY_RUN) {
-    console.log(`--- DRY RUN resolution for alert ${alertRow.alert_id} (DB write skipped) ---\n${text}`);
+    console.log(
+      `--- DRY RUN resolution for alert ${alertRow.alert_id} (DB write skipped) ---\n${text}`,
+    );
     return;
   }
   if (!alertRow.post_uri) {
@@ -89,7 +108,9 @@ async function main() {
   const relevant = alerts.filter(isRelevant);
   const activeIds = new Set(relevant.map((a) => a.id));
 
-  console.log(`Fetched ${alerts.length} active alerts, ${relevant.length} relevant to tracked bus routes`);
+  console.log(
+    `Fetched ${alerts.length} active alerts, ${relevant.length} relevant to tracked bus routes`,
+  );
 
   let agent = null;
   const agentGetter = async () => {
@@ -99,12 +120,14 @@ async function main() {
 
   for (const alert of relevant) {
     const existing = getAlertPost(alert.id);
-    if (existing && existing.post_uri) {
+    if (existing?.post_uri) {
       if (!DRY_RUN) {
         recordAlertSeen({
-          alertId: alert.id, kind: KIND,
+          alertId: alert.id,
+          kind: KIND,
           routes: alert.busRoutes.join(','),
-          headline: alert.headline, postUri: null,
+          headline: alert.headline,
+          postUri: null,
         });
       }
       continue;
@@ -128,7 +151,9 @@ async function main() {
       continue;
     }
     if (DRY_RUN) {
-      console.log(`--- DRY RUN would advance clear_ticks for alert ${row.alert_id} (DB write skipped) ---`);
+      console.log(
+        `--- DRY RUN would advance clear_ticks for alert ${row.alert_id} (DB write skipped) ---`,
+      );
       continue;
     }
     const next = incrementAlertClearTicks(row.alert_id);

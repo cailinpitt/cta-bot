@@ -8,7 +8,7 @@ const STATIONS = [
   { name: 'Forest Park', lines: ['blue'], isTerminal: true },
   { name: "O'Hare", lines: ['blue'], isTerminal: true },
   { name: 'UIC-Halsted', lines: ['blue'] },
-  { name: 'Harlem (Blue - O\'Hare Branch)', lines: ['blue'] },
+  { name: "Harlem (Blue - O'Hare Branch)", lines: ['blue'] },
   { name: '54th/Cermak', lines: ['pink'], isTerminal: true },
   { name: 'Halsted', lines: ['g', 'org'] },
 ];

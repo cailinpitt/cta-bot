@@ -6,18 +6,14 @@ const { train } = require('../helpers');
 const NOON_CT = new Date('2026-04-18T17:00:00Z'); // 12:00 PM CT
 
 test('countByLine tallies trains per line', () => {
-  const m = countByLine([
-    train({ line: 'red' }), train({ line: 'red' }), train({ line: 'blue' }),
-  ]);
+  const m = countByLine([train({ line: 'red' }), train({ line: 'red' }), train({ line: 'blue' })]);
   assert.equal(m.get('red'), 2);
   assert.equal(m.get('blue'), 1);
   assert.equal(m.get('brn'), undefined);
 });
 
 test('buildPostText includes time, total, and all 8 lines with counts', () => {
-  const trains = [
-    train({ line: 'red' }), train({ line: 'red' }), train({ line: 'g' }),
-  ];
+  const trains = [train({ line: 'red' }), train({ line: 'red' }), train({ line: 'g' })];
   const text = buildPostText(trains, NOON_CT);
   assert.ok(text.includes('3 trains system-wide'));
   assert.ok(text.includes('12:00 PM CT'));

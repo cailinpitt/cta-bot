@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { computeBusDominantOrigin, BUS_DOMINANCE_THRESHOLD, resolveServiceDayTypes } = require('../../scripts/fetch-gtfs');
+const {
+  computeBusDominantOrigin,
+  BUS_DOMINANCE_THRESHOLD,
+  resolveServiceDayTypes,
+} = require('../../scripts/fetch-gtfs');
 
 function mkTrips(spec) {
   const tripMeta = new Map();
@@ -61,18 +65,37 @@ test('trips missing an origin are skipped without crashing', () => {
     ['T2', { route: '9', dir: '0', mode: 'bus' }],
     ['T3', { route: '9', dir: '0', mode: 'bus' }],
   ]);
-  const firstStopId = new Map([['T1', 'X'], ['T2', 'X']]); // T3 has no origin
+  const firstStopId = new Map([
+    ['T1', 'X'],
+    ['T2', 'X'],
+  ]); // T3 has no origin
   const dom = computeBusDominantOrigin(tripMeta, firstStopId);
   assert.equal(dom.get('9|0'), 'X');
 });
 
 const WEEKDAY_CAL = {
-  service_id: 'REG', monday: '1', tuesday: '1', wednesday: '1', thursday: '1',
-  friday: '1', saturday: '0', sunday: '0', start_date: '20260101', end_date: '20261231',
+  service_id: 'REG',
+  monday: '1',
+  tuesday: '1',
+  wednesday: '1',
+  thursday: '1',
+  friday: '1',
+  saturday: '0',
+  sunday: '0',
+  start_date: '20260101',
+  end_date: '20261231',
 };
 const SUNDAY_CAL = {
-  service_id: 'SUN', monday: '0', tuesday: '0', wednesday: '0', thursday: '0',
-  friday: '0', saturday: '0', sunday: '1', start_date: '20260101', end_date: '20261231',
+  service_id: 'SUN',
+  monday: '0',
+  tuesday: '0',
+  wednesday: '0',
+  thursday: '0',
+  friday: '0',
+  saturday: '0',
+  sunday: '1',
+  start_date: '20260101',
+  end_date: '20261231',
 };
 
 test('calendar_dates exception_type=2 removes the regular service_id on the target date', () => {

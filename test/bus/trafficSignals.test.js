@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { filterSignalsOnRoute, dedupeNearbySignals, annotateSignalOrientations } = require('../../src/bus/trafficSignals');
+const {
+  filterSignalsOnRoute,
+  dedupeNearbySignals,
+  annotateSignalOrientations,
+} = require('../../src/bus/trafficSignals');
 const { pointAtFt } = require('../helpers');
 
 // A straight N-S route: 10 points along lon=-87.65, spanning 10000 ft.
@@ -10,7 +14,7 @@ for (let i = 0; i <= 10; i++) route.push(pointAtFt(10000, i * 1000));
 test('filterSignalsOnRoute keeps signals on the line and drops far ones', () => {
   const onLine = pointAtFt(10000, 3000);
   const near = { lat: onLine.lat, lon: onLine.lon + 0.0001 }; // ~27 ft east
-  const far = { lat: onLine.lat, lon: onLine.lon + 0.003 };  // ~810 ft east
+  const far = { lat: onLine.lat, lon: onLine.lon + 0.003 }; // ~810 ft east
   const kept = filterSignalsOnRoute([onLine, near, far], route, 120);
   assert.equal(kept.length, 2);
   assert.ok(!kept.includes(far));
@@ -45,8 +49,14 @@ test('dedupeNearbySignals preserves signals beyond minFt', () => {
 });
 
 test('annotateSignalOrientations marks E-W routes vertical and N-S routes horizontal', () => {
-  const ewRoute = [{ lat: 41.896, lon: -87.65 }, { lat: 41.896, lon: -87.64 }];
-  const nsRoute = [{ lat: 41.90, lon: -87.687 }, { lat: 41.91, lon: -87.687 }];
+  const ewRoute = [
+    { lat: 41.896, lon: -87.65 },
+    { lat: 41.896, lon: -87.64 },
+  ];
+  const nsRoute = [
+    { lat: 41.9, lon: -87.687 },
+    { lat: 41.91, lon: -87.687 },
+  ];
   const ew = annotateSignalOrientations([{ lat: 41.896, lon: -87.645 }], ewRoute);
   const ns = annotateSignalOrientations([{ lat: 41.905, lon: -87.687 }], nsRoute);
   assert.equal(ew[0].orientation, 'vertical');
@@ -56,7 +66,10 @@ test('annotateSignalOrientations marks E-W routes vertical and N-S routes horizo
 test('annotateSignalOrientations snaps signals to the nearest point on the route', () => {
   // Straight N-S route along lon=-87.687. Two signals offset east/west by
   // ~50 ft each — after snapping they should both sit on the centerline.
-  const route = [{ lat: 41.90, lon: -87.687 }, { lat: 41.91, lon: -87.687 }];
+  const route = [
+    { lat: 41.9, lon: -87.687 },
+    { lat: 41.91, lon: -87.687 },
+  ];
   const offsets = [
     { lat: 41.905, lon: -87.6872 },
     { lat: 41.906, lon: -87.6868 },

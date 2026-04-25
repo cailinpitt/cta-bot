@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { detectAllTrainGaps, TYPICAL_TRAIN_SPEED_FT_PER_MIN, ABSOLUTE_MIN_MIN } = require('../../src/train/gaps');
+const {
+  detectAllTrainGaps,
+  TYPICAL_TRAIN_SPEED_FT_PER_MIN,
+  ABSOLUTE_MIN_MIN,
+} = require('../../src/train/gaps');
 const { train, straightLine, pointAtFt } = require('../helpers');
 
 const LINE_FT = 100000;
@@ -16,7 +20,9 @@ const expected10 = () => 10; // scheduled headway
 
 // Qualifying gap: ratio ≥ 2.5 AND gapMin ≥ ABSOLUTE_MIN_MIN. For a 10-min
 // headway this means ≥ 25 min travel at 2200 ft/min = 55000 ft.
-const QUALIFYING_FT = Math.ceil(Math.max(ABSOLUTE_MIN_MIN, 2.5 * 10) * TYPICAL_TRAIN_SPEED_FT_PER_MIN);
+const QUALIFYING_FT = Math.ceil(
+  Math.max(ABSOLUTE_MIN_MIN, 2.5 * 10) * TYPICAL_TRAIN_SPEED_FT_PER_MIN,
+);
 
 test('flags a pair beyond threshold and orders leading/trailing by trackDist', () => {
   const a = trainAt(10000, { rn: 'A' });

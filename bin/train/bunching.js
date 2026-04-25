@@ -12,7 +12,12 @@ const { isOnCooldown } = require('../../src/shared/state');
 const { commitAndPost } = require('../../src/shared/postDetection');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
-const { buildPostText, buildAltText, buildVideoPostText, buildVideoAltText } = require('../../src/train/bunchingPost');
+const {
+  buildPostText,
+  buildAltText,
+  buildVideoPostText,
+  buildVideoAltText,
+} = require('../../src/train/bunchingPost');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
 
@@ -33,7 +38,9 @@ async function main() {
 
   console.log(`Found ${bunches.length} candidate bunch(es); picking best available:`);
   for (const b of bunches) {
-    console.log(`  ${LINE_NAMES[b.line]} Line toward ${b.trains[0].destination} — ${b.trains.length} trains span ${Math.round(b.spanFt)}ft, maxGap ${Math.round(b.maxGapFt)}ft`);
+    console.log(
+      `  ${LINE_NAMES[b.line]} Line toward ${b.trains[0].destination} — ${b.trains.length} trains span ${Math.round(b.spanFt)}ft, maxGap ${Math.round(b.maxGapFt)}ft`,
+    );
   }
 
   // Two cooldown layers: line+direction (specific) and line-wide (prevents
@@ -48,7 +55,9 @@ async function main() {
       const dirCd = isOnCooldown(candDirKey);
       const lineCd = isOnCooldown(candLineKey);
       if (dirCd || lineCd) {
-        console.log(`  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${dirCd ? 'direction' : 'line'} on cooldown`);
+        console.log(
+          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${dirCd ? 'direction' : 'line'} on cooldown`,
+        );
         history.recordBunching({
           kind: 'train',
           route: candidate.line,
@@ -67,7 +76,9 @@ async function main() {
         cap: TRAIN_BUNCHING_DAILY_CAP,
       });
       if (!capAllows) {
-        console.log(`  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: line at daily cap (${TRAIN_BUNCHING_DAILY_CAP}) and not more severe than today's posts`);
+        console.log(
+          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: line at daily cap (${TRAIN_BUNCHING_DAILY_CAP}) and not more severe than today's posts`,
+        );
         history.recordBunching({
           kind: 'train',
           route: candidate.line,
@@ -91,8 +102,9 @@ async function main() {
     return;
   }
 
-  console.log(`Posting: ${LINE_NAMES[bunch.line]} Line toward ${bunch.trains[0].destination} — ${bunch.trains.length} trains span ${Math.round(bunch.spanFt)}ft`);
-
+  console.log(
+    `Posting: ${LINE_NAMES[bunch.line]} Line toward ${bunch.trains[0].destination} — ${bunch.trains.length} trains span ${Math.round(bunch.spanFt)}ft`,
+  );
 
   const callouts = history.bunchingCallouts({
     kind: 'train',
@@ -115,20 +127,36 @@ async function main() {
   const alt = buildAltText(bunch);
 
   if (argv['dry-run']) {
-    const outPath = writeDryRunAsset(image, `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.jpg`);
+    const outPath = writeDryRunAsset(
+      image,
+      `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.jpg`,
+    );
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     if (argv.video) {
       const ticks = argv.ticks ? parseInt(argv.ticks, 10) : undefined;
       const tickMs = argv['tick-ms'] ? parseInt(argv['tick-ms'], 10) : undefined;
       const interpolate = argv.interpolate ? parseInt(argv.interpolate, 10) : undefined;
-      console.log(`\nCapturing video (ticks=${ticks || 'default'}, tickMs=${tickMs || 'default'}, interpolate=${interpolate || 'default'})...`);
-      const result = await captureTrainBunchingVideo(bunch, LINE_COLORS, trainLines, trainStations, { ticks, tickMs, interpolate });
+      console.log(
+        `\nCapturing video (ticks=${ticks || 'default'}, tickMs=${tickMs || 'default'}, interpolate=${interpolate || 'default'})...`,
+      );
+      const result = await captureTrainBunchingVideo(
+        bunch,
+        LINE_COLORS,
+        trainLines,
+        trainStations,
+        { ticks, tickMs, interpolate },
+      );
       if (!result) {
         console.log('Video capture produced <2 frames, skipped');
       } else {
-        const videoPath = writeDryRunAsset(result.buffer, `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.mp4`);
+        const videoPath = writeDryRunAsset(
+          result.buffer,
+          `train-bunching-${LINE_NAMES[bunch.line].toLowerCase()}-${Date.now()}.mp4`,
+        );
         console.log(`Video: ${videoPath}`);
-        console.log(`  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, gap ${result.initialDistFt}ft → ${result.finalDistFt ?? '?'}ft`);
+        console.log(
+          `  ticks=${result.ticksCaptured}, elapsed=${result.elapsedSec}s, gap ${result.initialDistFt}ft → ${result.finalDistFt ?? '?'}ft`,
+        );
       }
     }
     return;
@@ -146,9 +174,13 @@ async function main() {
     cooldownKeys: [dirCooldownKey, lineCooldownKey],
     recordSkip: () => history.recordBunching({ ...baseEvent, posted: false }),
     agentLogin: loginTrain,
-    image, text, alt,
-    recordPosted: (primary) => history.recordBunching({ ...baseEvent, posted: true, postUri: primary.uri }),
-    postWithImage, postText,
+    image,
+    text,
+    alt,
+    recordPosted: (primary) =>
+      history.recordBunching({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage,
+    postText,
   });
   if (!result) return;
   const { agent, primary } = result;

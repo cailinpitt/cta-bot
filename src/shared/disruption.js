@@ -31,12 +31,14 @@ function buildPostText(d) {
 
 function evidenceLine(e) {
   const stretch = e.runLengthMi != null ? `${e.runLengthMi}-mi stretch` : 'this stretch';
-  const since = e.minutesSinceLastTrain != null
-    ? `the last ${e.minutesSinceLastTrain} min`
-    : `the last ${e.lookbackMin || 20} min`;
-  const elsewhere = e.trainsOutsideRun != null
-    ? ` (${e.trainsOutsideRun} train${e.trainsOutsideRun === 1 ? '' : 's'} active elsewhere on the line)`
-    : '';
+  const since =
+    e.minutesSinceLastTrain != null
+      ? `the last ${e.minutesSinceLastTrain} min`
+      : `the last ${e.lookbackMin || 20} min`;
+  const elsewhere =
+    e.trainsOutsideRun != null
+      ? ` (${e.trainsOutsideRun} train${e.trainsOutsideRun === 1 ? '' : 's'} active elsewhere on the line)`
+      : '';
   return `📡 No trains seen on this ${stretch} in ${since}${elsewhere}.`;
 }
 
@@ -54,7 +56,8 @@ function buildAltText(d) {
 
 function footerFor(source) {
   if (source === 'cta-alert') return 'Per CTA. Check transitchicago.com for updates.';
-  if (source === 'observed') return "Inferred from live train positions; CTA hasn't issued an alert for this yet.";
+  if (source === 'observed')
+    return "Inferred from live train positions; CTA hasn't issued an alert for this yet.";
   return '';
 }
 
@@ -66,4 +69,11 @@ function buildClearPostText(d, { ctaAlertOpen = false } = {}) {
   return `✅ ${lineName} Line trains running through ${d.suspendedSegment.from} ↔ ${d.suspendedSegment.to} again. ${tail}`;
 }
 
-module.exports = { buildPostText, buildAltText, buildClearPostText, titleFor, footerFor, evidenceLine };
+module.exports = {
+  buildPostText,
+  buildAltText,
+  buildClearPostText,
+  titleFor,
+  footerFor,
+  evidenceLine,
+};

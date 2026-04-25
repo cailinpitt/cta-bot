@@ -9,7 +9,10 @@ function routeTitle(route) {
 
 function buildPostText(bunch, pattern, stop, callouts = []) {
   const title = routeTitle(bunch.route);
-  const vids = bunch.vehicles.map((v) => `#${v.vid}`).filter((s) => s !== '#undefined').join(', ');
+  const vids = bunch.vehicles
+    .map((v) => `#${v.vid}`)
+    .filter((s) => s !== '#undefined')
+    .join(', ');
   const busesLine = vids ? `\nBuses: ${vids}` : '';
   const base = `🚌 ${title} — ${pattern.direction}\n${bunch.vehicles.length} buses within ${formatDistance(bunch.spanFt)} near ${stop.stopName}${busesLine}`;
   const tail = formatCallouts(callouts);
@@ -23,11 +26,14 @@ function buildAltText(bunch, pattern, stop) {
 function buildVideoPostText(result, bunch, pattern) {
   const elapsed = elapsedMinutesLabel(result.elapsedSec);
   const context = bunch && pattern ? `${routeTitle(bunch.route)} — ${pattern.direction}\n` : '';
-  if (result.finalSpanFt == null) return `${context}Timelapse of the above — ${elapsed} of real time.`;
+  if (result.finalSpanFt == null)
+    return `${context}Timelapse of the above — ${elapsed} of real time.`;
   const delta = result.finalSpanFt - result.initialSpanFt;
   let headline;
-  if (delta > 50) headline = `${elapsed} later, the buses were ${formatDistance(delta)} farther apart.`;
-  else if (delta < -50) headline = `${elapsed} later, the gap had closed by ${formatDistance(-delta)}.`;
+  if (delta > 50)
+    headline = `${elapsed} later, the buses were ${formatDistance(delta)} farther apart.`;
+  else if (delta < -50)
+    headline = `${elapsed} later, the gap had closed by ${formatDistance(-delta)}.`;
   else headline = `Still bunched ${elapsed} later.`;
   return `${context}${headline}\n🎬 ${formatDistance(result.initialSpanFt)} → ${formatDistance(result.finalSpanFt)}`;
 }

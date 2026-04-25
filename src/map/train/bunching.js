@@ -6,11 +6,19 @@ const { buildLinePolyline, snapToLine } = require('../../train/speedmap');
 const { shortStationName } = require('../../train/api');
 const { dayTypeFor, chicagoHour } = require('../../shared/gtfs');
 const {
-  STYLE, WIDTH, HEIGHT,
-  TWEMOJI_TRAIN_INNER, TWEMOJI_HOUSE_INNER, TWEMOJI_FLAG_INNER,
+  STYLE,
+  WIDTH,
+  HEIGHT,
+  TWEMOJI_TRAIN_INNER,
+  TWEMOJI_HOUSE_INNER,
+  TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
-  buildDirectionArrow, xmlEscape, requireMapboxToken, fetchMapboxStatic,
-  separateMarkers, perpendicularFromBearing,
+  buildDirectionArrow,
+  xmlEscape,
+  requireMapboxToken,
+  fetchMapboxStatic,
+  separateMarkers,
+  perpendicularFromBearing,
 } = require('../common');
 
 const TRAIN_BUNCH_BBOX_PADDING_DEG = 0.003; // ~300m — zoom out a little past the trains
@@ -29,14 +37,18 @@ const AT_STATION_FT = 250;
 // have no real end-of-line, so we omit them from the map and skip the marker.
 // Yellow's "Skokie" short-name maps to the Dempster-Skokie station.
 const TRUE_TERMINALS = {
-  red:  { 'Howard': 'Howard', '95th/Dan Ryan': '95th/Dan Ryan' },
+  red: { Howard: 'Howard', '95th/Dan Ryan': '95th/Dan Ryan' },
   blue: { "O'Hare": "O'Hare", 'Forest Park': 'Forest Park' },
-  g:    { 'Harlem/Lake': 'Harlem/Lake', 'Ashland/63rd': 'Ashland/63rd', 'Cottage Grove': 'Cottage Grove' },
-  brn:  { 'Kimball': 'Kimball' },
-  org:  { 'Midway': 'Midway' },
-  p:    { 'Linden': 'Linden', 'Howard': 'Howard' },
+  g: {
+    'Harlem/Lake': 'Harlem/Lake',
+    'Ashland/63rd': 'Ashland/63rd',
+    'Cottage Grove': 'Cottage Grove',
+  },
+  brn: { Kimball: 'Kimball' },
+  org: { Midway: 'Midway' },
+  p: { Linden: 'Linden', Howard: 'Howard' },
   pink: { '54th/Cermak': '54th/Cermak' },
-  y:    { 'Dempster-Skokie': 'Dempster-Skokie', 'Skokie': 'Dempster-Skokie', 'Howard': 'Howard' },
+  y: { 'Dempster-Skokie': 'Dempster-Skokie', Skokie: 'Dempster-Skokie', Howard: 'Howard' },
 };
 
 function findTerminal(bunch, stations) {
@@ -76,11 +88,10 @@ function purpleExpressNorthboundActive(now) {
 }
 
 const LINE_ORIGIN_RESOLVERS = {
-  g: (_line, destStationName) => (
+  g: (_line, destStationName) =>
     destStationName === 'Ashland/63rd' || destStationName === 'Cottage Grove'
       ? 'Harlem/Lake'
-      : null
-  ),
+      : null,
   p: (_line, destStationName, opts = {}) => {
     if (destStationName === 'Linden') {
       if (purpleExpressNorthboundActive(opts.now)) return 'Merchandise Mart (Brown/Purple)';
@@ -104,13 +115,28 @@ function findOrigin(bunch, stations, opts = {}) {
   if (!dest) return null;
   const destStationName = lineTerms[dest] || null;
   const resolver = LINE_ORIGIN_RESOLVERS[bunch.line] || defaultOriginResolver;
-  const originName = resolver(bunch.line, destStationName, { dest, now, leadSouthOfHoward: opts.leadSouthOfHoward });
+  const originName = resolver(bunch.line, destStationName, {
+    dest,
+    now,
+    leadSouthOfHoward: opts.leadSouthOfHoward,
+  });
   if (!originName) return null;
   const st = (stations || []).find((s) => s.name === originName);
   return st ? { lat: st.lat, lon: st.lon } : null;
 }
 
-function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, lineColor, widthPx, heightPx, terminalPixel, originPixel, bearingDeg = 0, arrowBearingDeg = null) {
+function buildTrainOverlaySvg(
+  stationsWithPixels,
+  atStationPixels,
+  trainPixels,
+  lineColor,
+  widthPx,
+  heightPx,
+  terminalPixel,
+  originPixel,
+  bearingDeg = 0,
+  arrowBearingDeg = null,
+) {
   const fontSize = 18;
   const labelHeight = fontSize + 8;
 
@@ -118,8 +144,8 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   // radius as the exclusion for compass placement so labels sit right next to
   // the pin, not drifting across the map.
   const STATION_PIN_RADIUS = 14;
-  const LABEL_GAP = 8;             // gap between pin/halo edge and label rect
-  const LABEL_COLLISION_PAD = 4;   // padding when testing label-vs-label overlap
+  const LABEL_GAP = 8; // gap between pin/halo edge and label rect
+  const LABEL_COLLISION_PAD = 4; // padding when testing label-vs-label overlap
 
   // Reserved no-go boxes: train markers + their halos, and terminal (house/
   // flag) markers. Labels placed near trains should not slide over the train
@@ -177,16 +203,8 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
     // the first hit wins).
     const primary = perpSide(side);
     const opposite = perpSide(-side);
-    const alongPos = rectFrom(
-      pinX + along.x * (r + w / 2),
-      pinY + along.y * (r + h / 2),
-      'middle',
-    );
-    const alongNeg = rectFrom(
-      pinX - along.x * (r + w / 2),
-      pinY - along.y * (r + h / 2),
-      'middle',
-    );
+    const alongPos = rectFrom(pinX + along.x * (r + w / 2), pinY + along.y * (r + h / 2), 'middle');
+    const alongNeg = rectFrom(pinX - along.x * (r + w / 2), pinY - along.y * (r + h / 2), 'middle');
     // Cardinal + diagonal fallbacks, in case viewport edges clip the route-
     // relative placements.
     return [
@@ -194,12 +212,12 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
       opposite,
       alongPos,
       alongNeg,
-      { x: pinX + r, y: pinY - h / 2, anchor: 'start' },                 // E
-      { x: pinX - r - w, y: pinY - h / 2, anchor: 'end' },               // W
-      { x: pinX + r * 0.5, y: pinY + r * 0.5, anchor: 'start' },         // SE
-      { x: pinX - r * 0.5 - w, y: pinY + r * 0.5, anchor: 'end' },       // SW
-      { x: pinX + r * 0.5, y: pinY - r * 0.5 - h, anchor: 'start' },     // NE
-      { x: pinX - r * 0.5 - w, y: pinY - r * 0.5 - h, anchor: 'end' },   // NW
+      { x: pinX + r, y: pinY - h / 2, anchor: 'start' }, // E
+      { x: pinX - r - w, y: pinY - h / 2, anchor: 'end' }, // W
+      { x: pinX + r * 0.5, y: pinY + r * 0.5, anchor: 'start' }, // SE
+      { x: pinX - r * 0.5 - w, y: pinY + r * 0.5, anchor: 'end' }, // SW
+      { x: pinX + r * 0.5, y: pinY - r * 0.5 - h, anchor: 'start' }, // NE
+      { x: pinX - r * 0.5 - w, y: pinY - r * 0.5 - h, anchor: 'end' }, // NW
     ];
   }
 
@@ -228,17 +246,30 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
     const text = xmlEscape(shortStationName(s.station.name));
     const approxWidth = text.length * 10 + 16;
     // Trains get the bigger exclusion radius so labels clear the halo.
-    const pinX = s.hasTrain ? s.trainX ?? s.x : s.x;
+    const pinX = s.hasTrain ? (s.trainX ?? s.x) : s.x;
     const pinY = s.hasTrain ? s.trainY : s.y;
     const radius = s.hasTrain ? TRAIN_MARKER_RADIUS + 8 : STATION_PIN_RADIUS;
 
-    const cands = candidates(pinX, pinY, radius, approxWidth, labelHeight, sideFlip, s.bearingDeg ?? bearingDeg);
+    const cands = candidates(
+      pinX,
+      pinY,
+      radius,
+      approxWidth,
+      labelHeight,
+      sideFlip,
+      s.bearingDeg ?? bearingDeg,
+    );
     sideFlip = -sideFlip;
     let chosen = null;
     for (const c of cands) {
       const box = { x: c.x, y: c.y, w: approxWidth, h: labelHeight };
       if (!inViewport(box)) continue;
-      const pad = { x: box.x - LABEL_COLLISION_PAD, y: box.y - LABEL_COLLISION_PAD, w: box.w + LABEL_COLLISION_PAD * 2, h: box.h + LABEL_COLLISION_PAD * 2 };
+      const pad = {
+        x: box.x - LABEL_COLLISION_PAD,
+        y: box.y - LABEL_COLLISION_PAD,
+        w: box.w + LABEL_COLLISION_PAD * 2,
+        h: box.h + LABEL_COLLISION_PAD * 2,
+      };
       if (placed.some((p) => rectsOverlap(pad, p))) continue;
       if (reserved.some((r) => rectsOverlap(box, r))) continue;
       chosen = { ...c, box };
@@ -260,7 +291,13 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
     if (!chosen) continue;
 
     placed.push(chosen.box);
-    labels.push({ label: text, rectX: chosen.x, rectY: chosen.y, approxWidth, anchor: chosen.anchor });
+    labels.push({
+      label: text,
+      rectX: chosen.x,
+      rectY: chosen.y,
+      approxWidth,
+      anchor: chosen.anchor,
+    });
   }
 
   // White ring halo for trains sitting at a station.
@@ -289,9 +326,12 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   const labelElements = labels.map(({ label, rectX, rectY, approxWidth, anchor }) => {
     // Text x depends on text-anchor: start → left edge, middle → center,
     // end → right edge. Keeps the text visually centered within its rect.
-    const textX = anchor === 'start' ? rectX + 8
-      : anchor === 'end' ? rectX + approxWidth - 8
-      : rectX + approxWidth / 2;
+    const textX =
+      anchor === 'start'
+        ? rectX + 8
+        : anchor === 'end'
+          ? rectX + approxWidth - 8
+          : rectX + approxWidth / 2;
     const textY = rectY + fontSize + 2;
     return `
     <rect x="${rectX}" y="${rectY}" width="${approxWidth}" height="${labelHeight}" fill="#000" fill-opacity="0.8" rx="3"/>
@@ -303,16 +343,45 @@ function buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, 
   // be absent (Loop-bound trains have no flag; Green has no house; off-screen
   // points are dropped upstream).
   const terminalElements = [];
-  if (originPixel) terminalElements.push(...buildTerminalMarker(originPixel.x, originPixel.y, TERMINAL_MARKER_RADIUS, TWEMOJI_HOUSE_INNER));
-  if (terminalPixel) terminalElements.push(...buildTerminalMarker(terminalPixel.x, terminalPixel.y, TERMINAL_MARKER_RADIUS, TWEMOJI_FLAG_INNER));
+  if (originPixel)
+    terminalElements.push(
+      ...buildTerminalMarker(
+        originPixel.x,
+        originPixel.y,
+        TERMINAL_MARKER_RADIUS,
+        TWEMOJI_HOUSE_INNER,
+      ),
+    );
+  if (terminalPixel)
+    terminalElements.push(
+      ...buildTerminalMarker(
+        terminalPixel.x,
+        terminalPixel.y,
+        TERMINAL_MARKER_RADIUS,
+        TWEMOJI_FLAG_INNER,
+      ),
+    );
 
   // Draw labels before trains+halos so a stray overlap never hides a train.
   // Placement already avoids reserved train boxes, so this is belt-and-suspenders.
-  const elements = [...terminalElements, ...labelElements, ...halos, ...trainMarkers, ...arrows].join('\n');
+  const elements = [
+    ...terminalElements,
+    ...labelElements,
+    ...halos,
+    ...trainMarkers,
+    ...arrows,
+  ].join('\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${elements}</svg>`;
 }
 
-function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extraTrains = [], opts = {}) {
+function computeTrainBunchingView(
+  bunch,
+  lineColors,
+  trainLines,
+  stations,
+  extraTrains = [],
+  opts = {},
+) {
   const color = lineColors[bunch.line] || 'ffffff';
 
   const { points: linePts, cumDist: lineCumDist } = buildLinePolyline(trainLines, bunch.line);
@@ -331,9 +400,8 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
   // Howard pull `ahead[0]` down to a Loop-side express station (e.g. Belmont),
   // stretching the bbox ~5 mi south and clipping the trains at the frame edge.
   const howardEntry = stationsWithDist.find((s) => s.station.name === 'Howard');
-  const leadSouthOfHoward = bunch.line === 'p'
-    && howardEntry
-    && trainTrackDists[0] > howardEntry.trackDist;
+  const leadSouthOfHoward =
+    bunch.line === 'p' && howardEntry && trainTrackDists[0] > howardEntry.trackDist;
   const terminal = findTerminal(bunch, stations);
   const origin = findOrigin(bunch, stations, { leadSouthOfHoward });
 
@@ -342,8 +410,12 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
   // Green have unreliable cross-branch trackDists).
   let framingStations = stationsWithDist;
   if (bunch.line === 'p' && origin && terminal) {
-    const originEntry = stationsWithDist.find((s) => s.station.lat === origin.lat && s.station.lon === origin.lon);
-    const terminalEntry = stationsWithDist.find((s) => s.station.lat === terminal.lat && s.station.lon === terminal.lon);
+    const originEntry = stationsWithDist.find(
+      (s) => s.station.lat === origin.lat && s.station.lon === origin.lon,
+    );
+    const terminalEntry = stationsWithDist.find(
+      (s) => s.station.lat === terminal.lat && s.station.lon === terminal.lon,
+    );
     if (originEntry && terminalEntry) {
       const lo = Math.min(originEntry.trackDist, terminalEntry.trackDist);
       const hi = Math.max(originEntry.trackDist, terminalEntry.trackDist);
@@ -371,7 +443,11 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
     const already = new Set(nearestStations.map((s) => s.name));
     const fallback = onLineStations
       .filter((s) => !already.has(s.name))
-      .sort((a, b) => haversineFt({ lat: bunchLat, lon: bunchLon }, a) - haversineFt({ lat: bunchLat, lon: bunchLon }, b));
+      .sort(
+        (a, b) =>
+          haversineFt({ lat: bunchLat, lon: bunchLon }, a) -
+          haversineFt({ lat: bunchLat, lon: bunchLon }, b),
+      );
     for (const s of fallback) {
       if (nearestStations.length >= 2) break;
       nearestStations.push(s);
@@ -428,7 +504,10 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
     const seen = new Set();
     for (let i = 0; i < max; i++) {
       const idx = Math.round(i * step);
-      if (!seen.has(idx)) { seen.add(idx); out.push(arr[idx]); }
+      if (!seen.has(idx)) {
+        seen.add(idx);
+        out.push(arr[idx]);
+      }
     }
     return out;
   }
@@ -455,10 +534,15 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
       const dy = b.lat - a.lat;
       const lenSq = dx * dx + dy * dy;
       let t = 0;
-      if (lenSq > 0) t = Math.max(0, Math.min(1, ((pt.lon - a.lon) * dx + (pt.lat - a.lat) * dy) / lenSq));
+      if (lenSq > 0)
+        t = Math.max(0, Math.min(1, ((pt.lon - a.lon) * dx + (pt.lat - a.lat) * dy) / lenSq));
       const proj = { lat: a.lat + t * dy, lon: a.lon + t * dx };
       const d = haversineFt(pt, proj);
-      if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
+      if (d < bestDist) {
+        bestDist = d;
+        bestA = a;
+        bestB = b;
+      }
     }
     return bearing(bestA, bestB);
   }
@@ -486,10 +570,15 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
       const dy = b.lat - a.lat;
       const lenSq = dx * dx + dy * dy;
       let t = 0;
-      if (lenSq > 0) t = Math.max(0, Math.min(1, ((pt.lon - a.lon) * dx + (pt.lat - a.lat) * dy) / lenSq));
+      if (lenSq > 0)
+        t = Math.max(0, Math.min(1, ((pt.lon - a.lon) * dx + (pt.lat - a.lat) * dy) / lenSq));
       const proj = { lat: a.lat + t * dy, lon: a.lon + t * dx };
       const d = haversineFt(pt, proj);
-      if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
+      if (d < bestDist) {
+        bestDist = d;
+        bestA = a;
+        bestB = b;
+      }
     }
     return { from: bestA, to: bestB };
   }
@@ -519,9 +608,7 @@ function computeTrainBunchingView(bunch, lineColors, trainLines, stations, extra
   let arrowBearingDeg = bearingDeg;
   const arrowRef = terminal || origin;
   if (arrowRef) {
-    const refBearing = terminal
-      ? bearing(leadTrain, terminal)
-      : bearing(origin, leadTrain);
+    const refBearing = terminal ? bearing(leadTrain, terminal) : bearing(origin, leadTrain);
     const leadPx = project(leadTrain.lat, leadTrain.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
     const refPx = project(arrowRef.lat, arrowRef.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
     const pixelDist = Math.hypot(refPx.x - leadPx.x, refPx.y - leadPx.y);
@@ -561,32 +648,59 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   // Project each train, then nudge overlapping markers apart so a tight bunch
   // still shows every train instead of stacking them into one disc. Halos and
   // labels anchor to the separated pixels so they follow the visible markers.
-  const rawTrainPixels = trains.map((t) => project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
+  const rawTrainPixels = trains.map((t) =>
+    project(t.lat, t.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT),
+  );
   const separated = separateMarkers(rawTrainPixels, TRAIN_MARKER_RADIUS * 2 + 4, {
     axis: perpendicularFromBearing(view.bearingDeg),
   });
   const trainPixels = separated.map(({ x, y }) => ({ x, y, bearingDeg: view.bearingDeg }));
 
   const stationsWithPixels = view.visibleStations.map(({ station, x, y, bearingDeg }) => {
-    const nearbyIdx = trains.findIndex((t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT);
+    const nearbyIdx = trains.findIndex(
+      (t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT,
+    );
     const trainX = nearbyIdx >= 0 ? separated[nearbyIdx].x : null;
     const trainY = nearbyIdx >= 0 ? separated[nearbyIdx].y : null;
     return { station, x, y, bearingDeg, hasTrain: nearbyIdx >= 0, trainX, trainY };
   });
   const atStationPixels = trains
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => view.visibleStations.some((v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT))
+    .filter(({ t }) =>
+      view.visibleStations.some(
+        (v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT,
+      ),
+    )
     .map(({ idx }) => ({ x: separated[idx].x, y: separated[idx].y }));
 
   function projectIfVisible(point) {
     if (!point) return null;
-    const { x, y } = project(point.lat, point.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    const { x, y } = project(
+      point.lat,
+      point.lon,
+      view.centerLat,
+      view.centerLon,
+      view.zoom,
+      WIDTH,
+      HEIGHT,
+    );
     return x >= 0 && x <= WIDTH && y >= 0 && y <= HEIGHT ? { x, y } : null;
   }
   const terminalPixel = projectIfVisible(view.terminal);
   const originPixel = projectIfVisible(view.origin);
 
-  const svg = buildTrainOverlaySvg(stationsWithPixels, atStationPixels, trainPixels, view.color, WIDTH, HEIGHT, terminalPixel, originPixel, view.bearingDeg, view.arrowBearingDeg);
+  const svg = buildTrainOverlaySvg(
+    stationsWithPixels,
+    atStationPixels,
+    trainPixels,
+    view.color,
+    WIDTH,
+    HEIGHT,
+    terminalPixel,
+    originPixel,
+    view.bearingDeg,
+    view.arrowBearingDeg,
+  );
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])

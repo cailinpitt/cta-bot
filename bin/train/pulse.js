@@ -12,16 +12,27 @@ require('../../src/shared/env');
 
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { detectDeadSegments } = require('../../src/train/pulse');
-const { getAllTrainPositions, LINE_COLORS, LINE_NAMES, ALL_LINES } = require('../../src/train/api');
-const { loginAlerts, postWithImage, postText, resolveReplyRef } = require('../../src/shared/bluesky');
+const { getAllTrainPositions, LINE_COLORS, ALL_LINES } = require('../../src/train/api');
+const {
+  loginAlerts,
+  postWithImage,
+  postText,
+  resolveReplyRef,
+} = require('../../src/shared/bluesky');
 const { renderDisruption } = require('../../src/map');
 const { buildPostText, buildAltText, buildClearPostText } = require('../../src/shared/disruption');
 const { expectedTrainHeadwayMin } = require('../../src/shared/gtfs');
 const { getRecentTrainPositions } = require('../../src/shared/observations');
 const { acquireCooldown } = require('../../src/shared/state');
 const {
-  getPulseState, upsertPulseState, clearPulseState, recordDisruption,
-  getRecentPulsePost, hasObservedClearSince, ctaAlertPostedSince, getDb,
+  getPulseState,
+  upsertPulseState,
+  clearPulseState,
+  recordDisruption,
+  getRecentPulsePost,
+  hasObservedClearSince,
+  ctaAlertPostedSince,
+  getDb,
 } = require('../../src/shared/history');
 const { clearCooldown } = require('../../src/shared/state');
 const { LINE_TO_RAIL_ROUTE } = require('../../src/shared/ctaAlerts');
@@ -40,7 +51,9 @@ const MIN_DISTINCT_TS = 3;
 
 function chicagoHourNow(now = new Date()) {
   const h = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Chicago', hour12: false, hour: '2-digit',
+    timeZone: 'America/Chicago',
+    hour12: false,
+    hour: '2-digit',
   }).format(now);
   return parseInt(h, 10);
 }
@@ -72,7 +85,8 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   const segmentTag = `${Math.round(candidate.runLoFt)}_${Math.round(candidate.runHiFt)}`;
   const cooldownKey = `train_pulse_${line}_${direction}_${segmentTag}`;
   upsertPulseState({
-    line, direction,
+    line,
+    direction,
     runLoFt: candidate.runLoFt,
     runHiFt: candidate.runHiFt,
     fromStation: candidate.fromStation.name,
@@ -85,7 +99,9 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   });
 
   if (consecutive < MIN_CONSECUTIVE_TICKS) {
-    console.log(`[${line}/${direction}] candidate ${candidate.fromStation.name}→${candidate.toStation.name} tick ${consecutive}/${MIN_CONSECUTIVE_TICKS}`);
+    console.log(
+      `[${line}/${direction}] candidate ${candidate.fromStation.name}→${candidate.toStation.name} tick ${consecutive}/${MIN_CONSECUTIVE_TICKS}`,
+    );
     return;
   }
 
@@ -101,9 +117,10 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     detectedAt: now,
     evidence: {
       runLengthMi: Math.round((candidate.runLengthFt / 5280) * 10) / 10,
-      minutesSinceLastTrain: candidate.lastSeenInRunMs != null
-        ? Math.round((now - candidate.lastSeenInRunMs) / 60000)
-        : null,
+      minutesSinceLastTrain:
+        candidate.lastSeenInRunMs != null
+          ? Math.round((now - candidate.lastSeenInRunMs) / 60000)
+          : null,
       lookbackMin: Math.round(candidate.lookbackMs / 60000),
       coldThresholdMin: Math.round(candidate.coldThresholdMs / 60000),
       trainsOutsideRun: candidate.trainsOutsideRun,
@@ -114,20 +131,32 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     let image = null;
     try {
       image = await renderDisruption({
-        disruption, trainLines, lineColors: LINE_COLORS, trains: [], stations: trainStations,
+        disruption,
+        trainLines,
+        lineColors: LINE_COLORS,
+        trains: [],
+        stations: trainStations,
       });
     } catch (e) {
       console.warn(`renderDisruption failed: ${e.message}`);
     }
     const text = buildPostText(disruption);
     const alt = buildAltText(disruption);
-    const stub = image ? writeDryRunAsset(image, `pulse-${line}-${direction}-${now}.jpg`) : '(render failed)';
-    console.log(`--- DRY RUN pulse ${line}/${direction} ---\n${text}\n\nAlt: ${alt}\nImage: ${stub}`);
+    const stub = image
+      ? writeDryRunAsset(image, `pulse-${line}-${direction}-${now}.jpg`)
+      : '(render failed)';
+    console.log(
+      `--- DRY RUN pulse ${line}/${direction} ---\n${text}\n\nAlt: ${alt}\nImage: ${stub}`,
+    );
     recordDisruption({
-      kind: 'train', line, direction,
+      kind: 'train',
+      line,
+      direction,
       fromStation: candidate.fromStation.name,
       toStation: candidate.toStation.name,
-      source: 'observed', posted: false, postUri: null,
+      source: 'observed',
+      posted: false,
+      postUri: null,
     });
     return;
   }
@@ -135,10 +164,14 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   if (!acquireCooldown(cooldownKey, now, POST_COOLDOWN_MS)) {
     console.log(`[${line}/${direction}] on cooldown, skipping`);
     recordDisruption({
-      kind: 'train', line, direction,
+      kind: 'train',
+      line,
+      direction,
       fromStation: candidate.fromStation.name,
       toStation: candidate.toStation.name,
-      source: 'observed', posted: false, postUri: null,
+      source: 'observed',
+      posted: false,
+      postUri: null,
     });
     return;
   }
@@ -146,16 +179,24 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   clearPulseState(line, direction);
 
   recordDisruption({
-    kind: 'train', line, direction,
+    kind: 'train',
+    line,
+    direction,
     fromStation: candidate.fromStation.name,
     toStation: candidate.toStation.name,
-    source: 'observed', posted: false, postUri: null,
+    source: 'observed',
+    posted: false,
+    postUri: null,
   });
 
   let image;
   try {
     image = await renderDisruption({
-      disruption, trainLines, lineColors: LINE_COLORS, trains: [], stations: trainStations,
+      disruption,
+      trainLines,
+      lineColors: LINE_COLORS,
+      trains: [],
+      stations: trainStations,
     });
   } catch (e) {
     console.error(`renderDisruption failed for ${line}: ${e.stack || e.message}`);
@@ -169,10 +210,14 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   const result = await postWithImage(agent, text, image, alt, replyRef);
   console.log(`Posted pulse ${line}/${direction}: ${result.url}`);
   recordDisruption({
-    kind: 'train', line, direction,
+    kind: 'train',
+    line,
+    direction,
     fromStation: candidate.fromStation.name,
     toStation: candidate.toStation.name,
-    source: 'observed', posted: true, postUri: result.uri,
+    source: 'observed',
+    posted: true,
+    postUri: result.uri,
   });
 }
 
@@ -200,7 +245,12 @@ async function handleClear(line, direction, agentGetter, now) {
 // the bot's "trains are moving" signal and CTA's "we've cleared the alert"
 // signal are independent and both belong in the thread.
 async function postClearReply(line, direction, prior, agentGetter) {
-  const recentPulse = getRecentPulsePost({ kind: 'train', line, direction, withinMs: 24 * 60 * 60 * 1000 });
+  const recentPulse = getRecentPulsePost({
+    kind: 'train',
+    line,
+    direction,
+    withinMs: 24 * 60 * 60 * 1000,
+  });
   if (!recentPulse) return;
 
   // Idempotency: if a clear reply already exists for this pulse (e.g. previous
@@ -211,7 +261,10 @@ async function postClearReply(line, direction, prior, agentGetter) {
   }
 
   const ctaCode = LINE_TO_RAIL_ROUTE[line];
-  const ctaAlertOpen = !!(ctaCode && ctaAlertPostedSince({ kind: 'train', ctaRouteCode: ctaCode, sinceTs: recentPulse.ts }));
+  const ctaAlertOpen = !!(
+    ctaCode &&
+    ctaAlertPostedSince({ kind: 'train', ctaRouteCode: ctaCode, sinceTs: recentPulse.ts })
+  );
 
   const fromStation = prior.from_station || recentPulse.from_station;
   const toStation = prior.to_station || recentPulse.to_station;
@@ -234,23 +287,30 @@ async function postClearReply(line, direction, prior, agentGetter) {
   const result = await postText(agent, text, replyRef);
   console.log(`Posted pulse clear ${line}/${direction}: ${result.url}`);
   recordDisruption({
-    kind: 'train', line, direction,
-    fromStation, toStation,
-    source: 'observed-clear', posted: true, postUri: result.uri,
+    kind: 'train',
+    line,
+    direction,
+    fromStation,
+    toStation,
+    source: 'observed-clear',
+    posted: true,
+    postUri: result.uri,
   });
 }
 
 async function findOpenAlertReplyRef(agent, line) {
   const code = LINE_TO_RAIL_ROUTE[line];
   if (!code) return null;
-  const row = getDb().prepare(`
+  const row = getDb()
+    .prepare(`
     SELECT post_uri FROM alert_posts
     WHERE kind = 'train' AND resolved_ts IS NULL
       AND post_uri IS NOT NULL
       AND (',' || routes || ',') LIKE ?
     ORDER BY first_seen_ts DESC LIMIT 1
-  `).get(`%,${code},%`);
-  if (!row || !row.post_uri) return null;
+  `)
+    .get(`%,${code},%`);
+  if (!row?.post_uri) return null;
   return resolveReplyRef(agent, row.post_uri);
 }
 
@@ -296,7 +356,9 @@ async function main() {
   }
   const distinctTs = new Set(allRecent.map((r) => r.ts)).size;
   if (distinctTs < MIN_DISTINCT_TS) {
-    console.log(`pulse: only ${distinctTs} distinct snapshot(s) in lookback (need ${MIN_DISTINCT_TS}) — warming up, skipping`);
+    console.log(
+      `pulse: only ${distinctTs} distinct snapshot(s) in lookback (need ${MIN_DISTINCT_TS}) — warming up, skipping`,
+    );
     return;
   }
 
@@ -318,7 +380,13 @@ async function main() {
       candidates = detectDeadSegments({
         line,
         observations: [],
-        recentPositions: recent.map((r) => ({ ts: r.ts, lat: r.lat, lon: r.lon, rn: r.rn, trDr: r.trDr })),
+        recentPositions: recent.map((r) => ({
+          ts: r.ts,
+          lat: r.lat,
+          lon: r.lon,
+          rn: r.rn,
+          trDr: r.trDr,
+        })),
         trainLines,
         stations: trainStations,
         headwayMin,
@@ -359,7 +427,11 @@ async function main() {
 // Null destination → loop lines resolve line-wide; bi-directional lines return
 // null and the detector falls back to its 15-min floor.
 function safeHeadway(line) {
-  try { return expectedTrainHeadwayMin(line, null); } catch (e) { return null; }
+  try {
+    return expectedTrainHeadwayMin(line, null);
+  } catch (_e) {
+    return null;
+  }
 }
 
 runBin(main);

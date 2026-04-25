@@ -3,16 +3,26 @@ const { encode } = require('../../shared/polyline');
 const { cumulativeDistances, haversineFt, bearing } = require('../../shared/geo');
 const { fitZoom, project } = require('../../shared/projection');
 const {
-  STYLE, WIDTH, HEIGHT,
-  ROUTE_HALO_COLOR, ROUTE_HALO_STROKE, ROUTE_CORE_COLOR, ROUTE_CORE_STROKE,
-  TWEMOJI_BUS_INNER, TWEMOJI_HOUSE_INNER, TWEMOJI_FLAG_INNER,
+  STYLE,
+  WIDTH,
+  HEIGHT,
+  ROUTE_HALO_COLOR,
+  ROUTE_HALO_STROKE,
+  ROUTE_CORE_COLOR,
+  ROUTE_CORE_STROKE,
+  TWEMOJI_BUS_INNER,
+  TWEMOJI_HOUSE_INNER,
+  TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
-  buildDirectionArrow, requireMapboxToken, fetchMapboxStatic,
-  separateMarkers, perpendicularFromBearing,
+  buildDirectionArrow,
+  requireMapboxToken,
+  fetchMapboxStatic,
+  separateMarkers,
+  perpendicularFromBearing,
 } = require('../common');
 
-const BUS_COLOR = 'ff2a6d';         // hot pink/red reads well on dark
-const CONTEXT_PAD_FT = 1500;        // feet of route context on each side of the bunch
+const BUS_COLOR = 'ff2a6d'; // hot pink/red reads well on dark
+const CONTEXT_PAD_FT = 1500; // feet of route context on each side of the bunch
 const BUS_MARKER_RADIUS = 34;
 const TERMINAL_MARKER_RADIUS = BUS_MARKER_RADIUS;
 
@@ -87,9 +97,10 @@ function computeBunchingView(bunch, pattern, extraVehicles = []) {
   // flip the arrow to point east on a westbound route.
   const slicePoints = slice.map((p) => ({ lat: p.lat, lon: p.lon }));
   const leadBus = bunch.vehicles.reduce((a, b) => (b.pdist > a.pdist ? b : a), bunch.vehicles[0]);
-  const bearingDeg = slicePoints.length >= 2
-    ? bearing(slicePoints[0], slicePoints[slicePoints.length - 1])
-    : leadBus.heading;
+  const bearingDeg =
+    slicePoints.length >= 2
+      ? bearing(slicePoints[0], slicePoints[slicePoints.length - 1])
+      : leadBus.heading;
 
   // CTA orders pattern points by seq along the service direction, so the first
   // point is the route's origin and the last is its destination. We mark the
@@ -121,7 +132,15 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
   const SIGNAL_LONG = 36;
   const SIGNAL_SHORT = 16;
   const signalElements = signals.map((s) => {
-    const { x, y } = project(s.lat, s.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    const { x, y } = project(
+      s.lat,
+      s.lon,
+      view.centerLat,
+      view.centerLon,
+      view.zoom,
+      WIDTH,
+      HEIGHT,
+    );
     if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) return '';
     const vertical = s.orientation === 'vertical';
     const w = vertical ? SIGNAL_SHORT : SIGNAL_LONG;
@@ -148,7 +167,9 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
   // shows every vehicle instead of one disc covering the others. Push sideways
   // (perpendicular to the route bearing) so buses on a straight road don't look
   // further ahead/behind than they actually are.
-  const rawMarkerPixels = vehicles.map((v) => project(v.lat, v.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT));
+  const rawMarkerPixels = vehicles.map((v) =>
+    project(v.lat, v.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT),
+  );
   const markerPixels = separateMarkers(rawMarkerPixels, BUS_MARKER_RADIUS * 2 + 4, {
     axis: perpendicularFromBearing(view.bearingDeg),
   });
@@ -167,9 +188,20 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
   // bus sitting at either still reads clearly) but above signals. Each is
   // skipped if its point falls outside the viewport.
   const terminalElements = [];
-  for (const [point, glyph] of [[view.origin, TWEMOJI_HOUSE_INNER], [view.terminal, TWEMOJI_FLAG_INNER]]) {
+  for (const [point, glyph] of [
+    [view.origin, TWEMOJI_HOUSE_INNER],
+    [view.terminal, TWEMOJI_FLAG_INNER],
+  ]) {
     if (!point) continue;
-    const { x, y } = project(point.lat, point.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    const { x, y } = project(
+      point.lat,
+      point.lon,
+      view.centerLat,
+      view.centerLon,
+      view.zoom,
+      WIDTH,
+      HEIGHT,
+    );
     if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) continue;
     terminalElements.push(...buildTerminalMarker(x, y, TERMINAL_MARKER_RADIUS, glyph));
   }

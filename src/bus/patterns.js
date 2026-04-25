@@ -1,4 +1,4 @@
-const Path = require('path');
+const Path = require('node:path');
 const Fs = require('fs-extra');
 const { getPattern } = require('./api');
 
@@ -23,7 +23,7 @@ async function loadPattern(pid) {
   let pattern;
   try {
     pattern = await getPattern(pid);
-  } catch (e) {
+  } catch (_e) {
     // One-shot retry — ghost detection skips the entire route if this throws.
     await new Promise((r) => setTimeout(r, 250));
     pattern = await getPattern(pid);
@@ -39,7 +39,10 @@ function findNearestStop(pattern, pdist) {
   let bestDelta = Math.abs(stops[0].pdist - pdist);
   for (const s of stops) {
     const delta = Math.abs(s.pdist - pdist);
-    if (delta < bestDelta) { best = s; bestDelta = delta; }
+    if (delta < bestDelta) {
+      best = s;
+      bestDelta = delta;
+    }
   }
   return best;
 }

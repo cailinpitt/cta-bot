@@ -5,7 +5,7 @@ const EMOJI_BUS = '🚌';
 const EMOJI_WARN = '⚠';
 const EMOJI_RESOLVED = '✅';
 
-function buildAlertPostText({ alert, kind, disruption, shorten = true }) {
+function buildAlertPostText({ alert, kind, shorten = true }) {
   const prefix = kind === 'train' ? EMOJI_WARN : `${EMOJI_BUS}${EMOJI_WARN}`;
   const head = alert.headline || 'Service alert';
 
@@ -18,12 +18,12 @@ function buildAlertPostText({ alert, kind, disruption, shorten = true }) {
   parts.push('');
   parts.push('Per CTA. Check transitchicago.com for updates.');
 
-  let text = parts.join('\n');
+  const text = parts.join('\n');
   if (graphemeLength(text) <= 300) return text;
   return `${prefix} ${head}\n\nPer CTA. transitchicago.com`;
 }
 
-function buildAlertAltText({ alert, kind, disruption }) {
+function buildAlertAltText({ alert, disruption }) {
   if (disruption) {
     const lineName = LINE_NAMES[disruption.line] || disruption.line;
     return `Map of the ${lineName} Line showing the segment between ${disruption.suspendedSegment.from} and ${disruption.suspendedSegment.to} dimmed to indicate CTA-reported service impact.`;

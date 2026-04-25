@@ -42,7 +42,9 @@ async function main() {
 
   console.log(`Found ${gaps.length} candidate gap(s); picking best available:`);
   for (const g of gaps) {
-    console.log(`  ${LINE_NAMES[g.line]} ${g.trDr} — gap ${Math.round(g.gapMin)} min vs ${g.expectedMin} expected (ratio ${g.ratio.toFixed(2)})`);
+    console.log(
+      `  ${LINE_NAMES[g.line]} ${g.trDr} — gap ${Math.round(g.gapMin)} min vs ${g.expectedMin} expected (ratio ${g.ratio.toFixed(2)})`,
+    );
   }
 
   let gap = null;
@@ -53,7 +55,9 @@ async function main() {
       const dirCd = isOnCooldown(dirKey);
       const lineCd = isOnCooldown(lineKey);
       if (dirCd || lineCd) {
-        console.log(`  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${dirCd ? 'direction' : 'line'} on cooldown`);
+        console.log(
+          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${dirCd ? 'direction' : 'line'} on cooldown`,
+        );
         history.recordGap({
           kind: 'train',
           route: candidate.line,
@@ -74,7 +78,9 @@ async function main() {
         cap: TRAIN_GAP_DAILY_CAP,
       });
       if (!capAllows) {
-        console.log(`  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: line at daily cap (${TRAIN_GAP_DAILY_CAP}) and not more severe than today's posts`);
+        console.log(
+          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: line at daily cap (${TRAIN_GAP_DAILY_CAP}) and not more severe than today's posts`,
+        );
         history.recordGap({
           kind: 'train',
           route: candidate.line,
@@ -98,7 +104,9 @@ async function main() {
     return;
   }
 
-  console.log(`Posting: ${LINE_NAMES[gap.line]} Line toward ${gap.leading.destination} — ${Math.round(gap.gapMin)} min gap (${gap.ratio.toFixed(2)}x expected)`);
+  console.log(
+    `Posting: ${LINE_NAMES[gap.line]} Line toward ${gap.leading.destination} — ${Math.round(gap.gapMin)} min gap (${gap.ratio.toFixed(2)}x expected)`,
+  );
 
   const callouts = history.gapCallouts({
     kind: 'train',
@@ -120,7 +128,10 @@ async function main() {
   const alt = buildAltText(gap);
 
   if (argv['dry-run']) {
-    const outPath = writeDryRunAsset(image, `train-gap-${LINE_NAMES[gap.line].toLowerCase()}-${Date.now()}.jpg`);
+    const outPath = writeDryRunAsset(
+      image,
+      `train-gap-${LINE_NAMES[gap.line].toLowerCase()}-${Date.now()}.jpg`,
+    );
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -141,9 +152,13 @@ async function main() {
     cooldownKeys: [dirKey, lineKey],
     recordSkip: () => history.recordGap({ ...baseEvent, posted: false }),
     agentLogin: loginTrain,
-    image, text, alt,
-    recordPosted: (primary) => history.recordGap({ ...baseEvent, posted: true, postUri: primary.uri }),
-    postWithImage, postText,
+    image,
+    text,
+    alt,
+    recordPosted: (primary) =>
+      history.recordGap({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage,
+    postText,
   });
 }
 

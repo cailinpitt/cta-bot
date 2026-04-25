@@ -9,8 +9,10 @@ async function withRetry(fn, { attempts = 3, baseMs = 500, label = 'op' } = {}) 
     } catch (e) {
       lastErr = e;
       if (i === attempts - 1) break;
-      const wait = baseMs * (2 ** i) + Math.floor(Math.random() * baseMs);
-      console.warn(`${label} attempt ${i + 1}/${attempts} failed (${e.message}); retrying in ${wait}ms`);
+      const wait = baseMs * 2 ** i + Math.floor(Math.random() * baseMs);
+      console.warn(
+        `${label} attempt ${i + 1}/${attempts} failed (${e.message}); retrying in ${wait}ms`,
+      );
       await new Promise((r) => setTimeout(r, wait));
     }
   }

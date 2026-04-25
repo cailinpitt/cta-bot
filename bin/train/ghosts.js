@@ -8,7 +8,12 @@ const { detectTrainGhosts } = require('../../src/train/ghosts');
 const { buildRollupPost, POST_MAX_CHARS } = require('../../src/shared/post');
 
 const DISCLAIMER = '"Missing" = fewer trains than the full terminal-to-terminal schedule predicts.';
-const { expectedTrainHeadwayMin, expectedTrainTripMinutes, expectedTrainActiveTrips, isTrainLoopLine } = require('../../src/shared/gtfs');
+const {
+  expectedTrainHeadwayMin,
+  expectedTrainTripMinutes,
+  expectedTrainActiveTrips,
+  isTrainLoopLine,
+} = require('../../src/shared/gtfs');
 const { getTrainObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginTrain, postText } = require('../../src/train/bluesky');
 const { runBin } = require('../../src/shared/runBin');
@@ -36,11 +41,14 @@ function formatLine(event) {
   return `${emoji} ${lineName} Line${dest} · ${missing} of ${expected} missing (${pct}%) · every ~${effectiveHeadway} min instead of ~${scheduledHeadway}`;
 }
 
-
 function buildPostText(events) {
   // Reserve disclaimer budget so buildRollupPost truncates around the footer.
   const reserved = DISCLAIMER.length + 2;
-  const body = buildRollupPost('👻 Ghost trains, past hour', events.map(formatLine), POST_MAX_CHARS - reserved);
+  const body = buildRollupPost(
+    '👻 Ghost trains, past hour',
+    events.map(formatLine),
+    POST_MAX_CHARS - reserved,
+  );
   if (!body) return null;
   return `${body}\n\n${DISCLAIMER}`;
 }
@@ -73,7 +81,9 @@ async function main() {
 
   for (const e of events) {
     const dirLabel = e.trDr ? `${e.trDr} (${e.destination || '?'})` : '(line-wide)';
-    console.log(`  ${LINE_NAMES[e.line]} ${dirLabel}: ${e.observedActive.toFixed(1)} observed vs ${e.expectedActive.toFixed(1)} expected (${e.missing.toFixed(1)} missing across ${e.snapshots} snapshots)`);
+    console.log(
+      `  ${LINE_NAMES[e.line]} ${dirLabel}: ${e.observedActive.toFixed(1)} observed vs ${e.expectedActive.toFixed(1)} expected (${e.missing.toFixed(1)} missing across ${e.snapshots} snapshots)`,
+    );
   }
 
   const text = buildPostText(events);

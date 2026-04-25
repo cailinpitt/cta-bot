@@ -1,8 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  snapToLine, pointAlongLine, buildLineBranches, buildLinePolyline,
-  computeTrainSamples, pickTargetDir,
+  snapToLine,
+  pointAlongLine,
+  buildLineBranches,
+  buildLinePolyline,
+  computeTrainSamples,
+  pickTargetDir,
 } = require('../../src/train/speedmap');
 const { straightLine, pointAtFt } = require('../helpers');
 
@@ -13,7 +17,8 @@ test('snapToLine projects an on-line point back to its trackDist', () => {
   const points = line.map((p) => ({ lat: p[0], lon: p[1] }));
   const cumDist = [0];
   const { haversineFt } = require('../../src/shared/geo');
-  for (let i = 1; i < points.length; i++) cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
+  for (let i = 1; i < points.length; i++)
+    cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
 
   const mid = pointAtFt(LINE_FT, 20000);
   const d = snapToLine(mid.lat, mid.lon, line, cumDist);
@@ -24,7 +29,8 @@ test('pointAlongLine is the inverse of snapToLine within tolerance', () => {
   const points = line.map((p) => ({ lat: p[0], lon: p[1] }));
   const cumDist = [0];
   const { haversineFt } = require('../../src/shared/geo');
-  for (let i = 1; i < points.length; i++) cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
+  for (let i = 1; i < points.length; i++)
+    cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
 
   const pt = pointAlongLine(line, cumDist, 25000);
   const expected = pointAtFt(LINE_FT, 25000);
@@ -58,17 +64,26 @@ test('computeTrainSamples pairs consecutive positions into mph samples', () => {
   const points = line.map((p) => ({ lat: p[0], lon: p[1] }));
   const cumDist = [0];
   const { haversineFt } = require('../../src/shared/geo');
-  for (let i = 1; i < points.length; i++) cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
+  for (let i = 1; i < points.length; i++)
+    cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
 
   // One train ('1') heading along the line over 60s, advancing 2200 ft.
   // 2200 ft/min → 25 mph.
   const p1 = pointAtFt(LINE_FT, 10000);
   const p2 = pointAtFt(LINE_FT, 12200);
   const tracks = new Map([
-    ['R1', new Map([['5', [
-      { t: 0, lat: p1.lat, lon: p1.lon },
-      { t: 60_000, lat: p2.lat, lon: p2.lon },
-    ]]])],
+    [
+      'R1',
+      new Map([
+        [
+          '5',
+          [
+            { t: 0, lat: p1.lat, lon: p1.lon },
+            { t: 60_000, lat: p2.lat, lon: p2.lon },
+          ],
+        ],
+      ]),
+    ],
   ]);
   const { byDir } = computeTrainSamples(tracks, line, cumDist);
   const samples = byDir.get('5');
@@ -81,16 +96,25 @@ test('computeTrainSamples drops off-line samples via maxPerpFt', () => {
   const points = line.map((p) => ({ lat: p[0], lon: p[1] }));
   const cumDist = [0];
   const { haversineFt } = require('../../src/shared/geo');
-  for (let i = 1; i < points.length; i++) cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
+  for (let i = 1; i < points.length; i++)
+    cumDist.push(cumDist[i - 1] + haversineFt(points[i - 1], points[i]));
 
   const p1 = pointAtFt(LINE_FT, 10000);
   // Shift p2 ~0.05 deg east (≈ 14000 ft) so perpDist > maxPerpFt of 1000.
   const p2 = pointAtFt(LINE_FT, 12200);
   const tracks = new Map([
-    ['R1', new Map([['5', [
-      { t: 0, lat: p1.lat, lon: p1.lon },
-      { t: 60_000, lat: p2.lat, lon: p2.lon + 0.05 },
-    ]]])],
+    [
+      'R1',
+      new Map([
+        [
+          '5',
+          [
+            { t: 0, lat: p1.lat, lon: p1.lon },
+            { t: 60_000, lat: p2.lat, lon: p2.lon + 0.05 },
+          ],
+        ],
+      ]),
+    ],
   ]);
   const { byDir, stats } = computeTrainSamples(tracks, line, cumDist);
   assert.equal(byDir.size, 0);

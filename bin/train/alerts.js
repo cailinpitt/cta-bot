@@ -2,18 +2,34 @@
 require('../../src/shared/env');
 
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
-const { fetchAlerts, extractBetweenStations, isSignificantAlert } = require('../../src/shared/ctaAlerts');
+const {
+  fetchAlerts,
+  extractBetweenStations,
+  isSignificantAlert,
+} = require('../../src/shared/ctaAlerts');
 const { findStationByDestination } = require('../../src/train/findStation');
 const { renderDisruption } = require('../../src/map');
-const { LINE_COLORS, LINE_NAMES } = require('../../src/train/api');
-const { loginAlerts, postWithImage, postText, resolveReplyRef } = require('../../src/shared/bluesky');
+const { LINE_COLORS } = require('../../src/train/api');
 const {
-  buildAlertPostText, buildAlertAltText, buildResolutionReplyText,
+  loginAlerts,
+  postWithImage,
+  postText,
+  resolveReplyRef,
+} = require('../../src/shared/bluesky');
+const {
+  buildAlertPostText,
+  buildAlertAltText,
+  buildResolutionReplyText,
 } = require('../../src/shared/alertPost');
 const {
-  getAlertPost, recordAlertSeen, recordAlertResolved,
-  incrementAlertClearTicks, resetAlertClearTicks,
-  listUnresolvedAlerts, ALERT_CLEAR_TICKS, getRecentPulsePost,
+  getAlertPost,
+  recordAlertSeen,
+  recordAlertResolved,
+  incrementAlertClearTicks,
+  resetAlertClearTicks,
+  listUnresolvedAlerts,
+  ALERT_CLEAR_TICKS,
+  getRecentPulsePost,
 } = require('../../src/shared/history');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
@@ -70,11 +86,19 @@ async function postNewAlert(alert, agentGetter) {
     const stub = image
       ? writeDryRunAsset(image, `alert-train-${alert.id}-${Date.now()}.jpg`)
       : '(text-only post)';
-    console.log(`--- DRY RUN alert ${alert.id} (DB write skipped) ---\n${text}\n\nAlt: ${alt || '(no image)'}\nImage: ${stub}`);
+    console.log(
+      `--- DRY RUN alert ${alert.id} (DB write skipped) ---\n${text}\n\nAlt: ${alt || '(no image)'}\nImage: ${stub}`,
+    );
     return;
   }
 
-  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: null });
+  recordAlertSeen({
+    alertId: alert.id,
+    kind: KIND,
+    routes,
+    headline: alert.headline,
+    postUri: null,
+  });
 
   const agent = await agentGetter();
 
@@ -91,8 +115,16 @@ async function postNewAlert(alert, agentGetter) {
   const result = image
     ? await postWithImage(agent, text, image, alt, replyRef)
     : await postText(agent, text, replyRef);
-  console.log(`Posted alert ${alert.id}${replyRef ? ' (threaded under pulse)' : ''}: ${result.url}`);
-  recordAlertSeen({ alertId: alert.id, kind: KIND, routes, headline: alert.headline, postUri: result.uri });
+  console.log(
+    `Posted alert ${alert.id}${replyRef ? ' (threaded under pulse)' : ''}: ${result.url}`,
+  );
+  recordAlertSeen({
+    alertId: alert.id,
+    kind: KIND,
+    routes,
+    headline: alert.headline,
+    postUri: result.uri,
+  });
 }
 
 async function postResolution(alertRow, agentGetter) {
@@ -100,7 +132,9 @@ async function postResolution(alertRow, agentGetter) {
   const text = buildResolutionReplyText({ alert: pseudoAlert, kind: KIND });
 
   if (DRY_RUN) {
-    console.log(`--- DRY RUN resolution for alert ${alertRow.alert_id} (DB write skipped) ---\n${text}`);
+    console.log(
+      `--- DRY RUN resolution for alert ${alertRow.alert_id} (DB write skipped) ---\n${text}`,
+    );
     return;
   }
 
@@ -141,12 +175,14 @@ async function main() {
 
   for (const alert of relevant) {
     const existing = getAlertPost(alert.id);
-    if (existing && existing.post_uri) {
+    if (existing?.post_uri) {
       if (!DRY_RUN) {
         recordAlertSeen({
-          alertId: alert.id, kind: KIND,
+          alertId: alert.id,
+          kind: KIND,
           routes: alert.trainLines.join(','),
-          headline: alert.headline, postUri: null,
+          headline: alert.headline,
+          postUri: null,
         });
       }
       continue;
@@ -170,7 +206,9 @@ async function main() {
       continue;
     }
     if (DRY_RUN) {
-      console.log(`--- DRY RUN would advance clear_ticks for alert ${row.alert_id} (DB write skipped) ---`);
+      console.log(
+        `--- DRY RUN would advance clear_ticks for alert ${row.alert_id} (DB write skipped) ---`,
+      );
       continue;
     }
     const next = incrementAlertClearTicks(row.alert_id);

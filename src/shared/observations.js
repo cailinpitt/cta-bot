@@ -5,7 +5,9 @@ const { getDb } = require('./history');
 const ROLLOFF_MS = 48 * 60 * 60 * 1000;
 
 function rolloffOldObservations(now = Date.now()) {
-  getDb().prepare('DELETE FROM observations WHERE ts < ?').run(now - ROLLOFF_MS);
+  getDb()
+    .prepare('DELETE FROM observations WHERE ts < ?')
+    .run(now - ROLLOFF_MS);
 }
 
 // Errors are swallowed so a logger hiccup never breaks the API caller.
@@ -52,7 +54,8 @@ function recordTrainObservations(trains, now = Date.now()) {
       for (const t of items) {
         if (!t.rn || !t.line) continue;
         stmt.run(
-          now, String(t.line),
+          now,
+          String(t.line),
           t.trDr != null ? String(t.trDr) : null,
           String(t.rn),
           t.destination || null,
@@ -69,19 +72,23 @@ function recordTrainObservations(trains, now = Date.now()) {
 
 // `direction` carries the pid; callers resolve to a pattern downstream.
 function getBusObservations(route, sinceTs) {
-  return getDb().prepare(`
+  return getDb()
+    .prepare(`
     SELECT ts, direction, vehicle_id, destination
     FROM observations
     WHERE kind = 'bus' AND route = ? AND ts >= ?
-  `).all(String(route), sinceTs);
+  `)
+    .all(String(route), sinceTs);
 }
 
 function getTrainObservations(line, sinceTs) {
-  return getDb().prepare(`
+  return getDb()
+    .prepare(`
     SELECT ts, direction, vehicle_id, destination, lat, lon
     FROM observations
     WHERE kind = 'train' AND route = ? AND ts >= ?
-  `).all(String(line), sinceTs);
+  `)
+    .all(String(line), sinceTs);
 }
 
 // Returns Vehicle-shaped rows + the snapshotTs to use as `now` so the
@@ -91,20 +98,24 @@ function getLatestBusSnapshot(routes, maxStaleMs = null, now = Date.now()) {
   if (!routes || routes.length === 0) return null;
   const placeholders = routes.map(() => '?').join(',');
   const params = routes.map(String);
-  const latest = getDb().prepare(`
+  const latest = getDb()
+    .prepare(`
     SELECT MAX(ts) AS ts FROM observations
     WHERE kind = 'bus' AND route IN (${placeholders}) AND pdist IS NOT NULL
-  `).get(...params);
-  const snapshotTs = latest && latest.ts;
+  `)
+    .get(...params);
+  const snapshotTs = latest?.ts;
   if (!snapshotTs) return null;
   if (maxStaleMs != null && now - snapshotTs > maxStaleMs) return null;
   // Exact-ts match (vs a window) so a single fetch contributes one snapshot.
-  const rows = getDb().prepare(`
+  const rows = getDb()
+    .prepare(`
     SELECT route, direction AS pid, vehicle_id AS vid, destination,
            lat, lon, pdist, heading, vehicle_ts
     FROM observations
     WHERE kind = 'bus' AND route IN (${placeholders}) AND ts = ? AND pdist IS NOT NULL
-  `).all(...params, snapshotTs);
+  `)
+    .all(...params, snapshotTs);
   const vehicles = rows.map((r) => ({
     vid: r.vid,
     route: r.route,
@@ -120,11 +131,13 @@ function getLatestBusSnapshot(routes, maxStaleMs = null, now = Date.now()) {
 }
 
 function getRecentTrainPositions(sinceTs) {
-  return getDb().prepare(`
+  return getDb()
+    .prepare(`
     SELECT ts, route AS line, direction AS trDr, vehicle_id AS rn, lat, lon
     FROM observations
     WHERE kind = 'train' AND ts >= ? AND lat IS NOT NULL AND lon IS NOT NULL
-  `).all(sinceTs);
+  `)
+    .all(sinceTs);
 }
 
 module.exports = {

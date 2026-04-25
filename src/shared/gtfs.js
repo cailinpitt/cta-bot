@@ -1,4 +1,4 @@
-const Path = require('path');
+const Path = require('node:path');
 const Fs = require('fs-extra');
 const { haversineFt } = require('./geo');
 
@@ -20,10 +20,14 @@ function loadIndex() {
   const age = Date.now() - (_index.generatedAt || 0);
   const days = Math.round(age / (24 * 60 * 60 * 1000));
   if (age > STALE_FATAL_MS) {
-    throw new Error(`GTFS index is ${days} days old (>${STALE_FATAL_MS / (24 * 60 * 60 * 1000)}d) — re-run scripts/fetch-gtfs.js before retrying`);
+    throw new Error(
+      `GTFS index is ${days} days old (>${STALE_FATAL_MS / (24 * 60 * 60 * 1000)}d) — re-run scripts/fetch-gtfs.js before retrying`,
+    );
   }
   if (age > STALE_WARN_MS) {
-    console.warn(`GTFS index is ${days} days old — re-run fetch-gtfs.js (calendar_dates makes it date-specific)`);
+    console.warn(
+      `GTFS index is ${days} days old — re-run fetch-gtfs.js (calendar_dates makes it date-specific)`,
+    );
   }
   return _index;
 }
@@ -31,14 +35,21 @@ function loadIndex() {
 // Day-type bucket for a given instant in Chicago time. Matches the keys
 // produced by fetch-gtfs.js (weekday/saturday/sunday/weekend).
 function dayTypeFor(now = new Date()) {
-  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' }).format(now);
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'short',
+  }).format(now);
   if (weekday === 'Sat') return 'saturday';
   if (weekday === 'Sun') return 'sunday';
   return 'weekday';
 }
 
 function chicagoHour(now = new Date()) {
-  const h = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: '2-digit', hour12: false }).format(now);
+  const h = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hour: '2-digit',
+    hour12: false,
+  }).format(now);
   return parseInt(h, 10);
 }
 
@@ -100,9 +111,10 @@ function resolveDirection(pattern) {
     const info = byDir[dir];
     if (!info || info.terminalLat == null) continue;
     const endDist = haversineFt({ lat: info.terminalLat, lon: info.terminalLon }, end);
-    const originDist = (info.originLat != null && first)
-      ? haversineFt({ lat: info.originLat, lon: info.originLon }, first)
-      : 0;
+    const originDist =
+      info.originLat != null && first
+        ? haversineFt({ lat: info.originLat, lon: info.originLon }, first)
+        : 0;
     const score = endDist + originDist;
     if (score < bestScore) {
       bestScore = score;
@@ -123,7 +135,7 @@ function busLookup(route, pattern, field, now) {
   const dir = resolveDirection({ ...pattern, route });
   if (!dir) return null;
   const dirInfo = byDir[dir];
-  if (!dirInfo || !dirInfo[field]) return null;
+  if (!dirInfo?.[field]) return null;
   return hourlyLookup(dirInfo[field], now);
 }
 
@@ -145,8 +157,14 @@ function expectedActiveTrips(route, pattern, now = new Date()) {
 // Train Tracker line codes (lowercase) → GTFS route_id in the index. These
 // are the only eight rail "routes" CTA publishes and the mapping is static.
 const TRAIN_LINE_TO_GTFS = {
-  red: 'Red', blue: 'Blue', brn: 'Brn', g: 'G',
-  org: 'Org', p: 'P', pink: 'Pink', y: 'Y',
+  red: 'Red',
+  blue: 'Blue',
+  brn: 'Brn',
+  g: 'G',
+  org: 'Org',
+  p: 'P',
+  pink: 'Pink',
+  y: 'Y',
 };
 
 // Pick the GTFS direction whose terminal is closest to `destination` ({lat,
@@ -156,7 +174,7 @@ function pickTrainDirInfo(line, destination) {
   const index = loadIndex();
   const gtfsId = TRAIN_LINE_TO_GTFS[line];
   if (!gtfsId) return null;
-  const byDir = index.lines && index.lines[gtfsId];
+  const byDir = index.lines?.[gtfsId];
   if (!byDir) return null;
   const dirs = Object.values(byDir);
   if (dirs.length === 1) return dirs[0];
@@ -166,14 +184,17 @@ function pickTrainDirInfo(line, destination) {
   for (const info of dirs) {
     if (info.terminalLat == null) continue;
     const d = haversineFt({ lat: info.terminalLat, lon: info.terminalLon }, destination);
-    if (d < bestDist) { bestDist = d; best = info; }
+    if (d < bestDist) {
+      bestDist = d;
+      best = info;
+    }
   }
   return best;
 }
 
 function trainLookup(line, destination, field, now) {
   const dirInfo = pickTrainDirInfo(line, destination);
-  if (!dirInfo || !dirInfo[field]) return null;
+  if (!dirInfo?.[field]) return null;
   return hourlyLookup(dirInfo[field], now);
 }
 
@@ -197,9 +218,22 @@ function isTrainLoopLine(line) {
   const index = loadIndex();
   const gtfsId = TRAIN_LINE_TO_GTFS[line];
   if (!gtfsId) return false;
-  const byDir = index.lines && index.lines[gtfsId];
+  const byDir = index.lines?.[gtfsId];
   if (!byDir) return false;
   return Object.keys(byDir).length === 1;
 }
 
-module.exports = { loadIndex, expectedHeadwayMin, expectedTrainHeadwayMin, expectedTripMinutes, expectedTrainTripMinutes, expectedActiveTrips, expectedTrainActiveTrips, isTrainLoopLine, resolveDirection, dayTypeFor, chicagoHour, hourlyLookup };
+module.exports = {
+  loadIndex,
+  expectedHeadwayMin,
+  expectedTrainHeadwayMin,
+  expectedTripMinutes,
+  expectedTrainTripMinutes,
+  expectedActiveTrips,
+  expectedTrainActiveTrips,
+  isTrainLoopLine,
+  resolveDirection,
+  dayTypeFor,
+  chicagoHour,
+  hourlyLookup,
+};

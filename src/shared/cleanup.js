@@ -1,10 +1,10 @@
-const Os = require('os');
-const Path = require('path');
+const Os = require('node:os');
+const Path = require('node:path');
 const Fs = require('fs-extra');
 
 const ASSETS_DIR = Path.join(__dirname, '..', '..', 'assets');
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;  // 1 day
+const TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day
 
 // Sweeps tmpdirs leaked by SIGKILL'd captures (normal path cleans via finally).
 const TMP_PREFIXES = ['cta-bunch-video-', 'cta-train-video-'];

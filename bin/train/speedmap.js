@@ -5,7 +5,13 @@ const _ = require('lodash');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { LINE_NAMES, LINE_COLORS, ALL_LINES } = require('../../src/train/api');
-const { collectTrains, computeTrainSamples, buildLineBranches, snapToLine, truncateBranchToDistance } = require('../../src/train/speedmap');
+const {
+  collectTrains,
+  computeTrainSamples,
+  buildLineBranches,
+  snapToLine,
+  truncateBranchToDistance,
+} = require('../../src/train/speedmap');
 const { binSegments, summarize, TRAIN_THRESHOLDS } = require('../../src/bus/speedmap');
 const { renderTrainSpeedmap } = require('../../src/map');
 const { loginTrain, postWithImage } = require('../../src/train/bluesky');
@@ -102,13 +108,22 @@ async function main() {
         const b = branches[0];
         const howardDist = snapToLine(howard.lat, howard.lon, b.points, b.cumDist);
         branches = [truncateBranchToDistance(b, howardDist)];
-        console.log(`Purple shuttle hours — truncated polyline to Linden↔Howard (${(branches[0].totalFt / 5280).toFixed(1)} mi)`);
+        console.log(
+          `Purple shuttle hours — truncated polyline to Linden↔Howard (${(branches[0].totalFt / 5280).toFixed(1)} mi)`,
+        );
       }
     }
   }
 
-  console.log(`Train speedmap for ${LINE_NAMES[line]} Line, ${durationMin}min window, poll every ${POLL_INTERVAL_MS / 1000}s`);
-  console.log(`Branches: ${branches.length}` + branches.map((b, i) => `\n  [${i}] ${b.points.length} points, ${(b.totalFt / 5280).toFixed(1)} mi`).join(''));
+  console.log(
+    `Train speedmap for ${LINE_NAMES[line]} Line, ${durationMin}min window, poll every ${POLL_INTERVAL_MS / 1000}s`,
+  );
+  console.log(
+    `Branches: ${branches.length}` +
+      branches
+        .map((b, i) => `\n  [${i}] ${b.points.length} points, ${(b.totalFt / 5280).toFixed(1)} mi`)
+        .join(''),
+  );
 
   const startTime = new Date();
   const { tracks, destByRnDir } = await collectTrains(line, durationMs, POLL_INTERVAL_MS);
@@ -122,7 +137,9 @@ async function main() {
     const { points, cumDist, totalFt } = branches[i];
     const { byDir, rnsByDir, stats } = computeTrainSamples(tracks, points, cumDist);
     if (stats.offLine > 0 || stats.stationary > 0 || stats.dropped > 0) {
-      console.log(`Branch ${i} filter: ${stats.offLine} off-line, ${stats.stationary} stationary, ${stats.dropped} out-of-range`);
+      console.log(
+        `Branch ${i} filter: ${stats.offLine} off-line, ${stats.stationary} stationary, ${stats.dropped} out-of-range`,
+      );
     }
     const numBins = Math.max(MIN_BINS, Math.round(totalFt / FT_PER_BIN));
     const binSpeedsByDir = {};
@@ -131,7 +148,9 @@ async function main() {
       const s = summarize(binSpeedsByDir[trDr], TRAIN_THRESHOLDS);
       const dest = destForBranchDir(rnsByDir.get(trDr) || new Set(), trDr, destByRnDir);
       const label = dirLabel(dest);
-      console.log(`Branch ${i} / ${label} (dir ${trDr}): ${samples.length} samples · avg ${s.avg?.toFixed(1)} mph · red=${s.red} orange=${s.orange} yellow=${s.yellow} purple=${s.purple} green=${s.green}`);
+      console.log(
+        `Branch ${i} / ${label} (dir ${trDr}): ${samples.length} samples · avg ${s.avg?.toFixed(1)} mph · red=${s.red} orange=${s.orange} yellow=${s.yellow} purple=${s.purple} green=${s.green}`,
+      );
       dirSummaries.push({ dest, summary: s });
     }
     branchData.push({ points, cumDist, binSpeedsByDir });
@@ -141,7 +160,10 @@ async function main() {
   const dedupedByDest = new Map();
   for (const entry of dirSummaries) {
     const key = entry.dest || `unknown-${dedupedByDest.size}`;
-    if (!dedupedByDest.has(key) || (entry.summary.avg != null && dedupedByDest.get(key).summary.avg == null)) {
+    if (
+      !dedupedByDest.has(key) ||
+      (entry.summary.avg != null && dedupedByDest.get(key).summary.avg == null)
+    ) {
       dedupedByDest.set(key, entry);
     }
   }
@@ -156,7 +178,10 @@ async function main() {
         route: line,
         direction: null,
         avgMph: null,
-        pctRed: 0, pctOrange: 0, pctYellow: 0, pctGreen: 0,
+        pctRed: 0,
+        pctOrange: 0,
+        pctYellow: 0,
+        pctGreen: 0,
         binSpeeds: [],
         posted: false,
       });
@@ -167,7 +192,8 @@ async function main() {
   // Mean of per-direction averages — the callout reads "this line was slow today",
   // not "this direction was slow."
   const dirAvgs = finalDirs.map((d) => d.summary.avg).filter((v) => v != null);
-  const lineAvgMph = dirAvgs.length > 0 ? dirAvgs.reduce((a, v) => a + v, 0) / dirAvgs.length : null;
+  const lineAvgMph =
+    dirAvgs.length > 0 ? dirAvgs.reduce((a, v) => a + v, 0) / dirAvgs.length : null;
   const callouts = history.speedmapCallouts({
     kind: 'train',
     route: line,
@@ -181,7 +207,10 @@ async function main() {
   const alt = buildAltText(line, finalDirs, durationMin);
 
   if (argv['dry-run']) {
-    const outPath = writeDryRunAsset(image, `train-speedmap-${LINE_NAMES[line].toLowerCase()}-${Date.now()}.jpg`);
+    const outPath = writeDryRunAsset(
+      image,
+      `train-speedmap-${LINE_NAMES[line].toLowerCase()}-${Date.now()}.jpg`,
+    );
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -189,14 +218,17 @@ async function main() {
   const agent = await loginTrain();
   const result = await postWithImage(agent, text, image, alt);
   // One row per run so callout MIN/MAX is apples-to-apples with lineAvgMph.
-  const totals = finalDirs.reduce((acc, { summary }) => {
-    acc.red += summary.red;
-    acc.orange += summary.orange;
-    acc.yellow += summary.yellow;
-    acc.purple += summary.purple;
-    acc.green += summary.green;
-    return acc;
-  }, { red: 0, orange: 0, yellow: 0, purple: 0, green: 0 });
+  const totals = finalDirs.reduce(
+    (acc, { summary }) => {
+      acc.red += summary.red;
+      acc.orange += summary.orange;
+      acc.yellow += summary.yellow;
+      acc.purple += summary.purple;
+      acc.green += summary.green;
+      return acc;
+    },
+    { red: 0, orange: 0, yellow: 0, purple: 0, green: 0 },
+  );
   const totalValid = totals.red + totals.orange + totals.yellow + totals.purple + totals.green;
   history.recordSpeedmap({
     kind: 'train',

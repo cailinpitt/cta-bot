@@ -1,12 +1,12 @@
 // Run manually on line-geometry changes. GTFS over OSM: one ordered polyline
 // per direction, no way-chaining or parallel-track dedupe.
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
 const axios = require('axios');
 const Fs = require('fs-extra');
-const Path = require('path');
-const { exec, spawn } = require('child_process');
-const { promisify } = require('util');
-const readline = require('readline');
+const Path = require('node:path');
+const { exec, spawn } = require('node:child_process');
+const { promisify } = require('node:util');
+const readline = require('node:readline');
 
 const execAsync = promisify(exec);
 
@@ -26,14 +26,14 @@ const ZIP_PATH = '/tmp/cta-gtfs.zip';
 
 // CTA route_id → internal line key.
 const ROUTE_ID_MAP = {
-  Red:  'red',
+  Red: 'red',
   Blue: 'blue',
-  Brn:  'brn',
-  G:    'g',
-  Org:  'org',
-  P:    'p',
+  Brn: 'brn',
+  G: 'g',
+  Org: 'org',
+  P: 'p',
   Pink: 'pink',
-  Y:    'y',
+  Y: 'y',
 };
 
 async function downloadGtfs() {
@@ -51,7 +51,9 @@ async function downloadGtfs() {
 }
 
 async function readFromZip(filename) {
-  const { stdout } = await execAsync(`unzip -p "${ZIP_PATH}" "${filename}"`, { maxBuffer: 256 * 1024 * 1024 });
+  const { stdout } = await execAsync(`unzip -p "${ZIP_PATH}" "${filename}"`, {
+    maxBuffer: 256 * 1024 * 1024,
+  });
   return stdout;
 }
 
@@ -76,7 +78,10 @@ function perpendicularDist(p, a, b) {
   if (dx === 0 && dy === 0) {
     return Math.sqrt((p.lon - a.lon) ** 2 + (p.lat - a.lat) ** 2);
   }
-  const t = Math.max(0, Math.min(1, ((p.lon - a.lon) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy)));
+  const t = Math.max(
+    0,
+    Math.min(1, ((p.lon - a.lon) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy)),
+  );
   const projLon = a.lon + t * dx;
   const projLat = a.lat + t * dy;
   return Math.sqrt((p.lon - projLon) ** 2 + (p.lat - projLat) ** 2);
@@ -196,15 +201,14 @@ async function main() {
 
     const polylines = kept.map((shape) => {
       const decimated = decimateTo(shape.points, 80);
-      return decimated.map((p) => [
-        Math.round(p.lat * 1e5) / 1e5,
-        Math.round(p.lon * 1e5) / 1e5,
-      ]);
+      return decimated.map((p) => [Math.round(p.lat * 1e5) / 1e5, Math.round(p.lon * 1e5) / 1e5]);
     });
     out[line] = polylines;
     const totalPts = polylines.reduce((a, s) => a + s.length, 0);
     const chosenDir = dir0.length > 0 ? '0' : '1';
-    console.log(`  ${line}: ${chosenShapes.length} dir-${chosenDir} shapes → ${polylines.length} kept (${totalPts} pts)`);
+    console.log(
+      `  ${line}: ${chosenShapes.length} dir-${chosenDir} shapes → ${polylines.length} kept (${totalPts} pts)`,
+    );
   }
 
   const outPath = Path.join(__dirname, '..', 'src', 'data', 'trainLines.json');
@@ -215,7 +219,7 @@ async function main() {
   // Now extract CTA L stations. GTFS stops.txt mixes rail and bus stops; we
   // trace rail-route trips through stop_times to find only the L stops, then
   // resolve each to its parent station (stop_id where location_type=1).
-  const lTripIds = new Set(trips.filter((t) => ROUTE_ID_MAP[t.route_id]).map((t) => t.trip_id));
+  const _lTripIds = new Set(trips.filter((t) => ROUTE_ID_MAP[t.route_id]).map((t) => t.trip_id));
 
   // Track which line serves each trip so we can annotate stations with their lines.
   const lineByTrip = new Map();
@@ -267,7 +271,7 @@ async function main() {
   const seenNames = new Set();
   for (const [sid, lineSet] of stationLineSets) {
     const s = byStopId.get(sid);
-    if (!s || !s.stop_name || seenNames.has(s.stop_name)) continue;
+    if (!s?.stop_name || seenNames.has(s.stop_name)) continue;
     seenNames.add(s.stop_name);
     stationsOut.push({
       name: s.stop_name,

@@ -9,22 +9,22 @@ const DEFAULT_BUS_SAMPLE_OPTS = {
 };
 
 function colorForBusSpeed(mph) {
-  if (mph == null) return '444';   // no data — dim gray
-  if (mph < 5) return 'ff2a2a';    // red
-  if (mph < 10) return 'ff8c1a';   // orange
-  if (mph < 15) return 'ffd21a';   // yellow
-  return '2ad17f';                 // green
+  if (mph == null) return '444'; // no data — dim gray
+  if (mph < 5) return 'ff2a2a'; // red
+  if (mph < 10) return 'ff8c1a'; // orange
+  if (mph < 15) return 'ffd21a'; // yellow
+  return '2ad17f'; // green
 }
 
 // Buckets align with CTA's slow-zone categories (15/25/35 mph). Extra purple
 // band sits above slow zones but below line speed; green is full-speed (~45+).
 function colorForTrainSpeed(mph) {
-  if (mph == null) return '444';   // no data — dim gray
-  if (mph < 15) return 'ff2a2a';   // red
-  if (mph < 25) return 'ff8c1a';   // orange
-  if (mph < 35) return 'ffd21a';   // yellow
-  if (mph < 45) return 'a855f7';   // purple
-  return '2ad17f';                 // green
+  if (mph == null) return '444'; // no data — dim gray
+  if (mph < 15) return 'ff2a2a'; // red
+  if (mph < 25) return 'ff8c1a'; // orange
+  if (mph < 35) return 'ffd21a'; // yellow
+  if (mph < 45) return 'a855f7'; // purple
+  return '2ad17f'; // green
 }
 
 function sleep(ms) {
@@ -75,11 +75,20 @@ function computeSamples(tracks, opts = {}) {
         const p1 = points[i - 1];
         const p2 = points[i];
         const dt = p2.t - p1.t;
-        if (dt <= 0 || dt > maxDtMs) { stats.dropped++; continue; }
+        if (dt <= 0 || dt > maxDtMs) {
+          stats.dropped++;
+          continue;
+        }
         const dft = p2.pdist - p1.pdist;
-        if (dft < 0) { stats.restarts++; continue; } // vehicle completed a loop and restarted the pattern
+        if (dft < 0) {
+          stats.restarts++;
+          continue;
+        } // vehicle completed a loop and restarted the pattern
         const mph = (dft / (dt / 1000)) * (3600 / 5280);
-        if (mph < minMph || mph > maxMph) { stats.dropped++; continue; }
+        if (mph < minMph || mph > maxMph) {
+          stats.dropped++;
+          continue;
+        }
         const midPdist = (p1.pdist + p2.pdist) / 2;
 
         if (!byPid.has(pid)) byPid.set(pid, []);
@@ -140,9 +149,10 @@ function binSegments(segments, patternLengthFt, numBins) {
 // the 4-bucket shape (purple omitted).
 function summarize(speeds, thresholds = { orange: 5, yellow: 10, green: 15 }) {
   const valid = speeds.filter((s) => s != null);
-  const base = thresholds.purple == null
-    ? { avg: null, red: 0, orange: 0, yellow: 0, green: 0 }
-    : { avg: null, red: 0, orange: 0, yellow: 0, purple: 0, green: 0 };
+  const base =
+    thresholds.purple == null
+      ? { avg: null, red: 0, orange: 0, yellow: 0, green: 0 }
+      : { avg: null, red: 0, orange: 0, yellow: 0, purple: 0, green: 0 };
   if (valid.length === 0) return base;
   const avg = valid.reduce((a, v) => a + v, 0) / valid.length;
   const red = valid.filter((s) => s < thresholds.orange).length;

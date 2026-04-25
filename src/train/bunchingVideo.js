@@ -1,8 +1,8 @@
 const Fs = require('fs-extra');
-const Os = require('os');
-const Path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
+const Os = require('node:os');
+const Path = require('node:path');
+const { exec } = require('node:child_process');
+const { promisify } = require('node:util');
 
 const { getAllTrainPositions } = require('./api');
 const {
@@ -94,7 +94,10 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
         const { t } = series[i];
         t.track = smoothed[i];
         const snapped = pointAlongLine(linePts, lineCum, t.track);
-        if (snapped) { t.lat = snapped.lat; t.lon = snapped.lon; }
+        if (snapped) {
+          t.lat = snapped.lat;
+          t.lon = snapped.lon;
+        }
       }
     }
   }
@@ -124,7 +127,10 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
         if (hasPolyline && from.track != null && to.track != null) {
           const track = from.track + (to.track - from.track) * t;
           const p = pointAlongLine(linePts, lineCum, track);
-          if (p) { lat = p.lat; lon = p.lon; }
+          if (p) {
+            lat = p.lat;
+            lon = p.lon;
+          }
         }
         if (lat == null) {
           lat = from.lat + (to.lat - from.lat) * t;

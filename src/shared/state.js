@@ -21,7 +21,7 @@ function acquireCooldown(keys, now = Date.now(), ttlMs = null) {
   const db = getDb();
   const check = db.prepare('SELECT ts, expires_at FROM cooldowns WHERE key = ?');
   const upsert = db.prepare(
-    'INSERT INTO cooldowns (key, ts, expires_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET ts = excluded.ts, expires_at = excluded.expires_at'
+    'INSERT INTO cooldowns (key, ts, expires_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET ts = excluded.ts, expires_at = excluded.expires_at',
   );
   const expiresAt = ttlMs != null ? now + ttlMs : null;
   const tx = db.transaction((keyList) => {

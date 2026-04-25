@@ -1,8 +1,8 @@
-const { haversineFt, terminalZoneFt: terminalZoneFor } = require('../shared/geo');
+const { terminalZoneFt: terminalZoneFor } = require('../shared/geo');
 const { buildLinePolyline, snapToLine } = require('./speedmap');
 
 const TRAIN_BUNCHING_FT = 2000; // ~0.38 mi
-const MIN_DISTANCE_FT = 200;    // closer = same station / API glitch
+const MIN_DISTANCE_FT = 200; // closer = same station / API glitch
 const MAX_HEADING_DIFF_DEG = 60;
 
 function headingDiff(a, b) {
@@ -44,7 +44,10 @@ function detectAllTrainBunching(trains, trainLines) {
     // Dedupe near-coincident snaps — almost certainly the same train double-reported.
     const deduped = [];
     for (const s of snapped) {
-      if (deduped.length === 0 || s.trackDist - deduped[deduped.length - 1].trackDist >= MIN_DISTANCE_FT) {
+      if (
+        deduped.length === 0 ||
+        s.trackDist - deduped[deduped.length - 1].trackDist >= MIN_DISTANCE_FT
+      ) {
         deduped.push(s);
       }
     }
@@ -55,7 +58,10 @@ function detectAllTrainBunching(trains, trainLines) {
     let i = 0;
     while (i < deduped.length - 1) {
       const gap0 = deduped[i + 1].trackDist - deduped[i].trackDist;
-      if (gap0 > TRAIN_BUNCHING_FT) { i++; continue; }
+      if (gap0 > TRAIN_BUNCHING_FT) {
+        i++;
+        continue;
+      }
 
       let j = i + 1;
       let maxGap = gap0;
@@ -82,12 +88,19 @@ function detectAllTrainBunching(trains, trainLines) {
       for (let k = 0; k + 1 < cluster.length; k++) {
         const ha = cluster[k].train.heading;
         const hb = cluster[k + 1].train.heading;
-        if (Number.isFinite(ha) && Number.isFinite(hb) && headingDiff(ha, hb) > MAX_HEADING_DIFF_DEG) {
+        if (
+          Number.isFinite(ha) &&
+          Number.isFinite(hb) &&
+          headingDiff(ha, hb) > MAX_HEADING_DIFF_DEG
+        ) {
           headingOk = false;
           break;
         }
       }
-      if (!headingOk) { i = j + 1; continue; }
+      if (!headingOk) {
+        i = j + 1;
+        continue;
+      }
 
       bunches.push({
         line,
@@ -112,4 +125,9 @@ function detectTrainBunching(trains, trainLines) {
   return all.length ? all[0] : null;
 }
 
-module.exports = { detectTrainBunching, detectAllTrainBunching, TRAIN_BUNCHING_FT, MIN_DISTANCE_FT };
+module.exports = {
+  detectTrainBunching,
+  detectAllTrainBunching,
+  TRAIN_BUNCHING_FT,
+  MIN_DISTANCE_FT,
+};

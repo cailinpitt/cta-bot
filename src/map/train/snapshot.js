@@ -1,10 +1,7 @@
 const sharp = require('sharp');
 const { encode } = require('../../shared/polyline');
 const { fitZoom } = require('../../shared/projection');
-const {
-  STYLE, WIDTH, HEIGHT,
-  requireMapboxToken, fetchMapboxStatic,
-} = require('../common');
+const { STYLE, WIDTH, HEIGHT, requireMapboxToken, fetchMapboxStatic } = require('../common');
 
 // Chicago Loop elevated tracks bbox (Lake/Van Buren/Wells/Wabash) with a few
 // blocks of padding so surrounding stations fit.
@@ -19,8 +16,10 @@ const LOOP_INSET_MARGIN = 20;
 
 async function renderLoopInset(trains, lineColors, trainLines) {
   const inBbox = (lat, lon) =>
-    lat >= LOOP_BBOX.minLat && lat <= LOOP_BBOX.maxLat &&
-    lon >= LOOP_BBOX.minLon && lon <= LOOP_BBOX.maxLon;
+    lat >= LOOP_BBOX.minLat &&
+    lat <= LOOP_BBOX.maxLat &&
+    lon >= LOOP_BBOX.minLon &&
+    lon <= LOOP_BBOX.maxLon;
   const loopTrains = trains.filter((t) => inBbox(t.lat, t.lon));
 
   const overlays = [];
@@ -31,13 +30,12 @@ async function renderLoopInset(trains, lineColors, trainLines) {
     // the shared segment. Non-sharing lines (blue/red/yellow) stay thin.
     const RING_ORDER = ['brn', 'g', 'org', 'p', 'pink'];
     const ringIdx = Object.fromEntries(RING_ORDER.map((l, i) => [l, i]));
-    const entries = Object.entries(trainLines)
-      .sort(([a], [b]) => (ringIdx[a] ?? -1) - (ringIdx[b] ?? -1));
+    const entries = Object.entries(trainLines).sort(
+      ([a], [b]) => (ringIdx[a] ?? -1) - (ringIdx[b] ?? -1),
+    );
     for (const [line, segments] of entries) {
       const color = lineColors[line] || 'ffffff';
-      const width = line in ringIdx
-        ? 4 + (RING_ORDER.length - 1 - ringIdx[line]) * 2
-        : 4;
+      const width = line in ringIdx ? 4 + (RING_ORDER.length - 1 - ringIdx[line]) * 2 : 4;
       for (const points of segments) {
         if (!points || points.length < 2) continue;
         overlays.push(`path-${width}+${color}-0.85(${encodeURIComponent(encode(points))})`);
@@ -107,11 +105,7 @@ async function renderSnapshot(trains, lineColors, trainLines = null) {
     });
   }
 
-  return sharp(data)
-    .resize(WIDTH, HEIGHT)
-    .composite(composites)
-    .jpeg({ quality: 85 })
-    .toBuffer();
+  return sharp(data).resize(WIDTH, HEIGHT).composite(composites).jpeg({ quality: 85 }).toBuffer();
 }
 
 module.exports = { renderSnapshot, renderLoopInset };

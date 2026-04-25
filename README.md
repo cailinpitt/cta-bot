@@ -174,6 +174,11 @@ All bin scripts accept `--dry-run` (writes image under `assets/` instead of post
 |---|---|
 | `npm test` | Run the test suite (`node --test`). |
 | `npm run smoke` | Load each bin with `--check` — fast sanity check after edits. |
+| `npm run format` | Format all JS/JSON with [Biome](https://biomejs.dev/). |
+| `npm run lint` | Report Biome lint warnings (no changes written). |
+| `npm run check` | Format + apply safe lint fixes across the whole repo. |
+
+Formatting + safe lint fixes run automatically on `git commit` via a husky pre-commit hook (`.husky/pre-commit` → `lint-staged` → `biome check --write` on staged `*.{js,json}` files only). Config lives in `biome.json`. After cloning, `npm install` runs `prepare` which installs the hook for you.
 
 ## How it works
 

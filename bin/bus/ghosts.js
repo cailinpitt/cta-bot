@@ -7,7 +7,12 @@ const { names: routeNames, ghosts: ghostRoutes } = require('../../src/bus/routes
 const { detectBusGhosts } = require('../../src/bus/ghosts');
 const { buildRollupPost } = require('../../src/shared/post');
 const { loadPattern } = require('../../src/bus/patterns');
-const { expectedHeadwayMin, expectedTripMinutes, expectedActiveTrips, loadIndex } = require('../../src/shared/gtfs');
+const {
+  expectedHeadwayMin,
+  expectedTripMinutes,
+  expectedActiveTrips,
+  loadIndex,
+} = require('../../src/shared/gtfs');
 const { getBusObservations, rolloffOldObservations } = require('../../src/shared/observations');
 const { loginBus, postText } = require('../../src/bus/bluesky');
 const { runBin } = require('../../src/shared/runBin');
@@ -54,7 +59,9 @@ async function main() {
   const index = loadIndex();
   const unindexed = ghostRoutes.filter((r) => !index.routes[r]);
   if (unindexed.length) {
-    console.warn(`Routes missing from GTFS index (will be skipped): ${unindexed.join(', ')} — re-run scripts/fetch-gtfs.js`);
+    console.warn(
+      `Routes missing from GTFS index (will be skipped): ${unindexed.join(', ')} — re-run scripts/fetch-gtfs.js`,
+    );
   }
 
   const now = Date.now();
@@ -81,7 +88,9 @@ async function main() {
   }
 
   for (const e of events) {
-    console.log(`  Route ${e.route} ${e.direction}: ${e.observedActive.toFixed(1)} observed vs ${e.expectedActive.toFixed(1)} expected (${e.missing.toFixed(1)} missing across ${e.snapshots} snapshots)`);
+    console.log(
+      `  Route ${e.route} ${e.direction}: ${e.observedActive.toFixed(1)} observed vs ${e.expectedActive.toFixed(1)} expected (${e.missing.toFixed(1)} missing across ${e.snapshots} snapshots)`,
+    );
   }
 
   const text = buildPostText(events);

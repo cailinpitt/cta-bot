@@ -25,11 +25,15 @@ async function main() {
   const index = loadIndex();
   const unindexed = routes.filter((r) => !index.routes[r]);
   if (unindexed.length) {
-    console.warn(`Routes missing from GTFS index (will be skipped): ${unindexed.join(', ')} — re-run scripts/fetch-gtfs.js`);
+    console.warn(
+      `Routes missing from GTFS index (will be skipped): ${unindexed.join(', ')} — re-run scripts/fetch-gtfs.js`,
+    );
   }
 
   const { vehicles, now, source } = await getVehiclesCachedOrFresh(routes);
-  console.log(`Got ${vehicles.length} vehicles (${source}, snapshot ${new Date(now).toISOString()})`);
+  console.log(
+    `Got ${vehicles.length} vehicles (${source}, snapshot ${new Date(now).toISOString()})`,
+  );
 
   // Memoized fetchers passed into the detector — pattern.route isn't on the
   // pattern object so we sample any vehicle to get it.
@@ -62,7 +66,9 @@ async function main() {
 
   console.log(`Found ${gaps.length} candidate gap(s); picking best available:`);
   for (const g of gaps) {
-    console.log(`  route ${g.route} pid ${g.pid} — gap ${Math.round(g.gapMin)} min vs ${g.expectedMin} expected (ratio ${g.ratio.toFixed(2)})`);
+    console.log(
+      `  route ${g.route} pid ${g.pid} — gap ${Math.round(g.gapMin)} min vs ${g.expectedMin} expected (ratio ${g.ratio.toFixed(2)})`,
+    );
   }
 
   let gap = null;
@@ -108,7 +114,9 @@ async function main() {
         cap: BUS_GAP_DAILY_CAP,
       });
       if (!capAllows) {
-        console.log(`  skip pid ${candidate.pid}: route ${candidate.route} at daily cap (${BUS_GAP_DAILY_CAP}) and not more severe than today's posts`);
+        console.log(
+          `  skip pid ${candidate.pid}: route ${candidate.route} at daily cap (${BUS_GAP_DAILY_CAP}) and not more severe than today's posts`,
+        );
         history.recordGap({
           kind: 'bus',
           route: candidate.route,
@@ -151,7 +159,11 @@ async function main() {
       return null;
     }
     const onPattern = preds
-      .map((p) => ({ pred: p, stop: stopsByStpid.get(String(p.stpid)), min: predMinutes(p.prdctdn) }))
+      .map((p) => ({
+        pred: p,
+        stop: stopsByStpid.get(String(p.stpid)),
+        min: predMinutes(p.prdctdn),
+      }))
       .filter((x) => x.stop && x.min != null && x.stop.pdist < gap.leading.pdist);
 
     if (onPattern.length > 0) {
@@ -160,11 +172,15 @@ async function main() {
       const remainingFt = gap.leading.pdist - anchor.stop.pdist;
       const tailMin = remainingFt / 880; // 10 mph ≈ 880 ft/min
       const refined = anchor.min + tailMin;
-      console.log(`Prediction refinement: ${gap.gapMin.toFixed(1)} min (distance) → ${refined.toFixed(1)} min (anchor: ${anchor.min} min at ${anchor.stop.stopName} + ${tailMin.toFixed(1)} min to ${leadingStop.stopName})`);
+      console.log(
+        `Prediction refinement: ${gap.gapMin.toFixed(1)} min (distance) → ${refined.toFixed(1)} min (anchor: ${anchor.min} min at ${anchor.stop.stopName} + ${tailMin.toFixed(1)} min to ${leadingStop.stopName})`,
+      );
       gap.gapMin = refined;
       gap.ratio = refined / gap.expectedMin;
     } else {
-      console.log(`No usable predictions for vid ${gap.trailing.vid} on this pattern; keeping distance estimate`);
+      console.log(
+        `No usable predictions for vid ${gap.trailing.vid} on this pattern; keeping distance estimate`,
+      );
     }
   } catch (e) {
     console.warn(`Prediction refinement failed: ${e.message}; keeping distance estimate`);
@@ -173,11 +189,15 @@ async function main() {
   // Re-check thresholds: refinement may have moved us below the bar.
   const { RATIO_THRESHOLD, ABSOLUTE_MIN_MIN } = require('../../src/bus/gaps');
   if (gap.gapMin < ABSOLUTE_MIN_MIN || gap.ratio < RATIO_THRESHOLD) {
-    console.log(`After refinement, gap no longer meets threshold (${gap.gapMin} min, ${gap.ratio.toFixed(2)}x); skipping`);
+    console.log(
+      `After refinement, gap no longer meets threshold (${gap.gapMin} min, ${gap.ratio.toFixed(2)}x); skipping`,
+    );
     return;
   }
 
-  console.log(`Posting: route ${gap.route} pid ${gap.pid} — ${Math.round(gap.gapMin)} min gap (${gap.ratio.toFixed(2)}x expected)`);
+  console.log(
+    `Posting: route ${gap.route} pid ${gap.pid} — ${Math.round(gap.gapMin)} min gap (${gap.ratio.toFixed(2)}x expected)`,
+  );
 
   const callouts = history.gapCallouts({
     kind: 'bus',
@@ -200,7 +220,10 @@ async function main() {
   const alt = buildAltText(gap, pattern, chosenStop);
 
   if (argv['dry-run']) {
-    const outPath = writeDryRunAsset(image, `gap-${gap.route}-${pattern.direction.toLowerCase()}-${gap.pid}-${Date.now()}.jpg`);
+    const outPath = writeDryRunAsset(
+      image,
+      `gap-${gap.route}-${pattern.direction.toLowerCase()}-${gap.pid}-${Date.now()}.jpg`,
+    );
     console.log(`\n--- DRY RUN ---\n${text}\n\nAlt: ${alt}\nImage: ${outPath}`);
     return;
   }
@@ -219,9 +242,13 @@ async function main() {
     cooldownKeys: [`gap:${gap.pid}`, `gap:route:${gap.route}`],
     recordSkip: () => history.recordGap({ ...baseEvent, posted: false }),
     agentLogin: loginBus,
-    image, text, alt,
-    recordPosted: (primary) => history.recordGap({ ...baseEvent, posted: true, postUri: primary.uri }),
-    postWithImage, postText,
+    image,
+    text,
+    alt,
+    recordPosted: (primary) =>
+      history.recordGap({ ...baseEvent, posted: true, postUri: primary.uri }),
+    postWithImage,
+    postText,
   });
 }
 

@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { bucket, resolveTrainStation, formatRangeLabel, rangeForWindow } = require('../../src/shared/recap');
+const {
+  bucket,
+  resolveTrainStation,
+  formatRangeLabel,
+  rangeForWindow,
+} = require('../../src/shared/recap');
 
 test('bucket groups events at the same coords and counts sources', () => {
   const events = [
@@ -9,9 +14,8 @@ test('bucket groups events at the same coords and counts sources', () => {
     { near_stop: 'A', source: 'gap' },
     { near_stop: 'B', source: 'bunching' },
   ];
-  const resolve = (ev) => ev.near_stop === 'A'
-    ? { lat: 41.9, lon: -87.6 }
-    : { lat: 41.8, lon: -87.7 };
+  const resolve = (ev) =>
+    ev.near_stop === 'A' ? { lat: 41.9, lon: -87.6 } : { lat: 41.8, lon: -87.7 };
   const out = bucket(events, resolve);
   assert.equal(out.length, 2);
   assert.equal(out[0].label, 'A');
@@ -41,7 +45,7 @@ test('bucket skips events that do not resolve to a location', () => {
     { near_stop: 'Known', source: 'gap' },
     { near_stop: 'Unknown', source: 'gap' },
   ];
-  const resolve = (ev) => ev.near_stop === 'Known' ? { lat: 41, lon: -87 } : null;
+  const resolve = (ev) => (ev.near_stop === 'Known' ? { lat: 41, lon: -87 } : null);
   const out = bucket(events, resolve);
   assert.equal(out.length, 1);
   assert.equal(out[0].label, 'Known');
@@ -62,21 +66,21 @@ test('resolveTrainStation returns null for unknown station', () => {
 test('formatRangeLabel collapses same-month ranges', () => {
   assert.equal(
     formatRangeLabel({ year: 2026, month: 4, day: 1 }, { year: 2026, month: 4, day: 30 }),
-    'Apr 1 – 30'
+    'Apr 1 – 30',
   );
 });
 
 test('formatRangeLabel spells both months when the range crosses a month boundary', () => {
   assert.equal(
     formatRangeLabel({ year: 2026, month: 3, day: 25 }, { year: 2026, month: 4, day: 23 }),
-    'Mar 25 – Apr 23'
+    'Mar 25 – Apr 23',
   );
 });
 
 test('formatRangeLabel includes years when the range crosses years', () => {
   assert.equal(
     formatRangeLabel({ year: 2025, month: 12, day: 1 }, { year: 2026, month: 1, day: 1 }),
-    'Dec 1, 2025 – Jan 1, 2026'
+    'Dec 1, 2025 – Jan 1, 2026',
   );
 });
 

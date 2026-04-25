@@ -1,8 +1,8 @@
 const Fs = require('fs-extra');
-const Os = require('os');
-const Path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
+const Os = require('node:os');
+const Path = require('node:path');
+const { exec } = require('node:child_process');
+const { promisify } = require('node:util');
 
 const { getVehicles } = require('./api');
 const { computeBunchingView, fetchBunchingBaseMap, renderBunchingFrame } = require('../map');
@@ -74,7 +74,10 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
         const { v } = series[i];
         v.track = smoothed[i];
         const snapped = pointAlongLine(linePts, lineCum, v.track);
-        if (snapped) { v.lat = snapped.lat; v.lon = snapped.lon; }
+        if (snapped) {
+          v.lat = snapped.lat;
+          v.lon = snapped.lon;
+        }
       }
     }
   }
@@ -105,7 +108,10 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
         if (hasPolyline && from.track != null && to.track != null) {
           const track = from.track + (to.track - from.track) * t;
           const p = pointAlongLine(linePts, lineCum, track);
-          if (p) { lat = p.lat; lon = p.lon; }
+          if (p) {
+            lat = p.lat;
+            lon = p.lon;
+          }
         }
         if (lat == null) {
           lat = from.lat + (to.lat - from.lat) * t;
@@ -124,7 +130,9 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
   }
   // Final real snapshot → last frame, in the same stable vid order.
   const finalByVid = new Map(snapshots[snapshots.length - 1].vehicles.map((v) => [v.vid, v]));
-  vehicleFrames.push(allVids.filter((vid) => finalByVid.has(vid)).map((vid) => finalByVid.get(vid)));
+  vehicleFrames.push(
+    allVids.filter((vid) => finalByVid.has(vid)).map((vid) => finalByVid.get(vid)),
+  );
 
   const tmpDir = await Fs.mkdtemp(Path.join(Os.tmpdir(), 'cta-bunch-video-'));
   try {
@@ -158,8 +166,14 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
 
     const initialSpanFt = Math.round(bunch.spanFt);
     const finalVehicles = snapshots[snapshots.length - 1].vehicles;
-    const finalPdists = finalVehicles.map((v) => v.pdist).filter((p) => typeof p === 'number' || !isNaN(parseFloat(p))).map((p) => parseFloat(p));
-    const finalSpanFt = finalPdists.length >= 2 ? Math.round(Math.max(...finalPdists) - Math.min(...finalPdists)) : null;
+    const finalPdists = finalVehicles
+      .map((v) => v.pdist)
+      .filter((p) => typeof p === 'number' || !Number.isNaN(parseFloat(p)))
+      .map((p) => parseFloat(p));
+    const finalSpanFt =
+      finalPdists.length >= 2
+        ? Math.round(Math.max(...finalPdists) - Math.min(...finalPdists))
+        : null;
     const elapsedSec = Math.round((snapshots[snapshots.length - 1].ts - snapshots[0].ts) / 1000);
 
     return {
