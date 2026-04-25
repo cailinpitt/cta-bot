@@ -11,6 +11,14 @@ const {
   fetchSnapshotBaseLayer,
   renderSnapshotFrame,
 } = require('../map');
+const { buildLineBranches, snapToLineWithPerp, pointAlongLine } = require('./speedmap');
+const { smoothSeries, median } = require('../shared/stats');
+
+// Off-polyline rejection: trains whose median perp-distance to every branch
+// exceeds this fall back to raw lat/lon (no snap, no monotonicity clamp).
+// Generous since CTA polylines drift several hundred feet from actual track in
+// places (notably Yellow and Purple's express segment).
+const MAX_PERP_FT = 2000;
 
 const execP = promisify(exec);
 
@@ -45,9 +53,91 @@ async function captureSnapshotVideo(initialTrains, lineColors, trainLines, opts 
   const insetView = computeLoopInsetView();
   const layers = await fetchSnapshotBaseLayer(view, insetView, lineColors, trainLines);
 
-  // Linear lat/lon interpolation between adjacent snapshots, per-rn. At system
-  // zoom the cartesian shortcut across curves is invisible — pin radius (~8px)
-  // is wider than the deviation a 15s, half-mile leg would produce.
+  // Build per-line branches once so per-rn snapping is cheap.
+  const branchesByLine = new Map();
+  for (const line of Object.keys(trainLines)) {
+    branchesByLine.set(line, buildLineBranches(trainLines, line));
+  }
+
+  // Per-rn pass: pick the best branch (lowest median perp distance), snap to
+  // it, then enforce monotonicity in the direction the train is actually
+  // moving (forward → non-decreasing track distance; backward → non-increasing).
+  // Without this, GPS/prediction jitter shows up in the timelapse as trains
+  // briefly reversing before continuing forward.
+  const seriesByRn = new Map();
+  for (let s = 0; s < snapshots.length; s++) {
+    for (const t of snapshots[s].trains) {
+      if (!seriesByRn.has(t.rn)) seriesByRn.set(t.rn, []);
+      seriesByRn.get(t.rn).push({ snapIdx: s, t });
+    }
+  }
+  for (const series of seriesByRn.values()) {
+    const line = series[0].t.line;
+    const branches = branchesByLine.get(line) || [];
+    if (branches.length === 0) continue;
+
+    let bestBranch = null;
+    let bestMedianPerp = Infinity;
+    let bestTracks = null;
+    for (const br of branches) {
+      const perps = [];
+      const tracks = [];
+      for (const { t } of series) {
+        const { cumDist, perpDist } = snapToLineWithPerp(t.lat, t.lon, br.points, br.cumDist);
+        perps.push(perpDist);
+        tracks.push(cumDist);
+      }
+      const m = median(perps);
+      if (m < bestMedianPerp) {
+        bestMedianPerp = m;
+        bestBranch = br;
+        bestTracks = tracks;
+      }
+    }
+    if (!bestBranch || bestMedianPerp > MAX_PERP_FT) continue;
+
+    // Direction of travel along this branch: sign of (last - first). Use
+    // first/last rather than per-step deltas so a single jitter step doesn't
+    // flip the inferred direction.
+    const direction = Math.sign(bestTracks[bestTracks.length - 1] - bestTracks[0]) || 1;
+    const clamped = [];
+    let prev = null;
+    for (const raw of bestTracks) {
+      const next = prev == null ? raw : direction >= 0 ? Math.max(prev, raw) : Math.min(prev, raw);
+      prev = next;
+      clamped.push(next);
+    }
+    const smoothed = smoothSeries(clamped);
+    for (let i = 0; i < series.length; i++) {
+      const entry = series[i];
+      entry.branch = bestBranch;
+      entry.track = smoothed[i];
+      const snapped = pointAlongLine(bestBranch.points, bestBranch.cumDist, entry.track);
+      if (snapped) {
+        // Mutate a copy so the underlying snapshot is unchanged for callers
+        // that might inspect it after.
+        const next = { ...entry.t, lat: snapped.lat, lon: snapped.lon };
+        entry.t = next;
+        snapshots[entry.snapIdx].trains = snapshots[entry.snapIdx].trains.map((tr) =>
+          tr.rn === next.rn ? next : tr,
+        );
+      }
+    }
+  }
+
+  // Interpolate between adjacent snapshots. When both endpoints share a
+  // branch+track, walk the polyline so curves render correctly; otherwise
+  // fall back to cartesian lerp (off-polyline trains, or trains whose snap
+  // failed the perp threshold).
+  const trackByRnAtSnap = new Map();
+  for (const [rn, series] of seriesByRn) {
+    const m = new Map();
+    for (const e of series) {
+      if (e.track != null && e.branch) m.set(e.snapIdx, { track: e.track, branch: e.branch });
+    }
+    trackByRnAtSnap.set(rn, m);
+  }
+
   const trainFrames = [];
   for (let i = 0; i < snapshots.length - 1; i++) {
     const a = new Map(snapshots[i].trains.map((t) => [t.rn, t]));
@@ -59,13 +149,25 @@ async function captureSnapshotVideo(initialTrains, lineColors, trainLines, opts 
       for (const rn of allRns) {
         const ta = a.get(rn);
         const tb = b.get(rn);
-        // Trains entering/leaving service mid-window: hold their position from
-        // whichever side has them. Cheaper than fading and visually fine at
-        // this scale.
         const from = ta || tb;
         const to = tb || ta;
-        const lat = from.lat + (to.lat - from.lat) * t;
-        const lon = from.lon + (to.lon - from.lon) * t;
+        const tracks = trackByRnAtSnap.get(rn);
+        const trackA = tracks?.get(i);
+        const trackB = tracks?.get(i + 1);
+        let lat;
+        let lon;
+        if (trackA && trackB && trackA.branch === trackB.branch) {
+          const trackHere = trackA.track + (trackB.track - trackA.track) * t;
+          const p = pointAlongLine(trackA.branch.points, trackA.branch.cumDist, trackHere);
+          if (p) {
+            lat = p.lat;
+            lon = p.lon;
+          }
+        }
+        if (lat == null) {
+          lat = from.lat + (to.lat - from.lat) * t;
+          lon = from.lon + (to.lon - from.lon) * t;
+        }
         frame.push({ rn, line: from.line, lat, lon });
       }
       trainFrames.push(frame);
