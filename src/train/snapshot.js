@@ -19,4 +19,22 @@ function buildAltText(trains) {
   return `Map of Chicago showing live positions of ${trains.length} CTA L trains currently in service, colored by line: ${summary}.`;
 }
 
-module.exports = { buildPostText, buildAltText, countByLine };
+function buildVideoPostText(trains, startTs, endTs, windowMin) {
+  const byLine = countByLine(trains);
+  const parts = ALL_LINES.map((l) => `${LINE_NAMES[l]} ${byLine.get(l) || 0}`);
+  return `🚆 CTA L · ${windowMin}-min timelapse\n${formatTimeCT(startTs)}–${formatTimeCT(endTs)} CT · ${trains.length} trains at end of window\n\n${parts.join(' · ')}`;
+}
+
+function buildVideoAltText(trains, windowMin) {
+  const byLine = countByLine(trains);
+  const summary = ALL_LINES.map((l) => `${byLine.get(l) || 0} ${LINE_NAMES[l]}`).join(', ');
+  return `${windowMin}-minute timelapse of CTA L train movement across Chicago, colored by line. Final frame shows ${trains.length} trains in service: ${summary}.`;
+}
+
+module.exports = {
+  buildPostText,
+  buildAltText,
+  buildVideoPostText,
+  buildVideoAltText,
+  countByLine,
+};
