@@ -502,17 +502,27 @@ async function maybeSyntheticFullLineCandidate(line, allRecent, agentGetter, now
     `pulse: zero observations on line=${line} but ${expected} trips expected — synthesizing full-line candidate`,
   );
   const branches = buildLineBranches(trainLines, line);
-  const seenDirs = new Set();
+  // Lines like Yellow ship mirror-segment polylines (Howard→Dempster +
+  // Dempster→Howard) as two branches with no direction hint. Both represent
+  // the same physical track; dedupe by unordered station-pair signature so
+  // we don't post twice for one line-wide outage.
+  const seenSignatures = new Set();
   for (let bi = 0; bi < branches.length; bi++) {
     const b = branches[bi];
     if (!b.totalFt) continue;
     const stationsOnBranch = stationsAlongBranchHelper(b, line);
     if (stationsOnBranch.length < 2) continue;
     const direction = directionKeyFor(branches, bi, b.directionHint);
-    if (seenDirs.has(direction)) continue;
-    seenDirs.add(direction);
     const fromStation = stationsOnBranch[0].station;
     const toStation = stationsOnBranch[stationsOnBranch.length - 1].station;
+    const signature = [fromStation.name, toStation.name].sort().join('||');
+    if (seenSignatures.has(signature)) {
+      console.log(
+        `[${line}/${direction}] mirror-segment of an already-synthesized candidate — skipping`,
+      );
+      continue;
+    }
+    seenSignatures.add(signature);
     const synthetic = {
       line,
       direction,
