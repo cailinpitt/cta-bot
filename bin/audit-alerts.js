@@ -72,6 +72,28 @@ async function main() {
     );
   }
 
+  // Orphan cooldowns: a train_pulse cooldown whose pulse_state row no longer
+  // exists. Usually means a manual reset deleted pulse_state without also
+  // clearing the matching cooldown — which then blocks the next legitimate
+  // attempt for up to 90 min.
+  const orphanCooldowns = db
+    .prepare(`
+    SELECT c.key
+    FROM cooldowns c
+    WHERE c.key LIKE 'train_pulse_%'
+      AND (c.expires_at IS NULL OR c.expires_at > ?)
+      AND NOT EXISTS (
+        SELECT 1 FROM pulse_state ps WHERE ps.posted_cooldown_key = c.key
+      )
+  `)
+    .all(now);
+  if (orphanCooldowns.length > 0) {
+    issues.push(
+      `orphan-cooldowns: ${orphanCooldowns.length} active train_pulse cooldown(s) with no matching pulse_state row`,
+    );
+    for (const r of orphanCooldowns.slice(0, 5)) console.warn(`  ${r.key}`);
+  }
+
   if (issues.length === 0) {
     console.log('audit-alerts: OK');
     return;
