@@ -83,6 +83,11 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
 
     const zoneFt = terminalZoneFt(totalFt);
     const zoneBins = Math.ceil(zoneFt / (totalFt / numBins));
+    if (numBins - 2 * zoneBins < 4) {
+      console.warn(
+        `[pulse] line=${line} branch=${branchIdx} eligible scan range only ${numBins - 2 * zoneBins} bins — short branch may misfire`,
+      );
+    }
 
     let coveredBins = 0;
     for (const ts of lastSeenPerBin) if (ts > -Infinity) coveredBins++;
@@ -190,13 +195,21 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
 }
 
 // Direction key used as the (line, direction) PK in pulse_state. Stable
-// across branch reorderings: derives from directionHint (outbound/inbound)
-// when the branch comes from a round-trip split, else falls back to
-// branch-N for multi-branch bidirectional lines (Blue, Green).
+// across reorderings of trainLines.json: derives from directionHint
+// (outbound/inbound) for round-trip splits, or from a length+terminal
+// signature for multi-branch bidirectional lines (Blue, Green).
 function directionKeyFor(branches, branchIdx, directionHint) {
   if (branches.length === 1) return 'all';
   if (directionHint) return `branch-${branchIdx}-${directionHint}`;
-  return `branch-${branchIdx}`;
+  const branch = branches[branchIdx];
+  if (!branch?.points?.length) return `branch-${branchIdx}`;
+  const lastPt = branch.points[branch.points.length - 1];
+  const lat = Array.isArray(lastPt) ? lastPt[0] : lastPt.lat;
+  const lon = Array.isArray(lastPt) ? lastPt[1] : lastPt.lon;
+  const latStr = String(Math.round(lat * 1000));
+  const lonStr = String(Math.round(lon * 1000));
+  const lenK = Math.round(branch.totalFt / 1000);
+  return `branch-len${lenK}-${latStr}-${lonStr}`;
 }
 
 function stationsAlongBranch(stations, line, points, cumDist) {
