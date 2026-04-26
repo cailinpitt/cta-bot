@@ -1,0 +1,2050 @@
+{
+  "CTAAlerts": {
+    "TimeStamp": "2026-04-26T10:56:08",
+    "ErrorCode": "0",
+    "ErrorMessage": null,
+    "Alert": [
+      {
+        "AlertId": "93306",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "The SB #22 and #24 bus stop mid-block on Clark between Madison and Monroe will be temporarily discontinued. Use Clark/Randolph or Clark/Adams for SB buses.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe<strong> southbound</strong> bus stop located mid-block on Clark between Madison and Monroe will be temporarily discontinued.<br />\r\n<br />\r\nFor <strong>#22 Clark</strong> and <strong>#24 Wentworth</strong> service, use either of the bus stops at Clark/Randolph or&nbsp;Clark/Adams.<br />\r\n<br />\r\n<strong>Why is service being changed?</strong><br />\r\nThe bus stop is temporarily discontinued due to construction.&nbsp;</p>\r\n\r\n<h3 style=\"color:#aaa;font-style:italic;\">MAP</h3>\r\n\r\n<p><img alt=\"Map shows the bus stop on the west side of Clark between Madison and Monroe out of service\" src=\"http://www.transitchicago.com/assets/1/6/22_and_24_at_Madison.PNG\" style=\"width: 812px; height: 771px;\" /></p>\r\n"
+        },
+        "SeverityScore": "9",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Bus Stop Relocation",
+        "EventStart": "2022-07-11T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=93306"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Clark",
+              "ServiceId": "22",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/22/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Wentworth",
+              "ServiceId": "24",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/24/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "664b81c1-197b-450b-a00c-090483b90bb9"
+      },
+      {
+        "AlertId": "97115",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "EB #7 via Harrison, Jefferson, and Jackson. NB #37 via Van Buren, Clinton, Harrison, Jefferson, and Jackson. WB #7 and SB #37 buses are not affected. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nEastbound #7 Harrison </strong>buses will operate via Harrison, Jefferson, and Jackson to Canal, then continue their normal route on Jackson.</p>\r\n\r\n<p><strong>Northbound #37 Sedgwick </strong>buses will operate via Van Buren, Clinton, Harrison, Jefferson, and Jackson to Canal, then continue their normal route on Jackson.</p>\r\n\r\n<p><strong>Westbound #7 </strong>and <strong>southbound #37 </strong>buses are not affected.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to CDOT&rsquo;s Canal Street Reconstruction Project.</p>\r\n\r\n<p><span style=\"color:#0000FF;\"><strong>BUS BOARDING LOCATIONS:</strong></span></p>\r\n\r\n<table border=\"1\" cellpadding=\"0\" cellspacing=\"1\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 220px; background-color: black; border-color: black;\">\r\n\t\t\t<p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><strong>Bus Route</strong></span></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;\">\r\n\t\t\t<p><strong>&nbsp;Board Buses Here:</strong></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:220px;height:3px;\">\r\n\t\t\t<p><strong>#7</strong></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;height:3px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>Board eastbound buses on the northeast corner at Jefferson/Harrison</li>\r\n\t\t\t\t<li>Board eastbound buses on the northeast corner at Jefferson/Van Buren</li>\r\n\t\t\t\t<li>Board eastbound buses on the southwest corner at Jackson/Clinton</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<table border=\"1\" cellpadding=\"0\" cellspacing=\"1\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 220px; background-color: black; border-color: black;\">\r\n\t\t\t<p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><strong>Bus Route</strong></span></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;\">\r\n\t\t\t<p><strong>&nbsp;Board Buses Here:</strong></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:220px;height:3px;\">\r\n\t\t\t<p><strong>#37</strong></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;height:3px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>Board northbound buses on the northeast corner at Jefferson/Harrison</li>\r\n\t\t\t\t<li>Board northbound&nbsp;buses on the northeast corner at Jefferson/Van Buren</li>\r\n\t\t\t\t<li>Board northbound buses on the southwest corner at Jackson/Clinton</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<h3 style=\"color:#aaa;font-style:italic;\"><strong>MAP</strong>&nbsp;</h3>\r\n\r\n<p><img alt=\"Map shows buses being rerouted onto Jefferson \" src=\"http://www.transitchicago.com/assets/1/6/MainFCKEditorDimension/7,37.gif\" style=\"width: 1543px; height: 1000px;\" /></p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2024-01-16T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=97115"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Harrison",
+              "ServiceId": "7",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/7/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Sedgwick",
+              "ServiceId": "37",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/37/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "1823536e-d52f-4dd2-bc70-5f5ce108f659"
+      },
+      {
+        "AlertId": "98479",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "The SB #22 and #24 bus stop on the SW corner at Clark/Lake will be temporarily discontinued.\r\n\r\n",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe <strong>southbound #22 Clark </strong>and <strong>#24 Wentworth </strong>bus stop on the southwest corner at Clark/Lake will be temporarily discontinued.</p>\r\n\r\n<p>For <strong>southbound #22 </strong>and <strong>#24 </strong>service, board buses one block south at Clark/Randolph.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nThe bus stop is changed due to construction and related sidewalk closures.</p>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2024-03-25T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=98479"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Clark",
+              "ServiceId": "22",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/22/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Wentworth",
+              "ServiceId": "24",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/24/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "b22af7da-0f10-46f7-9bc1-2d4e4a2f38ea"
+      },
+      {
+        "AlertId": "109401",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#N5 and #67 buses will operate in both directions via 67th, Cottage Grove, Marquette, Stony Island, and 67th.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\n<strong>#N5 South Shore Night Bus </strong>and <strong>#67 67th/69th/71st </strong>buses will operate in both directions via 67th, Cottage Grove, Marquette, Stony Island, and 67th.</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to utility maintenance on 67th between Kenwood and Dorchester.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-08-11T07:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=109401"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "South Shore Night Bus",
+              "ServiceId": "N5",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "009999",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/n5/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "67th-69th-71st",
+              "ServiceId": "67",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/67/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "f0d3f696-5a6b-46b7-89e5-8a592e59c84b"
+      },
+      {
+        "AlertId": "109706",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #146 and #148 buses will operate via State, Wacker Drive, and East Wacker Place, then resume their normal route on Michigan.\r\n",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nNorthbound #146 Inner Lake Shore/Michigan Express&nbsp;</strong>and <strong>#148 Clarendon/Michigan Express&nbsp;</strong>buses will operate via State, Wacker Drive, and East Wacker Place, then resume their normal route on Michigan.</p>\r\n\r\n<p><strong>Southbound #146 </strong>and <strong>#148 </strong>buses are not affected.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction at State/Lake.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-08-20T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=109706"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Inner Lake Shore/Michigan Express",
+              "ServiceId": "146",
+              "ServiceBackColor": "b71234",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/146/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Clarendon/Michigan Express",
+              "ServiceId": "148",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "b71234",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/148/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "879347fe-0bf3-40a6-9b31-2501615f0a25"
+      },
+      {
+        "AlertId": "110280",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "EB #73 via Cortland, Elston, North, Kingsbury, Clifton, Clybourn, and Racine. WB via Racine, Clybourn, Sheffield, North Avenue, Elston, and Cortland.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nEastbound&nbsp;</strong>buses will operate via Cortland, Elston, North Avenue, Kingsbury, Clifton, and Clybourn, then resume normal route on Racine.</p>\r\n\r\n<p><strong>Westbound&nbsp;</strong>buses will operate Racine, Clybourn, Sheffield, North Avenue, and Elston, then resume normal route on Cortland.</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on the Cortland Bridge over the Chicago River.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-09-22T09:00:00",
+        "EventEnd": "2027-09-30",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=110280"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Armitage",
+            "ServiceId": "73",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/73/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "d41b2532-09ca-4827-b9c6-f4299cc86fb6"
+      },
+      {
+        "AlertId": "110324",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "EB #66 buses will operate via Chicago, Milwaukee, Grand, Orleans, and Chicago. WB buses will operate via Chicago, Wells, Grand, Milwaukee and Chicago. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nEastbound&nbsp;</strong>buses will operate via Chicago, Milwaukee, Grand, and Orleans, then resume their normal route on Chicago.&nbsp;</p>\r\n\r\n<p><strong>Westbound </strong>buses will operate via Chicago, Wells, and Grand, then resume their normal route on Milwaukee.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to CDOT construction on the Chicago Avenue viaduct.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-09-29T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=110324"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Chicago",
+            "ServiceId": "66",
+            "ServiceBackColor": "414145",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/66/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "189ed91d-79e0-4e10-bfa0-fc8d9538d54e"
+      },
+      {
+        "AlertId": "110415",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#126 buses will operate in both directions via Jackson, Cicero, Madison, Kostner, and Jackson.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBuses will operate in both directions via Jackson, Cicero, Madison, Kostner, and Jackson.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to utility work on Jackson at Kilpatrick.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-10-01T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=110415"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Jackson",
+            "ServiceId": "126",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/126/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "0afafbfe-b5f0-4adf-92f0-27a1f5add330"
+      },
+      {
+        "AlertId": "110419",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #125 buses will operate via Jefferson, Washington, and Franklin, then resume their normal route on Orleans. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nNorthbound </strong>buses will operate via Jefferson, Washington, and Franklin, then resume their normal route on Orleans.&nbsp;</p>\r\n\r\n<p><strong>Southbound </strong>buses are not affected.</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to maintenance on the Lake Street bridge over the Chicago River.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-10-06T09:00:00",
+        "EventEnd": "2027-11-26",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=110419"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Water Tower Express",
+            "ServiceId": "125",
+            "ServiceBackColor": "ffffff",
+            "ServiceTextColor": "b71234",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/125/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "410af8c7-1d79-4b0c-bc66-9fcd67fa84ab"
+      },
+      {
+        "AlertId": "110566",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "SB 11, 49B buses operate via Western, Wilson, Lincoln, Montrose, Western, ending at Western/Eastwood. Buses will not stop at the Brown Line bus terminal.\r\n",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\n<strong>Southbound #11 Lincoln </strong>and <strong>#49B North Western </strong>buses will operate via Western, Wilson, Lincoln, Montrose, and Western, ending their trips at Western/Eastwood. Buses will not stop at the Western Brown Line station bus terminal.</p>\r\n\r\n<p><strong>Northbound #11 </strong>and <strong>#49B&nbsp;</strong>buses will begin their trips at Western/Eastwood, then continue their normal route on Western.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-10-04T23:30:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=110566"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Lincoln",
+              "ServiceId": "11",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/11/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "North Western",
+              "ServiceId": "49B",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/49b/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "838c37f1-75d0-4598-aa05-05b72892cd9c"
+      },
+      {
+        "AlertId": "111296",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#8 buses will operate in both directions via Halsted, Division, Elston, Milwaukee and Halsted. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBuses will operate in both directions via Halsted, Division, Elston, Milwaukee and Halsted.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to CDOT Construction at Chicago/Halsted.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-11-07",
+        "EventEnd": "2026-12-25",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=111296"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Halsted",
+            "ServiceId": "8",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/8/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "0466d5e5-2715-4ddd-a0c8-0704a6e3fa5d"
+      },
+      {
+        "AlertId": "111350",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "The WB #39 bus stop on the NE corner at Pershing/Morgan will be temporarily relocated to the NW corner at Pershing/Morgan. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe <strong>westbound #39 Pershing&nbsp;</strong>bus stop on the northeast corner at Pershing/Morgan will be temporarily relocated to the northwest corner at Pershing/Morgan.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nThe bus stop is changed due to construction.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2025-11-07T07:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=111350"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Pershing",
+            "ServiceId": "39",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/39/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "20aea855-5ad8-4d1b-89b8-cd8776e031cf"
+      },
+      {
+        "AlertId": "111489",
+        "Headline": "Western Loop-bound Platform Elevator Out of Service",
+        "ShortDescription": "The Loop-bound platform elevator at the Western Brown Line station is temporarily out of service.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe Loop-bound platform elevator at the Western station is temporarily out of service.<br />\r\n<br />\r\nEntry/exiting from the Western Loop-bound platform will be available by escalator (entry only) and stairs only.<br />\r\n<br />\r\n<strong>For accessible boarding/exiting of Loop-bound Brown Line trains:</strong><br />\r\n&bull; For service from Western, take a Kimball-bound train to Rockwell station and transfer to a Loop-bound train.<br />\r\n<br />\r\n&bull; For service to Western, take a Loop-bound train to Damen station and transfer to a Kimball-bound train.<br />\r\n<br />\r\n&bull; Use the adjacent accessible Damen and Rockwell stations.<br />\r\n<br />\r\nAllow extra travel time.<br />\r\n<br />\r\n<strong>Why is service being changed?</strong><br />\r\nWe are upgrading the elevator at Western to ensure continued safe, accessible service.</p>\r\n\r\n<p><span style=\"color: rgb(35, 31, 32);\">The elevator is currently estimated to return to service on Saturday, May 30, 2026. (</span><em style=\"color: rgb(35, 31, 32);\">Note: date subject to change</em><span style=\"color: rgb(35, 31, 32);\">).</span></p>\r\n"
+        },
+        "SeverityScore": "5",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Elevator Status",
+        "EventStart": "2025-11-17T04:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=111489"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Western",
+              "ServiceId": "41480",
+              "ServiceBackColor": "62361b",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=135"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Brown Line",
+              "ServiceId": "Brn",
+              "ServiceBackColor": "62361b",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/brownline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "ece64519-cd7b-43b5-99f6-9dc5b51357fa"
+      },
+      {
+        "AlertId": "112013",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "EB #60 buses will operate via Harrison and Jefferson, then resume their normal route on Washington.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nEastbound #60 Blue Island/26th</strong>&nbsp;buses will operate&nbsp;via Harrison and Jefferson, then resume their normal route on Washington.</p>\r\n\r\n<p><strong>Westbound #60 </strong>buses are not affected.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><span style=\"font-weight: bolder;\">Why is service being&nbsp;changed?</span><br />\r\nBuses are rerouted due to&nbsp;CDOT&rsquo;s Canal Street Reconstruction Project.</p>\r\n\r\n<p><strong><span style=\"color:#3366FF;\">BUS BOARDING LOCATIONS:</span></strong></p>\r\n\r\n<table border=\"1\" cellpadding=\"0\" cellspacing=\"1\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 220px; background-color: black; border-color: black;\">\r\n\t\t\t<p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><strong>Bus Route</strong></span></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;\">\r\n\t\t\t<p><strong>Board Buses Here:</strong></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:220px;height:3px;\">\r\n\t\t\t<p><strong>#60 Blue Island/26th</strong></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;height:3px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/Harrison</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/Van Buren</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/Jackson</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the southwest corner at Jefferson/Washington&nbsp;</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the southwest corner at Washington/Canal.&nbsp;</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-12-15",
+        "EventEnd": "2026-12-18",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112013"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Blue Island/26th",
+            "ServiceId": "60",
+            "ServiceBackColor": "414145",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/60/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "4cc0b207-ba62-40d0-83d0-2b01a4f1bda6"
+      },
+      {
+        "AlertId": "112014",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #192 buses will operate via Roosevelt, and Jefferson, ending their trips at Jefferson/Washington. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect&nbsp;my trip?<br />\r\nNorthbound </strong>buses will&nbsp;operate via Roosevelt, and&nbsp;Jefferson, ending their trips at Jefferson/Washington.&nbsp;</p>\r\n\r\n<p><strong>Southbound </strong>buses are&nbsp;not affected.<br />\r\n<br />\r\nAllow extra travel time.</p>\r\n\r\n<p><strong>Why is service&nbsp;being changed?</strong><br />\r\nBuses are rerouted due&nbsp;to CDOT&rsquo;s Canal Street&nbsp;Reconstruction Project.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-12-15",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112014"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "U. of Chicago Hospitals Express",
+            "ServiceId": "192",
+            "ServiceBackColor": "ffffff",
+            "ServiceTextColor": "b71234",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/192/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "87e14753-363f-4193-b2b3-689a396b475f"
+      },
+      {
+        "AlertId": "112017",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "WB #124 buses will operate via Madison and Clinton, on Clinton bw Adams and Quincy. EB via Clinton, Van Buren, Jefferson, and Washington.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nWestbound </strong>buses will&nbsp;operate via Madison and&nbsp;Clinton, ending their trips&nbsp;on Clinton between Adams&nbsp;and Quincy.<br />\r\n<br />\r\n<strong>Eastbound </strong>buses will&nbsp;operate via Clinton,&nbsp;Van Buren, and Jefferson, then resume their normal route on Washington.<br />\r\n<br />\r\nAllow extra travel time.<br />\r\n<br />\r\n<span style=\"font-weight: bolder; color: rgb(35, 31, 32);\"><span style=\"color: rgb(51, 102, 255);\">BUS BOARDING LOCATIONS:</span></span></p>\r\n\r\n<table border=\"1\" cellpadding=\"0\" cellspacing=\"1\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 220px; background-color: black; border-color: black;\">\r\n\t\t\t<p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><strong>Bus Route</strong></span></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;\">\r\n\t\t\t<p><strong>Board Buses Here:</strong></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:220px;height:3px;\">\r\n\t\t\t<p><strong>#124 Navy Pier</strong></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;height:3px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>Board <strong>westbound </strong>buses on the northwest corner at Clinton/Quincy</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/Van Buren</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/Jackson</li>\r\n\t\t\t\t<li style=\"margin-bottom: 0.5em;\">Board&nbsp;<span style=\"font-weight: bolder;\">eastbound&nbsp;</span>buses on the southwest corner at Jefferson/Washington&nbsp;</li>\r\n\t\t\t\t<li style=\"margin-bottom: 0.5em;\">Board&nbsp;<span style=\"font-weight: bolder;\">eastbound&nbsp;</span>buses on the southwest corner at Washington/Canal.&nbsp;</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to CDOT&rsquo;s Canal&nbsp;Street Reconstruction Project.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-12-15",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112017"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Navy Pier",
+            "ServiceId": "124",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/124/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "fc95cbd4-4ad7-44d7-9b5b-110e8c41b279"
+      },
+      {
+        "AlertId": "112018",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #157 buses will operate via Taylor, and Jefferson, then resume their normal route on Washington. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nNorthbound</strong> buses will operate via&nbsp;Taylor, and Jefferson, then resume their normal route on Washington.&nbsp;</p>\r\n\r\n<p><strong>Southbound</strong> buses are&nbsp;not affected.<br />\r\n<br />\r\nAllow extra travel time.</p>\r\n\r\n<p><span style=\"font-weight: bolder; color: rgb(35, 31, 32);\"><span style=\"color: rgb(51, 102, 255);\">BUS BOARDING LOCATIONS:</span></span></p>\r\n\r\n<table border=\"1\" cellpadding=\"0\" cellspacing=\"1\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 220px; background-color: black; border-color: black;\">\r\n\t\t\t<p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><strong>Bus Route</strong></span></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;\">\r\n\t\t\t<p><strong>Board Buses </strong></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:220px;height:3px;\">\r\n\t\t\t<p><strong>#157 Steeterville/Taylor</strong></p>\r\n\t\t\t</td>\r\n\t\t\t<td style=\"width:615px;height:3px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>bus stop on the northeast corner at Jefferson/Taylor</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>bus stop on the northeast corner at Jefferson/Polk</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/Harrison</li>\r\n\t\t\t\t<li>Board <strong>eastbound</strong> buses on the northeast corner at Jefferson/ Van Buren</li>\r\n\t\t\t\t<li>Board <strong>eastbound </strong>buses on the northeast corner at Jefferson/ Jackson</li>\r\n\t\t\t\t<li style=\"box-sizing: inherit; margin-bottom: 0.5em;\">Board&nbsp;<span style=\"box-sizing: inherit; font-weight: bolder;\">eastbound&nbsp;</span>buses on the southwest corner at Jefferson/Washington&nbsp;</li>\r\n\t\t\t\t<li style=\"box-sizing: inherit; margin-bottom: 0.5em;\">Board&nbsp;<span style=\"box-sizing: inherit; font-weight: bolder;\">eastbound&nbsp;</span>buses on the southwest corner at Washington/Canal.&nbsp;</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p><br />\r\n<strong>Why is service&nbsp;being changed?</strong><br />\r\nBuses are rerouted due&nbsp;to CDOT&rsquo;s Canal Street&nbsp;Reconstruction&nbsp;Project.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2025-12-15",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112018"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Streeterville/Taylor",
+            "ServiceId": "157",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/157/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "270fa205-9381-4d6e-8974-9ffe847d400b"
+      },
+      {
+        "AlertId": "112148",
+        "Headline": "State/Lake Elevated Station Temporary Closure",
+        "ShortDescription": "Effective, now, the State/Lake Loop Elevated station is closed for reconstruction into 2029. Please use adjacent stations at Clark/Lake or Washington/Wabash.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nEffective, Monday, January 5, 2026, the State/Lake Loop Elevated&nbsp;station will temporarily close.<br />\r\n<br />\r\nPlease use the accessible Clark/Lake or Washington/Wabash&nbsp;stations, located within a few blocks of the State/Lake station. To&nbsp;transfer between the Red Line at Lake station and the Loop &lsquo;L&rsquo; lines,&nbsp;use Washington/Wabash.<br />\r\n<br />\r\n<strong>Why is service being changed?</strong><br />\r\nThe new State/Lake elevated station is scheduled to open in 2029. It&nbsp;will replace one of the oldest stations on the CTA rail system with a&nbsp;modern facility designed to improve safety, accessibility, and comfort&nbsp;for all riders.</p>\r\n"
+        },
+        "SeverityScore": "12",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Special Note",
+        "EventStart": "2026-01-05",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112148"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Purple Line",
+              "ServiceId": "P",
+              "ServiceBackColor": "522398",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/purpleline/" }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Pink Line",
+              "ServiceId": "Pink",
+              "ServiceBackColor": "e27ea6",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/pinkline/" }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Green Line",
+              "ServiceId": "G",
+              "ServiceBackColor": "009b3a",
+              "ServiceTextColor": "FFFFFF",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/greenline/" }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Brown Line",
+              "ServiceId": "Brn",
+              "ServiceBackColor": "62361b",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/brownline/" }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Orange Line",
+              "ServiceId": "Org",
+              "ServiceBackColor": "f9461c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/orangeline/" }
+            }
+          ]
+        },
+        "ttim": "1",
+        "GUID": "98b85267-5863-4fd8-ab33-caa4f77edc38"
+      },
+      {
+        "AlertId": "112506",
+        "Headline": "State/Lake Elevated Station Temporary Closure",
+        "ShortDescription": "Effective, now, the State/Lake Loop Elevated station is closed for reconstruction into 2029. Please use adjacent stations at Clark/Lake or Washington/Wabash.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nEffective, Monday, January 5, 2026, the State/Lake Loop Elevated&nbsp;station closed.<br />\r\n<br />\r\nPlease use the accessible Clark/Lake or Washington/Wabash&nbsp;stations, located within a few blocks of the State/Lake station. To&nbsp;transfer between the Red Line at Lake station and the Loop &lsquo;L&rsquo; lines,&nbsp;use Washington/Wabash.<br />\r\n<br />\r\n<strong>Why is service being changed?</strong><br />\r\nThe new State/Lake elevated station is scheduled to open in 2029. It&nbsp;will replace one of the oldest stations on the CTA rail system with a&nbsp;modern facility designed to improve safety, accessibility, and comfort&nbsp;for all riders.</p>\r\n"
+        },
+        "SeverityScore": "10",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Normal Service*",
+        "EventStart": "2026-01-05",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112506"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "R",
+            "ServiceTypeDescription": "Train Route",
+            "ServiceName": "Red Line",
+            "ServiceId": "Red",
+            "ServiceBackColor": "c60c30",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/redline/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "5a216dbc-b0a2-49fc-9464-1eee54b86497"
+      },
+      {
+        "AlertId": "113478",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #94 buses will operate via California, Archer, and Pershing, then resume their normal route on California. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nNorthbound&nbsp;</strong>buses will operate via California, Archer, and Pershing, then resume their normal route on California.&nbsp;</p>\r\n\r\n<p><strong>Southbound </strong>buses are not affected.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><em>Note: The&nbsp;<span style=\"font-weight: bolder;\">northbound #94 California&nbsp;</span>bus stop on the northeast&nbsp;corner at California/Archer will be temporarily relocated to the southeast corner. The&nbsp;<span style=\"font-weight: bolder;\">northbound #94&nbsp;</span>bus stop on the southeast corner at California/Pershing will be temporarily relocated to the northeast corner.&nbsp;</em></p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on California between Archer and Pershing.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-03-02T04:00:00",
+        "EventEnd": "2026-05-11T19:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113478"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "California",
+            "ServiceId": "94",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/california/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "739d9ef2-00d4-4a4d-a454-427c4698721a"
+      },
+      {
+        "AlertId": "113486",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "The NB #29 bus stop on the SE corner at State/23rd will be temp discontinued. Board/exit NB #29 buses at State/Cermak or State/24th. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe <strong>northbound #29 State&nbsp;</strong>bus stop on the southeast corner at State/23rd will be temporarily discontinued. Board/exit <strong>northbound #29 </strong>buses at State/Cermak or State/24th.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nThe bus stop is changed due to construction.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-03-02T04:00:00",
+        "EventEnd": "2027-12-17T19:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113486"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "State",
+            "ServiceId": "29",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/29/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "38d6d174-9cb2-4b07-b716-317000184c68"
+      },
+      {
+        "AlertId": "113489",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "The EB #72 bus stop on the NE corner at North/Taylor will be temporarily relocated to the NW corner. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe <strong>eastbound #72 North </strong>bus stop on the northeast corner at North/Taylor will be temporarily relocated to the northwest corner.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-02-27T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113489"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "North",
+            "ServiceId": "72",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/72/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "f272fe0d-85b5-46dd-b298-1779c0b14204"
+      },
+      {
+        "AlertId": "113762",
+        "Headline": "Later Weekday Evening Service",
+        "ShortDescription": "Effective Mon, Mar 30, #J14 weekday evening service will operate approximately 15 minutes later.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nWeekday evening service will operate approximately 15 minutes later.</p>\r\n\r\n<table align=\"left\" border=\"1\" cellpadding=\"0\" cellspacing=\"0\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 583px; height: 21px; background-color: black; border-color: black;\">\r\n\t\t\t<p>&nbsp;<span style=\"color:#FFFFFF;\"><strong>&nbsp;Last trip to Downtown:</strong></span></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:583px;height:21px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>departs 103rd Stony Island at 10:30pm</li>\r\n\t\t\t\t<li>departs 79th Jeffery at 10:40pm</li>\r\n\t\t\t\t<li>departs 67th Jeffery at 10:45pm</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<table align=\"left\" border=\"1\" cellpadding=\"0\" cellspacing=\"0\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width: 583px; height: 21px; background-color: black; border-color: black;\">\r\n\t\t\t<p>&nbsp;<span style=\"color:#FFFFFF;\"><strong>&nbsp;</strong></span><span style=\"color:#FFFFFF;\"><strong>Last trip to 103rd/Stony Island:</strong></span></p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td style=\"width:583px;height:21px;\">\r\n\t\t\t<ul>\r\n\t\t\t\t<li>departs Ogilvie Transportation Center at 11:30pm</li>\r\n\t\t\t\t<li>departs State/Washington at 11:35pm</li>\r\n\t\t\t\t<li>departs Balbo/Michigan at 11:40pm</li>\r\n\t\t\t</ul>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p><br />\r\n&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nService is being modified to increase later evening service options.</p>\r\n"
+        },
+        "SeverityScore": "11",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Added Service",
+        "EventStart": "2026-03-30",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113762"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Jeffery Jump",
+            "ServiceId": "J14",
+            "ServiceBackColor": "0065BD",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/j14/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "82f32dcc-48c2-45d9-a716-9bbf975a8693"
+      },
+      {
+        "AlertId": "113833",
+        "Headline": "New Schedules in Effect",
+        "ShortDescription": "Beginning Sunday, March 29, updated schedules will go into effect on some CTA bus routes. See latest schedules at transitchicago.com.",
+        "FullDescription": {
+          "#cdata-section": "<p><span style=\"font-weight: bolder;\">How does this affect my trip?</span><br />\r\nBeginning Sunday, March 29, updated schedules will go into effect for the following bus routes. The schedules for these routes are receiving updates as part of CTA&rsquo;s commitment to better meet evolving ridership needs and patterns. Most routes continue to have the same frequency and span of service, but arrival times may change&nbsp;up to a few minutes.</p>\r\n\r\n<p>Routes with more extensive changes to hours of service are marked with an asterisk (*). Bolded routes are part of CTA&rsquo;s&nbsp;Frequent Network.<br />\r\n<br />\r\n<strong>9 Ashland</strong><br />\r\nX9 Ashland Exp*<br />\r\n<strong>J14 Jeffery Jump*<br />\r\n20 Madison<br />\r\n34 South Michigan*</strong><br />\r\n35 31st/35th*<br />\r\n36 Broadway<br />\r\n37 Sedgwick<br />\r\n<strong>47 47th<br />\r\n49 Western</strong><br />\r\nX49 Western Exp<br />\r\n<strong>54 Cicero<br />\r\n55 Garfield</strong><br />\r\n62 Archer<br />\r\n<strong>63 63rd<br />\r\n66 Chicago</strong><br />\r\n<strong>72 North*</strong><br />\r\n73 Armitage<br />\r\n<strong>77 Belmont</strong><br />\r\n78 Montrose*<br />\r\n<strong>79 79th<br />\r\n95 95th</strong><br />\r\n100 Jeffery Manor Exp<br />\r\n103 West 103rd<br />\r\n134 Stockton/LaSalle Exp<br />\r\n147 Outer DuSable Lake Shore Exp<br />\r\n155 Devon<br />\r\n156&nbsp;LaSalle<br />\r\n<br />\r\n<span style=\"font-weight: bolder;\">*In addition, the following service changes will be implemented<br />\r\n(see </span><font face=\"Helvetica\"><a href=\"https://www.transitchicago.com/travel-information/alert-detail/?AlertId=113885\">separate alert</a>&nbsp;</font><span style=\"font-family: Helvetica;\">for details):</span></p>\r\n\r\n<p>&bull; <strong>Service to the lakefront and beaches will be expanded weekends/holidays - Sun, March 29 through mid-August: #35 31st/35th</strong> (31st Street Beach), <strong>#63rd 63rd</strong> (63rd Street Beach),<strong> #72 North</strong> (North Avenue Beach), and <strong>#78 Montrose</strong> (Montrose Beach) buses will begin and end their trips at the indicated beaches between approximately 9am and 9:30pm.</p>\r\n\r\n<p><span style=\"font-family: Helvetica;\">New timetable brochures will be posted at&nbsp;transitchicago.com.</span><font face=\"Helvetica\">&nbsp;Check&nbsp;<a href=\"https://www.transitchicago.com/schedules\" style=\"transition-property: all;\">Schedules</a>&nbsp;</font><span style=\"font-family: Helvetica;\">or call 1-888-YOUR-CTA to request a copy.&nbsp;For information on CTA&#39;s Frequent&nbsp;Network</span><span style=\"font-family: Helvetica;\">&nbsp;at</span><span style=\"font-family: Helvetica;\">&nbsp;transitchicago.com</span><font face=\"Helvetica\">&nbsp;see&nbsp;<a href=\"https://www.transitchicago.com/frequent/\" style=\"transition-property: all;\">Frequent Network</a>.</font></p>\r\n"
+        },
+        "SeverityScore": "20",
+        "SeverityColor": "000000",
+        "SeverityCSS": "planned",
+        "Impact": "Service Change",
+        "EventStart": "2026-03-29",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113833"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "X",
+            "ServiceTypeDescription": "Systemwide",
+            "ServiceName": "All Bus Routes",
+            "ServiceId": "Bus",
+            "ServiceBackColor": "000000",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": {
+              "#cdata-section": "http://www.transitchicago.com/travel_information/bus_status.aspx"
+            }
+          }
+        },
+        "ttim": "0",
+        "GUID": "8f396486-e373-48b6-89b4-4cab2c34093f"
+      },
+      {
+        "AlertId": "113869",
+        "Headline": "Austin Main Stationhouse Temporarily Closed, Use Mason Auxiliary Entrance",
+        "ShortDescription": "Austin Green Line station's main stationhouse will be temporarily closed. Use temporary entrance one block east of the main stationhouse at Mason Street.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe Austin Green Line station&rsquo;s main stationhouse will be temporarily closed. Please use the temporary Mason Street entrance/exit located one block east of Austin.<br />\r\n<br />\r\n<strong>Why is service being changed?</strong><br />\r\nThe CTA is committed to making our system 100% accessible. We are installing an elevator at the Austin Green Line station as part of CTA&rsquo;s All Stations Accessibility Program (ASAP) to improve system accessibility across the city and neighboring communities we serve.</p>\r\n"
+        },
+        "SeverityScore": "12",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Special Note",
+        "EventStart": "2025-07-14",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113869"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Austin",
+              "ServiceId": "41260",
+              "ServiceBackColor": "009b3a",
+              "ServiceTextColor": "FFFFFF",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=24"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Green Line",
+              "ServiceId": "G",
+              "ServiceBackColor": "009b3a",
+              "ServiceTextColor": "FFFFFF",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/greenline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "a2557379-c7d2-4c89-8c00-7659082b0cc9"
+      },
+      {
+        "AlertId": "113885",
+        "Headline": "CTA Service to the Beaches",
+        "ShortDescription": "Effective Sun, Mar 29 thru mid-Aug, service to the lakefront and beaches will be expanded on the #35, #63, #72, and #78 bus routes on weekends and holidays.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nFor customer convenience, service to the lakefront and beaches will be<br />\r\nexpanded to operate as follows:<br />\r\n<br />\r\n<strong>Weekends/Holidays - Sun, March 29 through mid-August</strong></p>\r\n\r\n<table border=\"1\" cellpadding=\"1\" cellspacing=\"1\" style=\"width:500px;\">\r\n\t<tbody>\r\n\t\t<tr>\r\n\t\t\t<td style=\"background-color: black;\"><strong><span style=\"color:#FFFFFF;\">Bus Routes</span></strong></td>\r\n\t\t\t<td style=\"background-color: black;\"><strong><span style=\"color:#FFFFFF;\">Buses will begin/end their trips at:</span></strong></td>\r\n\t\t\t<td style=\"background-color: black;\"><strong><span style=\"color:#FFFFFF;\">Times</span></strong></td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td><strong>#35 31st/35th</strong></td>\r\n\t\t\t<td>31st Street Beach</td>\r\n\t\t\t<td>between approximately 9am and 9:30pm</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td><strong>#63rd 63rd</strong></td>\r\n\t\t\t<td>63rd Street Beach</td>\r\n\t\t\t<td>between approximately 9am and 9:30pm</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td><strong>#72 North</strong></td>\r\n\t\t\t<td>North Avenue Beach</td>\r\n\t\t\t<td>between approximately 9am and 9:30pm</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td><strong>#78 Montrose</strong></td>\r\n\t\t\t<td>Montrose Beach</td>\r\n\t\t\t<td>between approximately 9am and 9:30pm</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p>&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "11",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Added Service",
+        "EventStart": "2026-03-29",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113885"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "31st/35th",
+              "ServiceId": "35",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/35/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "63rd",
+              "ServiceId": "63",
+              "ServiceBackColor": "414145",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/63/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "North",
+              "ServiceId": "72",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/72/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Montrose",
+              "ServiceId": "78",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/78/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "5293c0f4-4d99-4027-a2be-545d514c67e1"
+      },
+      {
+        "AlertId": "113892",
+        "Headline": "Service for Weekday Cubs Games",
+        "ShortDescription": "Loop-bd Purple Line Express trains will stop at Sheridan for all weekday Cubs night games; Linden-bd trains will stop at Sheridan for weekday Cubs day games.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong></p>\r\n\r\n<ul>\r\n\t<li>Loop-bound Purple Line Express trains will stop at Sheridan for all weekday Cubs night games.</li>\r\n\t<li><strong>NEW FOR 2026: </strong>Linden-bound Purple Line Express trains will stop at Sheridan for all weekday Cubs day games. Exit out the Budweiser Bleacher Gate and walk 2.5-blocks north to Sheridan for trains to Howard and Linden.</li>\r\n</ul>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nExtra service is being provided for the convenience of customers attending weekday Cubs day games.</p>\r\n\r\n<div class=\"responsive-table\">\r\n<table>\r\n\t<caption style=\"background:#522398\"><b data-index-in-node=\"0\" data-path-to-node=\"2,0,0\">Purple Line Express service for 2026 Cubs home games</b></caption>\r\n\t<thead>\r\n\t\t<tr>\r\n\t\t\t<th scope=\"col\">Weekday day games<br />\r\n\t\t\t<span style=\"color: rgb(68, 68, 68); font-weight: 700; background-color: rgb(238, 238, 238);\">(Linden-bound trains stop at Sheridan)</span></th>\r\n\t\t\t<th scope=\"col\"><span style=\"color: rgb(68, 68, 68); font-weight: 700; background-color: rgb(238, 238, 238);\">Weekday night games<br />\r\n\t\t\t(Loop-bound trains stop at Sheridan)</span></th>\r\n\t\t</tr>\r\n\t</thead>\r\n\t<tbody style=\"vertical-align:top;\">\r\n\t\t<tr>\r\n\t\t\t<td>Thu, Mar 26</td>\r\n\t\t\t<td>Mon, Mar 30</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Wed, Apr 1</td>\r\n\t\t\t<td>Tue, Mar 31</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Apr 10&nbsp;</td>\r\n\t\t\t<td>\r\n\t\t\t<p>Wed, Apr 22</p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Apr 17</td>\r\n\t\t\t<td>Mon, May 4</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Thu, Apr 23</td>\r\n\t\t\t<td>Tue, May 5</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, May 1</td>\r\n\t\t\t<td>Wed, May 6</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Thu, May 7</td>\r\n\t\t\t<td>Mon, May 18</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, May 22</td>\r\n\t\t\t<td>Tue, May 19</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Jun 5</td>\r\n\t\t\t<td>Wed, May 20</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Jun 19</td>\r\n\t\t\t<td>Tue, Jun 2</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Wed, Jul 1</td>\r\n\t\t\t<td>Wed, Jun 3</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Jul 31</td>\r\n\t\t\t<td>Thu, Jun 4</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Wed, Aug 5</td>\r\n\t\t\t<td>Thu, Jun 11</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Aug 14</td>\r\n\t\t\t<td>Fri, Jun 12</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Wed, Aug 19</td>\r\n\t\t\t<td>Mon, Jun 15</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Aug 28</td>\r\n\t\t\t<td>Tue, Jun 16</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Fri, Sep 11</td>\r\n\t\t\t<td>Wed, Jun 17</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>Thu, Sep 24</td>\r\n\t\t\t<td>Mon, Jun 29</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Jun 30</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Jul 14</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Wed, Jul 15</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Fri, Jul 17</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Mon, Jul 20</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Jul 21</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>\r\n\t\t\t<p>Wed, Jul 22</p>\r\n\t\t\t</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Fri, Jul 24</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Mon, Aug 3</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Aug 4</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Mon, Aug 17</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Aug 18</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Mon, Aug 31</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Sep 1</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Wed, Sep 2</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Thu, Sep 3</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Mon, Sep 14</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Sep 15</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Wed, Sep 16</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Tue, Sep 22</td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<td>&nbsp;</td>\r\n\t\t\t<td>Wed, Sep 23</td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n</div>\r\n\r\n<p>&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "11",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Added Service",
+        "EventStart": "2026-03-26",
+        "EventEnd": "2026-09-24",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113892"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "R",
+            "ServiceTypeDescription": "Train Route",
+            "ServiceName": "Purple Line",
+            "ServiceId": "P",
+            "ServiceBackColor": "522398",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/purpleline/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "e9597088-4476-4b70-9ee6-de5207357797"
+      },
+      {
+        "AlertId": "113896",
+        "Headline": "Service for 2026 Cubs Night Games and Wrigley Field Concerts",
+        "ShortDescription": "Additional svc from Howard will operate on the Yellow Line for Cubs night games and Wrigley Field concerts. Skokie-bound trains will operate until midnight.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nAdditional service from Howard will operate on the Yellow Line for weekday and weekend Cubs night games and Wrigley Field concerts. Skokie-bound trains will operate until 12am (midnight) on game and concert nights.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nExtra service is being provided for the convenience of customers attending weekday and weekend Cubs night games and Wrigley Field concerts.</p>\r\n"
+        },
+        "SeverityScore": "11",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Added Service",
+        "EventStart": "2026-03-30",
+        "EventEnd": "2026-09-23",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113896"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "R",
+            "ServiceTypeDescription": "Train Route",
+            "ServiceName": "Yellow Line",
+            "ServiceId": "Y",
+            "ServiceBackColor": "f9e300",
+            "ServiceTextColor": "000000",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/yellowline/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "353f6319-21e5-4cb0-8060-d83d03713247"
+      },
+      {
+        "AlertId": "113979",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "Between 95th/Woodlawn and 95th/Cottage Grove, #95 buses will operate via 95th. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBetween 95th/Woodlawn and 95th/Cottage Grove, buses will operate via 95th.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on Woodlawn between 93rd and 95th.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-03-25T08:00:00",
+        "EventEnd": "2026-05-01T16:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=113979"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "95th",
+            "ServiceId": "95",
+            "ServiceBackColor": "414145",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/95/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "f1bb1883-1468-4a04-aa23-a00d65c6e06b"
+      },
+      {
+        "AlertId": "114026",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "The EB #76 bus stop on the SE corner at Diversey/Halsted will be temporarily discontinued. Board/exit buses on the SW corner at Diversey/Halsted. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe <strong>eastbound #76 Diversey </strong>bus stop on the southeast corner at Diversey/Halsted will be temporarily discontinued. Board/exit buses on the southwest corner at Diversey/Halsted.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-03-27T04:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114026"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Diversey",
+            "ServiceId": "76",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/76/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "6e94b54c-ce88-4903-9285-f172b8b8b05a"
+      },
+      {
+        "AlertId": "114177",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #4 and #115 will operate via King Drive, and 107th, then resume their normal on Cottage Grove.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\n<strong>Northbound #4 Cottage Grove </strong>and <strong>#115 Pullman/115th </strong>will operate via King Drive, and 107th, then resume their normal on Cottage Grove.</p>\r\n\r\n<p><strong>Southbound&nbsp;</strong>buses are not affected.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on Cottage Grove between 107th and 111th.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-07T06:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114177"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Cottage Grove",
+              "ServiceId": "4",
+              "ServiceBackColor": "414145",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/4/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Pullman/115th",
+              "ServiceId": "115",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/115/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "0787429f-870c-470d-9ee9-89cd648928e5"
+      },
+      {
+        "AlertId": "114203",
+        "Headline": "Bus Stop Change",
+        "ShortDescription": "The NB and SB #135, #146 and #151 bus stops at Inner LSD/Stratford will be eliminated. Board/exit NB and SB buses at Inner LSD/Cornelia. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong></p>\r\n\r\n<ul>\r\n\t<li>The <strong>southbound #135 Clarendon/LaSalle Express, #146 Inner Lake Shore/Michigan Express </strong>and<strong> #151 Sheridan</strong> bus stop at Inner Lake Shore Drive/Stratford will be eliminated. Board/exit <strong>southbound</strong> buses at Inner Lake Shore Drive/Cornelia or Inner Lake Shore Drive/Roscoe.</li>\r\n\t<li>The <strong>northbound #135, #146 </strong>and<strong> #151 </strong>bus stop at Inner Lake Shore Drive/Stratford will be eliminated. Board/exit <strong>northbound </strong>buses at Inner Lake Shore Drive/Cornelia or Inner Lake Shore Drive/Hawthorne.</li>\r\n</ul>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-04-16",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114203"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Clarendon/LaSalle Express",
+              "ServiceId": "135",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "b71234",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/135/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Inner Lake Shore/Michigan Express",
+              "ServiceId": "146",
+              "ServiceBackColor": "b71234",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/146/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Sheridan",
+              "ServiceId": "151",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/151/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "d3501691-4766-42ee-a780-2e9b19250b86"
+      },
+      {
+        "AlertId": "114204",
+        "Headline": "Bus Stop Changes",
+        "ShortDescription": "The EB and WB #152 bus stops at Addison/Lincoln will be eliminated. Board/exit #152 buses at the Addison Brown Line station, one half block west.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong></p>\r\n\r\n<ul>\r\n\t<li>The <strong>eastbound #152 Addison</strong> bus stop on the southeast corner at Addison/Lincoln will be eliminated. Board/exit <strong>eastbound #152</strong> buses at the Addison Brown Line station, one half block west.</li>\r\n\t<li>The <strong>westbound #152 Addison</strong> bus stop on the northeast corner at Addison/Lincoln will be eliminated. Board/exit <strong>westbound #152</strong> buses at the Addison Brown Line station, one half block west.</li>\r\n</ul>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-04-16",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114204"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Addison",
+            "ServiceId": "152",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/152/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "85670edf-4738-474d-b4bd-883d784c05c7"
+      },
+      {
+        "AlertId": "114213",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "SB State will be closed between Wacker and Randolph. Board SB 2, 6, 10, 29, 36, 62, and 146 buses at State/Washington. Board SB 148 at Michigan/South Water. ",
+        "FullDescription": {
+          "#cdata-section": "<p class=\"xmsonormal\"><strong>How does this affect my trip?<br />\r\nSouthbound </strong>State Street will be closed between Wacker and Randolph.&nbsp;</p>\r\n\r\n<p class=\"xmsonormal\"><strong>Northbound </strong>buses are not affected.</p>\r\n\r\n<p class=\"xmsonormal\">Bus&nbsp;traffic will be rerouted. Board buses as follows:</p>\r\n\r\n<p class=\"xmsonormal\">Board <strong>southbound #2 Hyde Park Express, #6 Jackson Park Express, #10 Museum of Science &amp; Industry, #29 State, #36 Broadway, #62 Archer </strong>and <strong>#146 Inner Lake Shore/Michigan Express </strong>buses on the southwest corner at State/Washington.&nbsp;</p>\r\n\r\n<p class=\"xmsonormal\">Board <strong>southbound #148 Clarendon/Michigan Express </strong>buses at Michigan/South Water.&nbsp;</p>\r\n\r\n<p class=\"xmsonormal\"><strong>Why is service being changed?</strong><br />\r\nSouthbound buses are affected due to construction.<o:p></o:p></p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-13T09:00:00",
+        "EventEnd": "2026-05-25",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114213"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Hyde Park Express",
+              "ServiceId": "2",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "b71234",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/2/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Jackson Park Express",
+              "ServiceId": "6",
+              "ServiceBackColor": "b71234",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/6/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Museum of Science & Industry",
+              "ServiceId": "10",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "b71234",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/10/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "State",
+              "ServiceId": "29",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/29/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Broadway",
+              "ServiceId": "36",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/36/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Archer",
+              "ServiceId": "62",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/62/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Inner Lake Shore/Michigan Express",
+              "ServiceId": "146",
+              "ServiceBackColor": "b71234",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/146/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Clarendon/Michigan Express",
+              "ServiceId": "148",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "b71234",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/148/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "040993ba-e3b2-4503-b3b6-2568454db9f5"
+      },
+      {
+        "AlertId": "114233",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "EB #39 buses will operate via 41st, and Prairie, then resume their normal route on Pershing. WB buses will operate via 41st, Wabash, and Pershing.  ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\n<strong>Eastbound #39 Pershing </strong>buses will operate via 41st, and Prairie, then resume their normal route on Pershing.</p>\r\n\r\n<p><strong>Westbound #39&nbsp;</strong>buses will operate via 41st, and Wabash, then resume their normal route on Pershing.&nbsp;&nbsp;&nbsp;</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on Indiana between 41st and 31st.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-07T08:16:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114233"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Pershing",
+            "ServiceId": "39",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/39/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "5dc804c9-25e2-4e85-95a5-090c4177ffbf"
+      },
+      {
+        "AlertId": "114316",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #94 buses will operate via California, North Avenue, Humboldt, and Armitage, then resume their normal route on California. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?<br />\r\nNorthbound&nbsp;</strong>buses will operate via California, North Avenue, Humboldt, and Armitage, then resume their normal route on California.&nbsp;</p>\r\n\r\n<p><strong>Southbound </strong>buses are not affected.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on California between North Avenue and Armitage.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-03-21T05:00:00",
+        "EventEnd": "2026-05-02T08:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114316"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "California",
+            "ServiceId": "94",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/california/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "7be473b6-bc6b-4009-838c-b27793f10b1d"
+      },
+      {
+        "AlertId": "114318",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#85 buses will operate in both directions via Central, Chicago, Austin, Lake, Waller, Corcoran, and Central. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBuses will operate in both directions via Central, Chicago, Austin, Lake, Waller, Corcoran, and Central.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction on Central at Race.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-20T05:30:00",
+        "EventEnd": "2026-04-27T20:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114318"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Central",
+            "ServiceId": "85",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/85/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "ec50fccc-fc06-46cc-ae73-8ba758db5c11"
+      },
+      {
+        "AlertId": "114344",
+        "Headline": "Bus Substitution Between Dempster-Skokie and Howard Stations",
+        "ShortDescription": "Shuttle buses replace Yellow Line service between Dempster-Skokie and Howard. Trains will not operate between Dempster-Skokie and Howard.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nShuttle buses replace rail service between Dempster-Skokie and Howard. Trains will not operate between Dempster-Skokie and Howard.</p>\r\n\r\n<p>Shuttle buses will serve Dempster-Skokie, Oakton-Skokie, and Howard stations.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nService is affected due to utility work near our tracks.</p>\r\n\r\n<div class=\"responsive-table\">\r\n<table>\r\n\t<caption>Bus shuttle stops</caption>\r\n\t<thead>\r\n\t\t<tr>\r\n\t\t\t<th scope=\"row\" style=\"background: #F9E300; color: black;\">Station</th>\r\n\t\t\t<th scope=\"col\" style=\"background: #F9E300; color: black;\">to Howard</th>\r\n\t\t\t<th scope=\"col\" style=\"background: #F9E300; color: black;\">to Dempster-Skokie</th>\r\n\t\t</tr>\r\n\t</thead>\r\n\t<tbody style=\"vertical-align:top;\">\r\n\t\t<tr>\r\n\t\t\t<th scope=\"row\">Howar<strong>d</strong></th>\r\n\t\t\t<td colspan=\"2\" rowspan=\"1\">Paulina/Howard&nbsp;bus terminal&nbsp;<br />\r\n\t\t\t<em><strong>#97 Skokie </strong>bus stop at the Howard CTA station&#39;s main entrance on Paulina - serves both directions</em></td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<th scope=\"row\">Oakton-Skokie</th>\r\n\t\t\t<td>Oakton&nbsp;Yellow Line station<br />\r\n\t\t\t<i>Southbound <strong>#54A North Cicero/Skokie Blvd. </strong>bus stop outside the station&#39;s north entrance</i></td>\r\n\t\t\t<td>Skokie/Oakton<br />\r\n\t\t\t<i>Northbound&nbsp;<span style=\"font-weight: bolder;\">#54A North Cicero/Skokie Blvd.&nbsp;</span>bus stop on the northeast corner</i></td>\r\n\t\t</tr>\r\n\t\t<tr>\r\n\t\t\t<th scope=\"row\">Dempster-Skokie</th>\r\n\t\t\t<td colspan=\"2\" rowspan=\"1\">Dempster Yellow Line station<br />\r\n\t\t\t<em><strong>#97 Skokie </strong>and <strong>#54A&nbsp;</strong><span style=\"font-weight: bolder;\"><strong>North Cicero/Skokie Blvd.</strong>&nbsp;</span>bus stop outside the station&#39;s north entrance - serves both directions</em></td>\r\n\t\t</tr>\r\n\t</tbody>\r\n</table>\r\n</div>\r\n"
+        },
+        "SeverityScore": "25",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Work",
+        "EventStart": "2026-04-26T06:00:00",
+        "EventEnd": "2026-04-26T23:30:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114344"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Howard",
+              "ServiceId": "40900",
+              "ServiceBackColor": "c60c30",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=71"
+              }
+            },
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Dempster-Skokie",
+              "ServiceId": "40140",
+              "ServiceBackColor": "f9e300",
+              "ServiceTextColor": "000000",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=126"
+              }
+            },
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Oakton-Skokie",
+              "ServiceId": "41680",
+              "ServiceBackColor": "f9e300",
+              "ServiceTextColor": "000000",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=147"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Yellow Line",
+              "ServiceId": "Y",
+              "ServiceBackColor": "f9e300",
+              "ServiceTextColor": "000000",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/yellowline/" }
+            }
+          ]
+        },
+        "ttim": "1",
+        "GUID": "90150f25-ac87-4bda-bde1-f6f6bc76cd21"
+      },
+      {
+        "AlertId": "114360",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "From 7am to 4pm, daily, #24 buses will operate in both directions via Wentworth, 26th, State, Cermak and Wentworth.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nFrom 7am to 4pm, daily, <strong>#24 Wentworth </strong>buses will operate in both directions via Wentworth, 26th, State, Cermak and Wentworth.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to construction at Wentworth/24th.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-15T07:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114360"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Wentworth",
+            "ServiceId": "24",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/24/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "416d27f1-02d0-41bd-8632-f4aaf1aaf6dd"
+      },
+      {
+        "AlertId": "114385",
+        "Headline": "Bus Stop Changes",
+        "ShortDescription": "#53 bus stops mid-block on both sides of street at 2300 S. Pulaski will be eliminated. Board buses half block north on SE and NE corners at Pulaski/Ogden.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe bus stops located mid-block on both sides of the street at 2300 S. Pulaski will be eliminated.</p>\r\n\r\n<ul>\r\n\t<li>Board&nbsp;<strong>northbound&nbsp;#53</strong>&nbsp;buses a half block north near the southeast corner at Pulaski/Ogden.<br />\r\n\t&nbsp;</li>\r\n\t<li>Board&nbsp;<strong>southbound&nbsp;#53</strong>&nbsp;buses a half block north near the southwest corner at Pulaski/Ogden.</li>\r\n</ul>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-04-20T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114385"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Pulaski",
+            "ServiceId": "53",
+            "ServiceBackColor": "414145",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/53/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "1179bc95-e2ce-4bdd-860c-f2ee3eb83afc"
+      },
+      {
+        "AlertId": "114448",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "NB #9 via Ashland, Lawrence, Clark, Wilson, ending trips at Ashland/Wilson. SB buses begin trips at Ashland/Wilson, then resume their normal route on Ashland. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\n<strong>Northbound </strong>buses will operate via Ashland, Lawrence, Clark, and Wilson, ending their trips at Ashland/Wilson.</p>\r\n\r\n<p><strong>Southbound</strong> buses will begin their trips at Ashland/Wilson, then resume their normal route on Ashland.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to the Ravenswood 5K Run.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-26T06:00:00",
+        "EventEnd": "2026-04-26T11:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114448"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Ashland",
+            "ServiceId": "9",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/9/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "3c6ee260-bb3a-4fc9-a622-f1c2d9c090ca"
+      },
+      {
+        "AlertId": "114449",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#50 buses will operate in both directions via Damen, Montrose, Western, Foster, and Damen.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBuses will operate in both directions via Damen, Montrose, Western, Foster, and Damen.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to the Ravenswood 5K Run.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-26T06:00:00",
+        "EventEnd": "2026-04-26T11:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114449"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Damen",
+            "ServiceId": "50",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/50/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "af171b6b-5408-4796-ba87-3ea8805b9c68"
+      },
+      {
+        "AlertId": "114450",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#78 buses will operate in both directions via Montrose, Damen, Irving Park, Ashland, and Montrose.",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBuses will operate in both directions via Montrose, Damen, Irving Park, Ashland, and Montrose.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to the Ravenswood 5K Run.</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-26T06:00:00",
+        "EventEnd": "2026-04-26T11:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114450"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Montrose",
+            "ServiceId": "78",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/78/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "ca2a4adf-ec2d-4205-aee5-bd43a361399c"
+      },
+      {
+        "AlertId": "114451",
+        "Headline": "Temporary Reroute",
+        "ShortDescription": "#81 buses will operate in both directions via Lawrence, Western, Foster, Ashland and Lawrence. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nBuses will operate in both directions via Lawrence, Western, Foster, Ashland and Lawrence.&nbsp;</p>\r\n\r\n<p>Allow extra travel time.&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nBuses are rerouted due to the Ravenswood 5K.&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "37",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Planned Reroute",
+        "EventStart": "2026-04-26T06:00:00",
+        "EventEnd": "2026-04-26T11:00:00",
+        "TBD": "0",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114451"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Lawrence",
+            "ServiceId": "81",
+            "ServiceBackColor": "565a5c",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/81/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "b40ffeda-e29c-4bcd-b5a8-8c2615205b48"
+      },
+      {
+        "AlertId": "114453",
+        "Headline": "Bus Stop Change",
+        "ShortDescription": "The NB and SB #53 bus stops mid-block at 2300 S Pulaski will be eliminated. ",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong></p>\r\n\r\n<ul>\r\n\t<li>The <strong>northbound #53 Pulaski </strong>bus stop mid-block at 2300 S Pulaski will be eliminated.&nbsp;&nbsp;</li>\r\n\t<li>The&nbsp;<span style=\"font-weight: bolder;\">southbound #53 </span>bus stop mid-block&nbsp;at 2300 S Pulaski will be eliminated.&nbsp;</li>\r\n</ul>\r\n"
+        },
+        "SeverityScore": "19",
+        "SeverityColor": "000000",
+        "SeverityCSS": "normal",
+        "Impact": "Bus Stop Note",
+        "EventStart": "2026-04-20T09:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114453"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Pulaski",
+            "ServiceId": "53",
+            "ServiceBackColor": "414145",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/53/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "0ed0864e-f8bd-4d18-af81-1ffc307bd39e"
+      },
+      {
+        "AlertId": "114461",
+        "Headline": "Elevator at Jackson Temporarily Out-of-Service",
+        "ShortDescription": "The elevator to/from street at the Adams-Jackson entrance to Jackson (Red Line) is temporarily out-of-service due to a mechanical issue.",
+        "FullDescription": {
+          "#cdata-section": "<p>The elevator to/from street at the Adams-Jackson entrance to Jackson (Red Line) is temporarily out-of-service due to a mechanical issue.</p>\r\n\r\n<p>The elevator is currently estimated to return to service on Friday May, 15, 2026.&nbsp;<em>(Note: date subject to change)</em>.</p>\r\n\r\n<p>Crews are working to return this elevator to service as quickly as possible.</p>\r\n\r\n<p><a href=\"http://www.transitchicago.com/elevatorescalatorupgrades/\">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>\r\n"
+        },
+        "SeverityScore": "5",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Elevator Status",
+        "EventStart": "2026-04-21T07:57:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114461"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Jackson",
+              "ServiceId": "40560",
+              "ServiceBackColor": "c60c30",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=76"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Red Line",
+              "ServiceId": "Red",
+              "ServiceBackColor": "c60c30",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/redline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "829cae34-d1e6-4127-85a7-6045baf10a64"
+      },
+      {
+        "AlertId": "114512",
+        "Headline": "Temporary Bus Stop Change",
+        "ShortDescription": "WB bus stop located on the NE corner at Howard/Clyde is temporarily discontinued. Board buses EB on Howard at Chicago (Clark) or WB on Howard at Custer (Damen).",
+        "FullDescription": {
+          "#cdata-section": "<p><strong>How does this affect my trip?</strong><br />\r\nThe westbound bus stop located on the northeast corner at Howard/Clyde is temporarily discontinued.<br />\r\n<br />\r\nBoard buses eastbound on Howard at Chicago (Clark) or westbound on Howard at Custer (Damen).</p>\r\n\r\n<p>&nbsp;</p>\r\n\r\n<p><strong>Why is service being changed?</strong><br />\r\nThe bus stop is temporarily affected due to sidewalk construction.</p>\r\n\r\n<p>&nbsp;</p>\r\n"
+        },
+        "SeverityScore": "9",
+        "SeverityColor": "06c",
+        "SeverityCSS": "planned",
+        "Impact": "Bus Stop Relocation",
+        "EventStart": "2026-04-22T07:00:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114512"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Skokie",
+              "ServiceId": "97",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/97/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Central/Ridge",
+              "ServiceId": "201",
+              "ServiceBackColor": "565a5c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/201/" }
+            },
+            {
+              "ServiceType": "B",
+              "ServiceTypeDescription": "Bus Route",
+              "ServiceName": "Evanston Circulator",
+              "ServiceId": "206",
+              "ServiceBackColor": "ffffff",
+              "ServiceTextColor": "565a5c",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/206/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "de519ee5-4d5c-48fe-bdc3-239d67787aed"
+      },
+      {
+        "AlertId": "114527",
+        "Headline": "Elevator at Forest Park Temporarily Out-of-Service",
+        "ShortDescription": "The elevator at Forest Park (Blue Line) is temporarily out-of-service.",
+        "FullDescription": {
+          "#cdata-section": "<p>The elevator at Forest Park (Blue Line) is temporarily out-of-service.</p>\r\n\r\n<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service.</p>\r\n\r\n<p>Crews are working to return this elevator to service as quickly as possible.</p>\r\n\r\n<p><a href=\"http://www.transitchicago.com/elevatorescalatorupgrades/\">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>\r\n"
+        },
+        "SeverityScore": "5",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Elevator Status",
+        "EventStart": "2026-04-24T08:25:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114527"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Forest Park",
+              "ServiceId": "40390",
+              "ServiceBackColor": "00a1de",
+              "ServiceTextColor": "FFFFFF",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=56"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Blue Line",
+              "ServiceId": "Blue",
+              "ServiceBackColor": "00a1de",
+              "ServiceTextColor": "FFFFFF",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/blueline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "279e0157-c78d-4eff-9b4c-66f305eae075"
+      },
+      {
+        "AlertId": "114530",
+        "Headline": "Elevator at Grand Temporarily Out-of-Service",
+        "ShortDescription": "The 95th- bound platform elevator at Grand (Red Line) is temporarily out-of-service.",
+        "FullDescription": {
+          "#cdata-section": "<p>The 95th- bound platform elevator at Grand (Red Line) is temporarily out-of-service.</p>\r\n\r\n<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service</p>\r\n\r\n<p>Crews are working to return this elevator to service as quickly as possible.</p>\r\n\r\n<p><a href=\"http://www.transitchicago.com/elevatorescalatorupgrades/\">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>\r\n"
+        },
+        "SeverityScore": "5",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Elevator Status",
+        "EventStart": "2026-04-24T11:06:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114530"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Grand",
+              "ServiceId": "40330",
+              "ServiceBackColor": "c60c30",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=63"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Red Line",
+              "ServiceId": "Red",
+              "ServiceBackColor": "c60c30",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/redline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "b6f826b2-4f7e-4416-a853-bd35fbc8524a"
+      },
+      {
+        "AlertId": "114544",
+        "Headline": "Elevator at Davis Temporarily Out-of-Service",
+        "ShortDescription": "The Linden- bound platform elevator at Davis (Purple Line) is temporarily out-of-service.",
+        "FullDescription": {
+          "#cdata-section": "<p>The Linden- bound platform elevator at Davis (Purple Line) is temporarily out-of-service.</p>\r\n\r\n<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service.</p>\r\n\r\n<p>Crews are working to return this elevator to service as quickly as possible.</p>\r\n\r\n<p><a href=\"http://www.transitchicago.com/elevatorescalatorupgrades/\">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>\r\n"
+        },
+        "SeverityScore": "5",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Elevator Status",
+        "EventStart": "2026-04-25T07:35:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114544"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Davis",
+              "ServiceId": "40050",
+              "ServiceBackColor": "522398",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=51"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Purple Line",
+              "ServiceId": "P",
+              "ServiceBackColor": "522398",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/purpleline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "c045af29-7c75-48bb-b109-efd645ae3ce2"
+      },
+      {
+        "AlertId": "114545",
+        "Headline": "#147 Outer DuSable Lake Shore Express Temporary Northbound Reroute near Michigan/Ida B Well",
+        "ShortDescription": "Northbound 147 Outer DuSable Lake Shore Express buses are temp. rerouted via Congress Plaza, Ida B Well, Michigan, Van Buren and State near Michigan/Ida B Well.",
+        "FullDescription": {
+          "#cdata-section": "<p>Northbound #147 Outer DuSable Lake Shore Express buses are temporarily rerouted via Congress Plaza, Ida B Well, Michigan, Van Buren and State due to, street blockage near Michigan/Ida B Well.</p>\r\n\r\n<p>Southbound buses are not affected.</p>\r\n\r\n<p>Allow extra travel time.</p>\r\n"
+        },
+        "SeverityScore": "55",
+        "SeverityColor": "B45F04",
+        "SeverityCSS": "minor",
+        "Impact": "Minor Delays / Reroute",
+        "EventStart": "2026-04-25T08:12:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114545"
+        },
+        "ImpactedService": {
+          "Service": {
+            "ServiceType": "B",
+            "ServiceTypeDescription": "Bus Route",
+            "ServiceName": "Outer DuSable Lake Shore Express",
+            "ServiceId": "147",
+            "ServiceBackColor": "b71234",
+            "ServiceTextColor": "ffffff",
+            "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/bus/147/" }
+          }
+        },
+        "ttim": "0",
+        "GUID": "02b830ce-21bb-4736-8da5-4cf3fb673183"
+      },
+      {
+        "AlertId": "114549",
+        "Headline": "Elevator at Midway Temporarily Out-of-Service",
+        "ShortDescription": "The main platform elevator at Midway (Orange Line) is temporarily out-of-service.",
+        "FullDescription": {
+          "#cdata-section": "<p>The main platform elevator at Midway (Orange Line) is temporarily out-of-service.</p>\r\n\r\n<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service.</p>\r\n\r\n<p>Crews are working to return this elevator to service as quickly as possible.</p>\r\n\r\n<p><a href=\"http://www.transitchicago.com/elevatorescalatorupgrades/\">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>\r\n"
+        },
+        "SeverityScore": "5",
+        "SeverityColor": "000000",
+        "SeverityCSS": "special-note",
+        "Impact": "Elevator Status",
+        "EventStart": "2026-04-25T19:19:00",
+        "EventEnd": null,
+        "TBD": "1",
+        "MajorAlert": "0",
+        "AlertURL": {
+          "#cdata-section": "http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=114549"
+        },
+        "ImpactedService": {
+          "Service": [
+            {
+              "ServiceType": "T",
+              "ServiceTypeDescription": "Train Station",
+              "ServiceName": "Midway",
+              "ServiceId": "40930",
+              "ServiceBackColor": "f9461c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": {
+                "#cdata-section": "http://www.transitchicago.com/travel_information/station.aspx?StopId=99"
+              }
+            },
+            {
+              "ServiceType": "R",
+              "ServiceTypeDescription": "Train Route",
+              "ServiceName": "Orange Line",
+              "ServiceId": "Org",
+              "ServiceBackColor": "f9461c",
+              "ServiceTextColor": "ffffff",
+              "ServiceURL": { "#cdata-section": "http://www.transitchicago.com/orangeline/" }
+            }
+          ]
+        },
+        "ttim": "0",
+        "GUID": "040df439-2593-4153-b47a-a65cc01da576"
+      }
+    ]
+  }
+}

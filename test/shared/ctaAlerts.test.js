@@ -5,6 +5,7 @@ const {
   normalizeAlert,
   extractBetweenStations,
   isSignificantAlert,
+  cleanText,
 } = require('../../src/shared/ctaAlerts');
 
 test('normalizeAlert extracts rail line mapping', () => {
@@ -113,10 +114,73 @@ test('significant: shuttle buses running', () => {
   );
 });
 
-test('not significant: MajorAlert=0 baseline', () => {
+test('not significant: MajorAlert=0 with no severity, no major keywords', () => {
   assert.equal(
-    isSignificantAlert(makeAlert({ major: false, headline: 'No trains between X and Y' })),
+    isSignificantAlert(makeAlert({ major: false, severityScore: 1, headline: 'Service advisory' })),
     false,
+  );
+});
+
+test('significant: planned shuttle replacement with MajorAlert=0 (Yellow Line scenario)', () => {
+  assert.equal(
+    isSignificantAlert(
+      makeAlert({
+        major: false,
+        severityScore: 25,
+        headline: 'Bus Substitution Between Dempster-Skokie and Howard Stations',
+        shortDescription:
+          'Shuttle buses replace Yellow Line service between Dempster-Skokie and Howard.',
+      }),
+    ),
+    true,
+  );
+});
+
+test('significant: high severity alone is sufficient', () => {
+  assert.equal(
+    isSignificantAlert(makeAlert({ major: false, severityScore: 7, headline: 'Service advisory' })),
+    true,
+  );
+});
+
+test('significant: major keyword without major flag (e.g. "suspended")', () => {
+  assert.equal(
+    isSignificantAlert(
+      makeAlert({
+        major: false,
+        severityScore: 1,
+        headline: 'Red Line service suspended between Belmont and Howard',
+      }),
+    ),
+    true,
+  );
+});
+
+test('extractBetweenStations: capitalized "Between" in headline', () => {
+  assert.deepEqual(
+    extractBetweenStations('Bus Substitution Between Dempster-Skokie and Howard Stations'),
+    { from: 'Dempster-Skokie', to: 'Howard' },
+  );
+});
+
+test('extractBetweenStations: capitalized "Stations" trailing token', () => {
+  assert.deepEqual(
+    extractBetweenStations('Service suspended between Belmont and Addison Stations.'),
+    { from: 'Belmont', to: 'Addison' },
+  );
+});
+
+test('extractBetweenStations: prefers disruption-anchored phrase over transfer prose', () => {
+  const text =
+    'Customers can transfer at Belmont between Brown/Purple and Red trains. ' +
+    'Service is suspended between Damen and California due to a switch failure.';
+  assert.deepEqual(extractBetweenStations(text), { from: 'Damen', to: 'California' });
+});
+
+test('cleanText decodes named and numeric entities', () => {
+  assert.equal(
+    cleanText('Customers&#39; access &amp; &quot;Loop&quot; service &lt;test&gt;'),
+    `Customers' access & "Loop" service <test>`,
   );
 });
 

@@ -71,57 +71,90 @@ function normalizeAlert(raw) {
   };
 }
 
+const NAMED_ENTITIES = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+};
+
 function cleanText(s) {
   if (s == null) return null;
-  const str = typeof s === 'string' ? s : s['#cdata-section'] || s.toString();
-  return str
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/\s+/g, ' ')
-    .trim();
+  let str = typeof s === 'string' ? s : s['#cdata-section'] || s.toString();
+  str = str.replace(/<[^>]+>/g, ' ');
+  str = str.replace(/&[a-z]+;/gi, (m) =>
+    m.toLowerCase() in NAMED_ENTITIES ? NAMED_ENTITIES[m.toLowerCase()] : m,
+  );
+  str = str.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)));
+  str = str.replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+  return str.replace(/\s+/g, ' ').trim();
 }
 
-// CTA returns dates like "20260424 12:45:00" as America/Chicago wall time.
+// Feed dates may arrive as ISO 8601 ("2026-04-26T06:00:00") or legacy compact
+// ("20260426 06:00:00") — both as America/Chicago wall time. Try DST and
+// standard offsets and pick the one that round-trips back to the same wall
+// time. Returns null on parse failure (no silently-wrong fallback).
 function parseCtaDate(s) {
-  const m = /^(\d{4})(\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/.exec(s);
+  if (!s) return null;
+  const m = /^(\d{4})-?(\d{2})-?(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/.exec(s);
   if (!m) return null;
-  const [, y, mo, d, h, mi, se] = m;
-  const asUtc = Date.UTC(+y, +mo - 1, +d, +h, +mi, +se);
-  // Try both possible CT offsets (DST: -5, standard: -6) — pick the one that
-  // round-trips to the same wall time in America/Chicago.
+  const y = +m[1];
+  const mo = +m[2];
+  const d = +m[3];
+  const h = +m[4];
+  const mi = +m[5];
+  const se = +m[6];
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi, se);
   for (const offsetHours of [5, 6]) {
     const candidate = asUtc + offsetHours * 3600 * 1000;
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago',
-      hour12: false,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }).formatToParts(new Date(candidate));
-    const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
-    if (get('year') === +y && get('month') === +mo && get('day') === +d && get('hour') === +h) {
-      return candidate;
-    }
-  }
-  return asUtc;
-}
-
-// Returns { from, to } or null. Caller falls back to text-only when null.
-const BETWEEN_PATTERNS = [
-  /\bbetween\s+([A-Z][A-Za-z0-9./&\- ]+?)\s+and\s+([A-Z][A-Za-z0-9./&\- ]+?)(?:[.,;]| stations?\b| on\b| due\b| while\b)/,
-  /\bfrom\s+([A-Z][A-Za-z0-9./&\- ]+?)\s+to\s+([A-Z][A-Za-z0-9./&\- ]+?)(?:[.,;]| stations?\b| on\b| due\b| while\b)/,
-];
-function extractBetweenStations(text) {
-  if (!text) return null;
-  for (const re of BETWEEN_PATTERNS) {
-    const m = re.exec(text);
-    if (m) return { from: m[1].trim(), to: m[2].trim() };
+    if (matchesChicagoWallTime(candidate, y, mo, d, h)) return candidate;
   }
   return null;
+}
+
+function matchesChicagoWallTime(ms, y, mo, d, h) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(ms));
+  const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
+  return get('year') === y && get('month') === mo && get('day') === d && get('hour') % 24 === h;
+}
+
+const BETWEEN_PATTERNS = [
+  /\bbetween\s+([A-Z][A-Za-z0-9./&\- ]+?)\s+and\s+([A-Z][A-Za-z0-9./&\- ]+?)(?:[.,;]| stations?\b| on\b| due\b| while\b)/i,
+  /\bfrom\s+([A-Z][A-Za-z0-9./&\- ]+?)\s+to\s+([A-Z][A-Za-z0-9./&\- ]+?)(?:[.,;]| stations?\b| on\b| due\b| while\b)/i,
+];
+
+// Trailing word boundary deliberately omitted on the verb stems so "suspended",
+// "shuttling", "halted", "closed" all match.
+const DISRUPTION_ANCHORS = /\b(suspend|shuttl|halt|closed|no service|not running|no trains)/i;
+
+function extractBetweenStations(text) {
+  if (!text) return null;
+  const matches = [];
+  for (const re of BETWEEN_PATTERNS) {
+    const reGlobal = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+    let m = reGlobal.exec(text);
+    while (m !== null) {
+      matches.push({ from: m[1].trim(), to: m[2].trim(), index: m.index });
+      m = reGlobal.exec(text);
+    }
+  }
+  if (matches.length === 0) return null;
+  const anchor = DISRUPTION_ANCHORS.exec(text);
+  if (anchor) {
+    matches.sort((a, b) => Math.abs(a.index - anchor.index) - Math.abs(b.index - anchor.index));
+  }
+  return { from: matches[0].from, to: matches[0].to };
 }
 
 // MajorAlert=1 alone is too noisy: CTA flags single-stop closures, block-party
@@ -160,15 +193,19 @@ const MINOR_PATTERNS = [
   /\bweekend\s+service\s+change\b/i,
 ];
 
+// CTA's MajorAlert flag was previously required as a hard gate, but it's
+// absent on planned-work shuttle replacements (e.g. Yellow Line bus
+// substitution: MajorAlert=0, SeverityScore=25). Drop that gate; admit
+// whenever there's positive evidence (major keyword OR severity >= floor).
+// Minor-wins veto stays first so station-level closures with major phrasing
+// still drop ("No trains stopping at Belmont (elevator construction)").
 function isSignificantAlert(alert) {
-  if (!alert?.major) return false;
+  if (!alert) return false;
   const text = [alert.headline, alert.shortDescription, alert.fullDescription]
     .filter(Boolean)
     .join(' \n ');
   if (!text) return false;
 
-  // Minor-wins: "No trains stopping at Belmont (elevator construction)" looks
-  // major by headline alone but should drop on the elevator keyword.
   for (const re of MINOR_PATTERNS) if (re.test(text)) return false;
   for (const re of MAJOR_PATTERNS) if (re.test(text)) return true;
   if (alert.severityScore != null && alert.severityScore >= MIN_SEVERITY) return true;
@@ -181,6 +218,8 @@ module.exports = {
   normalizeAlert,
   extractBetweenStations,
   isSignificantAlert,
+  parseCtaDate,
+  cleanText,
   MAJOR_PATTERNS,
   MINOR_PATTERNS,
   MIN_SEVERITY,
