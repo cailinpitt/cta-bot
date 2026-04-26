@@ -11,7 +11,7 @@ require('../../src/shared/env');
 
 const { setup, runBin } = require('../../src/shared/runBin');
 const { fetchAlerts, isSignificantAlert } = require('../../src/shared/ctaAlerts');
-const { loginAlerts, postText } = require('../../src/shared/bluesky');
+const { loginAlerts, postText, resolveReplyRef } = require('../../src/shared/bluesky');
 const { buildAlertPostText, buildResolutionReplyText } = require('../../src/shared/alertPost');
 const {
   getAlertPost,
@@ -67,12 +67,6 @@ async function postNewAlert(alert, agentGetter) {
   });
 }
 
-function parseAtUri(uri) {
-  const m = /^at:\/\/([^/]+)\/([^/]+)\/(.+)$/.exec(uri);
-  if (!m) throw new Error(`Invalid at:// URI: ${uri}`);
-  return [m[1], m[2], m[3]];
-}
-
 async function postResolution(alertRow, agentGetter) {
   const pseudoAlert = { headline: alertRow.headline };
   const text = buildResolutionReplyText({ alert: pseudoAlert, kind: KIND });
@@ -90,10 +84,9 @@ async function postResolution(alertRow, agentGetter) {
 
   const agent = await agentGetter();
   try {
-    const [repo, collection, rkey] = parseAtUri(alertRow.post_uri);
-    const { data: record } = await agent.com.atproto.repo.getRecord({ repo, collection, rkey });
-    const ref = { uri: alertRow.post_uri, cid: record.cid };
-    const result = await postText(agent, text, { root: ref, parent: ref });
+    const replyRef = await resolveReplyRef(agent, alertRow.post_uri);
+    if (!replyRef) throw new Error('could not resolve reply ref for alert post');
+    const result = await postText(agent, text, replyRef);
     console.log(`Posted resolution for alert ${alertRow.alert_id}: ${result.url}`);
     recordAlertResolved({ alertId: alertRow.alert_id, replyUri: result.uri });
   } catch (e) {

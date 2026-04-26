@@ -2,7 +2,8 @@ const Path = require('node:path');
 const Fs = require('fs-extra');
 const Database = require('better-sqlite3');
 
-const DB_PATH = Path.join(__dirname, '..', '..', 'state', 'history.sqlite');
+const DB_PATH =
+  process.env.HISTORY_DB_PATH || Path.join(__dirname, '..', '..', 'state', 'history.sqlite');
 const ROLLOFF_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -168,6 +169,16 @@ function db() {
   if (!alertCols.includes('clear_ticks')) {
     _db.exec('ALTER TABLE alert_posts ADD COLUMN clear_ticks INTEGER NOT NULL DEFAULT 0');
   }
+  const pulseCols = _db
+    .prepare('PRAGMA table_info(pulse_state)')
+    .all()
+    .map((c) => c.name);
+  if (!pulseCols.includes('active_post_uri')) {
+    _db.exec('ALTER TABLE pulse_state ADD COLUMN active_post_uri TEXT');
+  }
+  if (!pulseCols.includes('active_post_ts')) {
+    _db.exec('ALTER TABLE pulse_state ADD COLUMN active_post_ts INTEGER');
+  }
 
   return _db;
 }
@@ -187,6 +198,12 @@ function rolloffOld(now = Date.now()) {
   db()
     .prepare('DELETE FROM alert_posts WHERE resolved_ts IS NOT NULL AND resolved_ts < ?')
     .run(cutoff);
+  // Cooldowns: drop expired rows + ancient legacy null-ttl rows.
+  db()
+    .prepare(
+      'DELETE FROM cooldowns WHERE (expires_at IS NOT NULL AND expires_at < ?) OR (expires_at IS NULL AND ts < ?)',
+    )
+    .run(now, cutoff);
 }
 
 function getAlertPost(alertId) {
@@ -194,18 +211,41 @@ function getAlertPost(alertId) {
 }
 
 const ALERT_CLEAR_TICKS = 2;
+// If an alert was previously resolved and we see it active again after this
+// gap, treat the new sighting as a re-published incident and reset tracking.
+const ALERT_FLICKER_RESET_MS = 30 * 60 * 1000;
 
 function recordAlertSeen({ alertId, kind, routes, headline, postUri }, now = Date.now()) {
   const existing = getAlertPost(alertId);
   if (existing) {
-    db()
-      .prepare(`
-      UPDATE alert_posts
-      SET last_seen_ts = ?, post_uri = COALESCE(?, post_uri),
-          headline = COALESCE(?, headline), routes = COALESCE(?, routes)
-      WHERE alert_id = ?
-    `)
-      .run(now, postUri || null, headline || null, routes || null, alertId);
+    // Re-engage tracking when (a) post finally lands after a premature
+    // resolution sweep wiped resolved_ts before any post existed, or (b) the
+    // alert was previously resolved and CTA re-published the same id after a
+    // gap. Both end up with resolved_ts non-null and need clearing here, or
+    // listUnresolvedAlerts will never pick the row up again.
+    const reEngage =
+      existing.resolved_ts != null &&
+      ((postUri && !existing.post_uri) || now - existing.last_seen_ts > ALERT_FLICKER_RESET_MS);
+    if (reEngage) {
+      db()
+        .prepare(`
+        UPDATE alert_posts
+        SET last_seen_ts = ?, post_uri = COALESCE(?, post_uri),
+            headline = COALESCE(?, headline), routes = COALESCE(?, routes),
+            resolved_ts = NULL, resolved_reply_uri = NULL, clear_ticks = 0
+        WHERE alert_id = ?
+      `)
+        .run(now, postUri || null, headline || null, routes || null, alertId);
+    } else {
+      db()
+        .prepare(`
+        UPDATE alert_posts
+        SET last_seen_ts = ?, post_uri = COALESCE(?, post_uri),
+            headline = COALESCE(?, headline), routes = COALESCE(?, routes)
+        WHERE alert_id = ?
+      `)
+        .run(now, postUri || null, headline || null, routes || null, alertId);
+    }
     return;
   }
   db()
@@ -278,17 +318,61 @@ function hasObservedClearSince({ kind, line, direction, sinceTs }) {
     .get(...params);
 }
 
-function ctaAlertPostedSince({ kind, ctaRouteCode, sinceTs }) {
+// Asks "is there an unresolved CTA alert on this route right now?". Replaces
+// the old time-windowed `ctaAlertPostedSince` which missed CTA-first-pulse-
+// second cases (alert's first_seen_ts < pulse start).
+function hasUnresolvedCtaAlert({ kind, ctaRouteCode }) {
   const row = db()
     .prepare(`
     SELECT alert_id FROM alert_posts
-    WHERE kind = ? AND post_uri IS NOT NULL
-      AND first_seen_ts >= ?
+    WHERE kind = ? AND post_uri IS NOT NULL AND resolved_ts IS NULL
       AND (',' || routes || ',') LIKE ?
     LIMIT 1
   `)
-    .get(kind, sinceTs, `%,${ctaRouteCode},%`);
+    .get(kind, `%,${ctaRouteCode},%`);
   return !!row;
+}
+
+// Deprecation shim kept for one release; remove once consumers migrate.
+function ctaAlertPostedSince({ kind, ctaRouteCode }) {
+  return hasUnresolvedCtaAlert({ kind, ctaRouteCode });
+}
+
+// Exact-pulse idempotency: did we already post an observed-clear after the
+// posted observed event with this URI? Replaces `hasObservedClearSince`'s
+// time-windowed approximation.
+function hasObservedClearForPulse({ kind, pulseUri }) {
+  const pulseEvt = db()
+    .prepare(`
+    SELECT ts FROM disruption_events
+    WHERE kind = ? AND source = 'observed' AND post_uri = ?
+    ORDER BY ts DESC LIMIT 1
+  `)
+    .get(kind, pulseUri);
+  if (!pulseEvt) return false;
+  const row = db()
+    .prepare(`
+    SELECT id FROM disruption_events
+    WHERE kind = ? AND source = 'observed-clear' AND posted = 1 AND ts >= ?
+    LIMIT 1
+  `)
+    .get(kind, pulseEvt.ts);
+  return !!row;
+}
+
+// Phase 4 helper — returns up to 10 most recent pulse posts on a line for
+// caller-side scoring (e.g. station-overlap matching).
+function getRecentPulsePostsAll({ kind, line, withinMs }, now = Date.now()) {
+  return db()
+    .prepare(`
+    SELECT id, ts, from_station, to_station, direction, post_uri
+    FROM disruption_events
+    WHERE kind = ? AND line = ? AND source = 'observed'
+      AND posted = 1 AND post_uri IS NOT NULL
+      AND ts >= ?
+    ORDER BY ts DESC LIMIT 10
+  `)
+    .all(kind, line, now - withinMs);
 }
 
 function recordDisruption(
@@ -334,13 +418,16 @@ function upsertPulseState({
   consecutiveTicks,
   clearTicks,
   postedCooldownKey,
+  activePostUri = null,
+  activePostTs = null,
 }) {
   db()
     .prepare(`
     INSERT INTO pulse_state
       (line, direction, run_lo_ft, run_hi_ft, from_station, to_station,
-       started_ts, last_seen_ts, consecutive_ticks, clear_ticks, posted_cooldown_key)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       started_ts, last_seen_ts, consecutive_ticks, clear_ticks, posted_cooldown_key,
+       active_post_uri, active_post_ts)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(line, direction) DO UPDATE SET
       run_lo_ft = excluded.run_lo_ft,
       run_hi_ft = excluded.run_hi_ft,
@@ -350,7 +437,9 @@ function upsertPulseState({
       last_seen_ts = excluded.last_seen_ts,
       consecutive_ticks = excluded.consecutive_ticks,
       clear_ticks = excluded.clear_ticks,
-      posted_cooldown_key = excluded.posted_cooldown_key
+      posted_cooldown_key = excluded.posted_cooldown_key,
+      active_post_uri = excluded.active_post_uri,
+      active_post_ts = excluded.active_post_ts
   `)
     .run(
       line,
@@ -364,6 +453,8 @@ function upsertPulseState({
       consecutiveTicks || 0,
       clearTicks || 0,
       postedCooldownKey || null,
+      activePostUri || null,
+      activePostTs || null,
     );
 }
 
@@ -682,10 +773,14 @@ module.exports = {
   ALERT_CLEAR_TICKS,
   recordDisruption,
   getRecentPulsePost,
+  getRecentPulsePostsAll,
   hasObservedClearSince,
+  hasObservedClearForPulse,
   ctaAlertPostedSince,
+  hasUnresolvedCtaAlert,
   getPulseState,
   upsertPulseState,
   clearPulseState,
   getDb,
+  ALERT_FLICKER_RESET_MS,
 };

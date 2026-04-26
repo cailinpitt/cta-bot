@@ -10,23 +10,10 @@ function freshDbPath() {
 }
 
 function loadHistoryWithDb(dbPath) {
-  const stateDir = Path.dirname(dbPath);
-  Fs.mkdirSync(stateDir, { recursive: true });
-  const repoState = Path.join(__dirname, '..', '..', 'state');
-  const real = Path.join(repoState, 'history.sqlite');
-  const realWal = `${real}-wal`;
-  const realShm = `${real}-shm`;
-  const backup = Fs.existsSync(real) ? Fs.readFileSync(real) : null;
-  const backupWal = Fs.existsSync(realWal) ? Fs.readFileSync(realWal) : null;
-  const backupShm = Fs.existsSync(realShm) ? Fs.readFileSync(realShm) : null;
-  if (Fs.existsSync(real)) Fs.unlinkSync(real);
-  if (Fs.existsSync(realWal)) Fs.unlinkSync(realWal);
-  if (Fs.existsSync(realShm)) Fs.unlinkSync(realShm);
-
+  process.env.HISTORY_DB_PATH = dbPath;
   delete require.cache[require.resolve('../../src/shared/history')];
   const history = require('../../src/shared/history');
   history.getDb();
-
   return {
     history,
     cleanup: () => {
@@ -36,12 +23,12 @@ function loadHistoryWithDb(dbPath) {
         /* ignore */
       }
       delete require.cache[require.resolve('../../src/shared/history')];
-      if (Fs.existsSync(real)) Fs.unlinkSync(real);
-      if (Fs.existsSync(realWal)) Fs.unlinkSync(realWal);
-      if (Fs.existsSync(realShm)) Fs.unlinkSync(realShm);
-      if (backup) Fs.writeFileSync(real, backup);
-      if (backupWal) Fs.writeFileSync(realWal, backupWal);
-      if (backupShm) Fs.writeFileSync(realShm, backupShm);
+      delete process.env.HISTORY_DB_PATH;
+      try {
+        Fs.rmSync(Path.dirname(dbPath), { recursive: true, force: true });
+      } catch (_e) {
+        /* ignore */
+      }
     },
   };
 }

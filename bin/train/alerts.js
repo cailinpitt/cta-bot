@@ -108,7 +108,11 @@ async function postNewAlert(alert, agentGetter) {
   // pulse to thread under.
   let replyRef = null;
   if (alert.trainLines.length === 1) {
-    const recentPulse = getRecentPulsePost({ kind: KIND, line: alert.trainLines[0] });
+    const recentPulse = getRecentPulsePost({
+      kind: KIND,
+      line: alert.trainLines[0],
+      withinMs: 24 * 60 * 60 * 1000,
+    });
     if (recentPulse) replyRef = await resolveReplyRef(agent, recentPulse.post_uri);
   }
 

@@ -29,9 +29,8 @@ const {
   upsertPulseState,
   clearPulseState,
   recordDisruption,
-  getRecentPulsePost,
-  hasObservedClearSince,
-  ctaAlertPostedSince,
+  hasObservedClearForPulse,
+  hasUnresolvedCtaAlert,
   getDb,
 } = require('../../src/shared/history');
 const { clearCooldown } = require('../../src/shared/state');
@@ -52,10 +51,24 @@ const MIN_DISTINCT_TS = 3;
 function chicagoHourNow(now = new Date()) {
   const h = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
-    hour12: false,
+    hourCycle: 'h23',
     hour: '2-digit',
   }).format(now);
-  return parseInt(h, 10);
+  return parseInt(h, 10) % 24;
+}
+
+function slugStation(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+// Cooldown key derives from the bracketing stations rather than raw ft
+// boundaries — single-bin drift between ticks no longer changes the key, so
+// the cooldown actually suppresses re-posts of the same outage.
+function stableSegmentTag(candidate) {
+  return `${slugStation(candidate.fromStation.name)}__${slugStation(candidate.toStation.name)}`;
 }
 
 function overlapFraction(a, b) {
@@ -82,8 +95,11 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     }
   }
 
-  const segmentTag = `${Math.round(candidate.runLoFt)}_${Math.round(candidate.runHiFt)}`;
+  const segmentTag = stableSegmentTag(candidate);
   const cooldownKey = `train_pulse_${line}_${direction}_${segmentTag}`;
+  const activePostUri = prior?.active_post_uri || null;
+  const activePostTs = prior?.active_post_ts || null;
+
   upsertPulseState({
     line,
     direction,
@@ -96,7 +112,16 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     consecutiveTicks: consecutive,
     clearTicks: 0,
     postedCooldownKey: cooldownKey,
+    activePostUri,
+    activePostTs,
   });
+
+  if (activePostUri) {
+    console.log(
+      `[${line}/${direction}] active pulse ${activePostUri} still in effect — refreshing state, no re-post`,
+    );
+    return;
+  }
 
   if (consecutive < MIN_CONSECUTIVE_TICKS) {
     console.log(
@@ -124,6 +149,10 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       lookbackMin: Math.round(candidate.lookbackMs / 60000),
       coldThresholdMin: Math.round(candidate.coldThresholdMs / 60000),
       trainsOutsideRun: candidate.trainsOutsideRun,
+      coldStations: candidate.coldStations,
+      coldStationNames: candidate.coldStationNames,
+      expectedTrains: candidate.expectedTrains,
+      synthetic: candidate.synthetic === true,
     },
   };
 
@@ -162,7 +191,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   }
 
   if (!acquireCooldown(cooldownKey, now, POST_COOLDOWN_MS)) {
-    console.log(`[${line}/${direction}] on cooldown, skipping`);
+    console.log(`[${line}/${direction}] on cooldown ${cooldownKey}, skipping`);
     recordDisruption({
       kind: 'train',
       line,
@@ -175,19 +204,6 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     });
     return;
   }
-
-  clearPulseState(line, direction);
-
-  recordDisruption({
-    kind: 'train',
-    line,
-    direction,
-    fromStation: candidate.fromStation.name,
-    toStation: candidate.toStation.name,
-    source: 'observed',
-    posted: false,
-    postUri: null,
-  });
 
   let image;
   try {
@@ -206,7 +222,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   const alt = buildAltText(disruption);
 
   const agent = await agentGetter();
-  const replyRef = await findOpenAlertReplyRef(agent, line);
+  const replyRef = await findOpenAlertReplyRef(agent, line, candidate);
   const result = await postWithImage(agent, text, image, alt, replyRef);
   console.log(`Posted pulse ${line}/${direction}: ${result.url}`);
   recordDisruption({
@@ -218,6 +234,23 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     source: 'observed',
     posted: true,
     postUri: result.uri,
+  });
+  // Pin the canonical post for this outage. Subsequent ticks see active_post_uri
+  // and skip; the eventual clear targets this URI directly.
+  upsertPulseState({
+    line,
+    direction,
+    runLoFt: candidate.runLoFt,
+    runHiFt: candidate.runHiFt,
+    fromStation: candidate.fromStation.name,
+    toStation: candidate.toStation.name,
+    startedTs,
+    lastSeenTs: now,
+    consecutiveTicks: consecutive,
+    clearTicks: 0,
+    postedCooldownKey: cooldownKey,
+    activePostUri: result.uri,
+    activePostTs: now,
   });
 }
 
@@ -241,34 +274,25 @@ async function handleClear(line, direction, agentGetter, now) {
 
 // Post a green-checkmark reply under the original pulse when the bot's
 // detector says trains are running through the previously cold stretch
-// again. We post even when a CTA alert has been threaded under the pulse —
-// the bot's "trains are moving" signal and CTA's "we've cleared the alert"
-// signal are independent and both belong in the thread.
+// again. Targets `prior.active_post_uri` directly — no time-window lookup,
+// so multi-day outages still land their ✅ on the canonical pulse post.
 async function postClearReply(line, direction, prior, agentGetter) {
-  const recentPulse = getRecentPulsePost({
-    kind: 'train',
-    line,
-    direction,
-    withinMs: 24 * 60 * 60 * 1000,
-  });
-  if (!recentPulse) return;
+  if (!prior?.active_post_uri) return;
+  const fromStation = prior.from_station;
+  const toStation = prior.to_station;
+  if (!fromStation || !toStation) return;
 
-  // Idempotency: if a clear reply already exists for this pulse (e.g. previous
-  // run posted but crashed before clearPulseState), skip rather than duplicate.
-  if (hasObservedClearSince({ kind: 'train', line, direction, sinceTs: recentPulse.ts })) {
-    console.log(`[${line}/${direction}] clear reply already posted for this pulse — skipping`);
+  if (hasObservedClearForPulse({ kind: 'train', pulseUri: prior.active_post_uri })) {
+    console.log(
+      `[${line}/${direction}] clear reply already posted for ${prior.active_post_uri} — skipping`,
+    );
     return;
   }
 
   const ctaCode = LINE_TO_RAIL_ROUTE[line];
   const ctaAlertOpen = !!(
-    ctaCode &&
-    ctaAlertPostedSince({ kind: 'train', ctaRouteCode: ctaCode, sinceTs: recentPulse.ts })
+    ctaCode && hasUnresolvedCtaAlert({ kind: 'train', ctaRouteCode: ctaCode })
   );
-
-  const fromStation = prior.from_station || recentPulse.from_station;
-  const toStation = prior.to_station || recentPulse.to_station;
-  if (!fromStation || !toStation) return;
 
   const disruption = { line, suspendedSegment: { from: fromStation, to: toStation } };
   const text = buildClearPostText(disruption, { ctaAlertOpen });
@@ -279,7 +303,7 @@ async function postClearReply(line, direction, prior, agentGetter) {
   }
 
   const agent = await agentGetter();
-  const replyRef = await resolveReplyRef(agent, recentPulse.post_uri);
+  const replyRef = await resolveReplyRef(agent, prior.active_post_uri);
   if (!replyRef) {
     console.warn(`[${line}/${direction}] could not resolve reply ref for clear post`);
     return;
@@ -298,20 +322,32 @@ async function postClearReply(line, direction, prior, agentGetter) {
   });
 }
 
-async function findOpenAlertReplyRef(agent, line) {
+// Score top-N unresolved alerts by station-overlap with the candidate so a
+// recent unrelated alert on the same line doesn't grab the thread root.
+async function findOpenAlertReplyRef(agent, line, candidate) {
   const code = LINE_TO_RAIL_ROUTE[line];
   if (!code) return null;
-  const row = getDb()
+  const rows = getDb()
     .prepare(`
-    SELECT post_uri FROM alert_posts
+    SELECT post_uri, headline FROM alert_posts
     WHERE kind = 'train' AND resolved_ts IS NULL
       AND post_uri IS NOT NULL
       AND (',' || routes || ',') LIKE ?
-    ORDER BY first_seen_ts DESC LIMIT 1
+    ORDER BY first_seen_ts DESC LIMIT 5
   `)
-    .get(`%,${code},%`);
-  if (!row?.post_uri) return null;
-  return resolveReplyRef(agent, row.post_uri);
+    .all(`%,${code},%`);
+  if (rows.length === 0) return null;
+  const fromName = candidate?.fromStation?.name?.toLowerCase() || '';
+  const toName = candidate?.toStation?.name?.toLowerCase() || '';
+  const scored = rows.map((r) => {
+    const h = (r.headline || '').toLowerCase();
+    let score = 0;
+    if (fromName && h.includes(fromName)) score++;
+    if (toName && h.includes(toName)) score++;
+    return { ...r, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return resolveReplyRef(agent, scored[0].post_uri);
 }
 
 function priorToUpsertArgs(prior) {
@@ -327,6 +363,8 @@ function priorToUpsertArgs(prior) {
     consecutiveTicks: prior.consecutive_ticks,
     clearTicks: prior.clear_ticks,
     postedCooldownKey: prior.posted_cooldown_key,
+    activePostUri: prior.active_post_uri,
+    activePostTs: prior.active_post_ts,
   };
 }
 
