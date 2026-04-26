@@ -27,14 +27,11 @@ const busRoutes = require('../../src/bus/routes');
 const DRY_RUN = process.env.ALERTS_DRY_RUN === '1' || process.argv.includes('--dry-run');
 const KIND = 'bus';
 
-// Filter to routes the bot actively tracks; CTA's bus alert volume is huge
-// and most of it concerns routes followers don't care about.
-const TRACKED = new Set([
-  ...busRoutes.bunching,
-  ...busRoutes.gaps,
-  ...busRoutes.speedmap,
-  ...busRoutes.ghosts,
-]);
+// Filter to every CTA bus route in `names`. The significance filter in
+// ctaAlerts.js does the real gating — minor reroutes and bus-stop changes
+// don't make it through — so narrowing to bunching/gaps/speedmap/ghosts
+// just dropped major disruptions on long-tail routes.
+const TRACKED = new Set(Object.keys(busRoutes.names));
 
 function isRelevant(alert) {
   if (!isSignificantAlert(alert)) return false;
