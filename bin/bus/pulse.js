@@ -202,7 +202,12 @@ async function postClearReply(route, prior, agentGetter) {
   }
 
   const agent = await agentGetter();
-  const replyRef = await resolveReplyRef(agent, prior.active_post_uri);
+  // Thread the ✅ under the most recent open CTA alert in the thread when one
+  // joined; falls back to the original pulse post when no CTA alert is in the
+  // thread. resolveReplyRef walks up the chain so root stays the pulse post.
+  const replyRef =
+    (await findOpenAlertReplyRefBus(agent, route)) ||
+    (await resolveReplyRef(agent, prior.active_post_uri));
   if (!replyRef) {
     console.warn(`[bus/${route}] could not resolve reply ref for clear post`);
     return;

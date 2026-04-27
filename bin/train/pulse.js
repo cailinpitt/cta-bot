@@ -333,7 +333,14 @@ async function postClearReply(line, direction, prior, agentGetter) {
   }
 
   const agent = await agentGetter();
-  const replyRef = await resolveReplyRef(agent, prior.active_post_uri);
+  // Prefer threading the ✅ under the most recent open CTA alert in the thread
+  // (resolveReplyRef walks up the reply chain, so root stays pinned to the
+  // original pulse). Falls back to the pulse post itself when no CTA alert
+  // joined the thread.
+  const candidateForLookup = { fromStation: { name: fromStation }, toStation: { name: toStation } };
+  const replyRef =
+    (await findOpenAlertReplyRef(agent, line, candidateForLookup)) ||
+    (await resolveReplyRef(agent, prior.active_post_uri));
   if (!replyRef) {
     console.warn(`[${line}/${direction}] could not resolve reply ref for clear post`);
     return;
@@ -439,11 +446,11 @@ async function main() {
   for (const line of ALL_LINES) {
     // GTFS says fewer than 1 trip active this hour on any direction → line is
     // winding down or between service hours. Don't false-flag the cold tail
-    // behind the last train as an outage. The < 1 threshold catches both
-    // "no service scheduled" (Brown/Pink/Yellow/Purple Express late-night,
-    // value = 0) and "wind-down hour" (e.g. Yellow at 0.1, Purple at 0.9 in
-    // their final hour). Still advance clears on any open pulse_state row so
-    // a pulse posted earlier in the day naturally resolves when service ends.
+    // behind the last train as an outage. Leave any open pulse_state intact:
+    // advancing clears here would post a bogus "trains running again" reply
+    // the moment scheduled service drops below 1 trip/hr (it's service ending,
+    // not resuming). The next morning's normal detection will clear organically
+    // if the outage has actually resolved.
     const MIN_EXPECTED_ACTIVE = 1;
     let expectedAnyDir = 0;
     try {
@@ -453,10 +460,8 @@ async function main() {
     }
     if (expectedAnyDir < MIN_EXPECTED_ACTIVE) {
       console.log(
-        `pulse: skipped line=${line} reason=below-min-scheduled-service expected=${expectedAnyDir}`,
+        `pulse: skipped line=${line} reason=below-min-scheduled-service expected=${expectedAnyDir} — leaving pulse_state intact`,
       );
-      const rows = getDb().prepare('SELECT * FROM pulse_state WHERE line = ?').all(line);
-      for (const row of rows) await handleClear(line, row.direction, agentGetter, now);
       continue;
     }
 
