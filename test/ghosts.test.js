@@ -420,8 +420,8 @@ test('sanity gate: MIN_OBSERVED blocks events when observed drops below 2', asyn
   assert.equal(events.length, 0);
 });
 
-test('sanity gate: MIN_SNAPSHOTS=8 blocks coverage below 8 snapshots', async () => {
-  const obs = buildObs({ pid: 'p1', snapshots: 7, vidsPerSnapshot: 3 });
+test('sanity gate: MIN_SNAPSHOTS blocks coverage below the floor', async () => {
+  const obs = buildObs({ pid: 'p1', snapshots: MIN_SNAPSHOTS - 1, vidsPerSnapshot: 3 });
   const events = await detectBusGhosts({
     routes: ['66'],
     getObservations: () => obs,

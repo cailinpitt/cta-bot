@@ -4,7 +4,7 @@
 
 const MISSING_PCT_THRESHOLD = 0.25;
 const MISSING_ABS_THRESHOLD = 3;
-const MIN_SNAPSHOTS = 8; // tolerates ≤4 dropped polls in a ~12-poll window
+const MIN_SNAPSHOTS = 4; // observe-buses runs */10 → ~6 polls/hour; 4 tolerates 2 drops
 const MIN_OBSERVED = 2; // observed=0/1 is either a schedule bug or a gap (already covered)
 const MAX_EXPECTED_ACTIVE = 30; // sanity ceiling — most likely a bad GTFS bucket
 const RAMP_FILL_RATIO = 0.8; // tail median ≥ this × expected → pipeline is filling, not ghosting

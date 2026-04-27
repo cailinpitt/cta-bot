@@ -13,7 +13,7 @@ The bot only posts when the gap is large enough and consistent enough that it al
 Once an hour, for each route or train line, the bot asks two questions:
 
 1. **How many vehicles *should* be running right now?** Pulled from the CTA's published GTFS schedule.
-2. **How many vehicles are we actually seeing?** Pulled from CTA's live vehicle-position feed, sampled every five minutes for the past hour.
+2. **How many vehicles are we actually seeing?** Pulled from CTA's live vehicle-position feed, sampled every ten minutes for the past hour.
 
 If "actually seeing" is meaningfully smaller than "should be running" — and stays that way across the whole hour — the bot posts.
 
@@ -47,7 +47,7 @@ A 90-minute trip that runs 16:30–18:00 contributes 0.5 to hour 16, 1.0 to hour
 
 Two scripts feed a SQLite observations table:
 
-- `scripts/observeBuses.js` — runs every five minutes, fetches every active vehicle on the configured ghost-watch routes from the CTA Bus Tracker / Train Tracker APIs.
+- `scripts/observeBuses.js` — runs every ten minutes, fetches every active vehicle on every active CTA bus route. Bunching, gaps, and pulse all read this snapshot via the cache layer, so this script is the only API call site for the all-routes workload.
 - The bunching/gap detectors also write every vehicle they see into the same table (so we get extra coverage for free).
 
 Each row records `(ts, route, direction, vehicle_id, ...)`. Observations older than 48 hours are rolled off; the live ghost detectors only look back one hour.
@@ -70,7 +70,7 @@ False-positive ghost posts are a credibility risk; the gates exist to swallow am
 |---|---|---|
 | `MISSING_PCT_THRESHOLD` | ≥25% | The deficit must be a real share of expected service, not 1 of 8. |
 | `MISSING_ABS_THRESHOLD` | ≥3 vehicles | Avoids firing on routes with tiny absolute counts. |
-| `MIN_SNAPSHOTS` | ≥8 | At a 5-min cadence the window holds ~12 snapshots; 8 tolerates up to 4 dropped polls. |
+| `MIN_SNAPSHOTS` | ≥4 | At the 10-min observer cadence the hour-long window holds ~6 snapshots; 4 tolerates up to 2 dropped polls. |
 | `MIN_OBSERVED` | ≥2 | "Missing 7 of 9" with observed 0 or 1 is either a genuine outage (the gap detector handles those) or a feed bug. |
 | `active < 2` floor | skip | Routes with fewer than 2 expected vehicles are too sparse for a meaningful ghost call. |
 | `MAX_EXPECTED_ACTIVE` | ≤30 | Sanity ceiling. >30 has historically meant a bad GTFS bucket; we'd rather skip than post nonsense. |
@@ -95,7 +95,7 @@ The CTA publishes a schedule. Live vehicle positions are public. The interesting
 ## Files
 
 - `scripts/fetch-gtfs.js` — builds the active-trip index from CTA's published GTFS feed.
-- `scripts/observeBuses.js` — five-minute live observation poller.
+- `scripts/observeBuses.js` — ten-minute live observation poller covering every active CTA bus route.
 - `src/shared/observations.js` — observation storage and roll-off.
 - `src/shared/gtfs.js` — index lookup helpers.
 - `src/bus/ghosts.js`, `src/train/ghosts.js` — core detection and gates.
