@@ -28,7 +28,7 @@ const {
   buildVideoAltText,
 } = require('../../src/bus/bunchingPost');
 
-const BUS_BUNCHING_DAILY_CAP = 3;
+const BUS_BUNCHING_DAILY_CAP = 8;
 
 async function main() {
   setup();
