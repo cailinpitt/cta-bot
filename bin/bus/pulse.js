@@ -253,7 +253,7 @@ async function main() {
   // Fresh poll if cache is stale — observeBuses runs */5 in parallel, so
   // most ticks reuse its snapshot.
   try {
-    await getVehiclesCachedOrFresh(pulseRoutes, { maxStaleMs: 4 * 60 * 1000 });
+    await getVehiclesCachedOrFresh(pulseRoutes);
   } catch (e) {
     console.warn(`bus pulse: getVehicles failed: ${e.message}`);
   }

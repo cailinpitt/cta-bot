@@ -124,10 +124,13 @@ async function getPredictions({ stpid, vid, rt, top }) {
   return body.prd || [];
 }
 
-// Returns `{ vehicles, now, source }`. The default 4 min maxStaleMs sits
-// between the 5-min observeBuses cadence and the 3-min per-vehicle staleness
-// floor — the cached snapshot is at most 5 min old.
-async function getVehiclesCachedOrFresh(routes, { maxStaleMs = 4 * 60 * 1000 } = {}) {
+// Returns `{ vehicles, now, source }`. The default 11 min maxStaleMs is
+// sized to cover the 10-min observeBuses cadence — bunching/gaps/pulse
+// always hit the cache, so observeBuses is the only API call site for the
+// "all routes" workload. The per-vehicle 3-min staleness gate inside the
+// detectors still drops individual stale buses, so a 10-min-old snapshot
+// is still detection-correct (just posts lag by up to 10 min).
+async function getVehiclesCachedOrFresh(routes, { maxStaleMs = 11 * 60 * 1000 } = {}) {
   const cached = getLatestBusSnapshot(routes, maxStaleMs);
   if (cached && cached.vehicles.length > 0) {
     return { vehicles: cached.vehicles, now: new Date(cached.snapshotTs), source: 'cache' };
