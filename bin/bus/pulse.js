@@ -14,7 +14,7 @@ require('../../src/shared/env');
 
 const { setup, runBin } = require('../../src/shared/runBin');
 const { detectBusBlackouts } = require('../../src/bus/pulse');
-const { pulse: pulseRoutes, names: routeNames } = require('../../src/bus/routes');
+const { allRoutes: pulseRoutes, names: routeNames } = require('../../src/bus/routes');
 const { loadPattern } = require('../../src/bus/patterns');
 const { getVehiclesCachedOrFresh } = require('../../src/bus/api');
 const { loginAlerts, postText, resolveReplyRef } = require('../../src/shared/bluesky');

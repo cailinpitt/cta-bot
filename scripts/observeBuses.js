@@ -5,7 +5,7 @@
 require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
 
 const { getVehicles } = require('../src/bus/api');
-const { pulse: pulseRoutes } = require('../src/bus/routes');
+const { allRoutes: pulseRoutes } = require('../src/bus/routes');
 const { rolloffOldObservations } = require('../src/shared/observations');
 
 async function main() {

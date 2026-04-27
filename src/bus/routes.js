@@ -281,9 +281,10 @@ const ghosts = [
   '151',
 ];
 
-// Routes polled by bus pulse — every active CTA bus route. Keeps the watch
-// list symmetric with bin/bus/alerts.js so a CTA alert and a pulse signal
-// can converge on the same thread regardless of which fires first.
-const pulse = Object.keys(names);
+// Every active CTA bus route. Used by observeBuses (the single API call site
+// for the all-routes workload), bus pulse, and bunching — all three read the
+// same snapshot, so this list also keeps pulse symmetric with bin/bus/alerts.js
+// so a CTA alert and a pulse signal can converge on the same thread.
+const allRoutes = Object.keys(names);
 
-module.exports = { names, bunching, speedmap, gaps, ghosts, pulse };
+module.exports = { names, bunching, speedmap, gaps, ghosts, allRoutes };

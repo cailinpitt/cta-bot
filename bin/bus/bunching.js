@@ -4,7 +4,7 @@ require('../../src/shared/env');
 const argv = require('minimist')(process.argv.slice(2));
 
 const { getVehiclesCachedOrFresh } = require('../../src/bus/api');
-const { bunching: bunchingRoutes } = require('../../src/bus/routes');
+const { allRoutes: bunchingRoutes } = require('../../src/bus/routes');
 const { detectAllBunching } = require('../../src/bus/bunching');
 const { loadPattern, findNearestStop } = require('../../src/bus/patterns');
 const { renderBunchingMap } = require('../../src/map');
@@ -28,7 +28,7 @@ const {
   buildVideoAltText,
 } = require('../../src/bus/bunchingPost');
 
-const BUS_BUNCHING_DAILY_CAP = 8;
+const BUS_BUNCHING_DAILY_CAP = 12;
 
 async function main() {
   setup();
