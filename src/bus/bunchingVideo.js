@@ -33,7 +33,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
     await sleep(tickMs);
     let vehicles = [];
     try {
-      const all = await getVehicles([bunch.route]);
+      const all = await getVehicles([bunch.route], { record: false });
       vehicles = all.filter((v) => v.pid === bunch.pid && bunchVids.has(v.vid));
     } catch (e) {
       console.warn(`video capture tick ${i}: fetch failed — ${e.message}`);

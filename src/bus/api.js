@@ -77,7 +77,7 @@ function parseBusTime(s) {
   return new Date(utcGuess + offset);
 }
 
-async function getVehicles(routes) {
+async function getVehicles(routes, { record = true } = {}) {
   if (routes.length === 0) return [];
   // API caps at 10 routes per call.
   const chunks = [];
@@ -88,8 +88,9 @@ async function getVehicles(routes) {
     const body = await get('getvehicles', { rt: chunk.join(','), tmres: 's' });
     for (const v of body.vehicle || []) results.push(parseVehicle(v));
   }
-  // Single `now` for the whole call so this batch reads as one polling snapshot.
-  recordBusObservations(results);
+  // Single-route diagnostic fetches (timelapse, speedmap) pass record:false so
+  // they don't pollute getLatestBusSnapshot's MAX(ts) with a partial-route tick.
+  if (record) recordBusObservations(results);
   return results;
 }
 

@@ -41,7 +41,7 @@ async function collect(route, durationMs, pollIntervalMs) {
   while (Date.now() - start < durationMs) {
     const tickStart = Date.now();
     try {
-      const vehicles = await getVehicles([route]);
+      const vehicles = await getVehicles([route], { record: false });
       pollCount++;
       for (const v of vehicles) {
         if (!tracks.has(v.vid)) tracks.set(v.vid, new Map());
