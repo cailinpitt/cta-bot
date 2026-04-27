@@ -31,6 +31,8 @@ const { getDb } = require('../../src/shared/history');
 const {
   recordBusObservations,
   getLatestBusSnapshot,
+  getRecentBusObservationsByRoute,
+  countDistinctTsInBusObservations,
   rolloffOldObservations,
 } = require('../../src/shared/observations');
 
@@ -143,6 +145,60 @@ test('getLatestBusSnapshot ignores rows with null pdist (legacy / pre-migration)
     .run(now - 60 * 1000, 'TEST_4', '400', 'e', 'W');
   const result = getLatestBusSnapshot(['TEST_4'], 4 * 60 * 1000, now);
   assert.equal(result, null);
+  clearBusObs();
+});
+
+test('getRecentBusObservationsByRoute returns empty map for empty input', () => {
+  const result = getRecentBusObservationsByRoute([], Date.now() - 60_000);
+  assert.equal(result.size, 0);
+});
+
+test('getRecentBusObservationsByRoute returns Map<route, []> with empty buckets for routes with no obs', () => {
+  clearBusObs();
+  const result = getRecentBusObservationsByRoute(['TEST_5', 'TEST_6'], Date.now() - 60_000);
+  assert.equal(result.size, 2);
+  assert.deepEqual(result.get('TEST_5'), []);
+  assert.deepEqual(result.get('TEST_6'), []);
+});
+
+test('getRecentBusObservationsByRoute buckets rows by route and respects sinceTs', () => {
+  clearBusObs();
+  const now = Date.now();
+  recordBusObservations(
+    [
+      { vid: 'r1', route: 'TEST_7', pid: '700', lat: 41.9, lon: -87.6, pdist: 1, heading: 0 },
+      { vid: 'r2', route: 'TEST_8', pid: '800', lat: 41.9, lon: -87.6, pdist: 1, heading: 0 },
+    ],
+    now - 30_000,
+  );
+  recordBusObservations(
+    [{ vid: 'old', route: 'TEST_7', pid: '700', lat: 41.9, lon: -87.6, pdist: 1, heading: 0 }],
+    now - 10 * 60_000,
+  );
+  const result = getRecentBusObservationsByRoute(['TEST_7', 'TEST_8'], now - 60_000);
+  assert.equal(result.get('TEST_7').length, 1);
+  assert.equal(result.get('TEST_7')[0].vid, 'r1');
+  assert.equal(result.get('TEST_8').length, 1);
+  clearBusObs();
+});
+
+test('countDistinctTsInBusObservations counts unique ts values', () => {
+  clearBusObs();
+  const now = Date.now();
+  recordBusObservations(
+    [{ vid: 'a', route: 'TEST_9', pid: '900', lat: 41.9, lon: -87.6, pdist: 1, heading: 0 }],
+    now - 10_000,
+  );
+  recordBusObservations(
+    [{ vid: 'b', route: 'TEST_9', pid: '900', lat: 41.9, lon: -87.6, pdist: 2, heading: 0 }],
+    now - 5_000,
+  );
+  recordBusObservations(
+    [{ vid: 'c', route: 'TEST_9', pid: '900', lat: 41.9, lon: -87.6, pdist: 3, heading: 0 }],
+    now - 10_000, // same ts as first → still 2 distinct
+  );
+  const n = countDistinctTsInBusObservations(now - 60_000);
+  assert.ok(n >= 2, `expected ≥2 distinct ts, got ${n}`);
   clearBusObs();
 });
 

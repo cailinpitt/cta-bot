@@ -2,10 +2,9 @@
 // Bus alerts post text-only — bus reroutes don't map cleanly onto a polyline
 // segment, so there's no equivalent of the rail disruption map.
 //
-// Asymmetry with bin/train/alerts.js: there's no bus pulse detector today,
-// so this bin doesn't thread under prior pulse posts (getRecentPulsePost /
-// resolveReplyRef). If a bus pulse is added, mirror the threading logic from
-// bin/train/alerts.js#postNewAlert and the root-aware reply in postResolution.
+// When a recent bus pulse post exists for any of the alert's routes, the
+// CTA alert threads under it so all signals about one disruption converge
+// to a single thread. Symmetric to bin/train/alerts.js.
 
 require('../../src/shared/env');
 
@@ -20,9 +19,12 @@ const {
   incrementAlertClearTicks,
   resetAlertClearTicks,
   listUnresolvedAlerts,
+  getRecentPulsePostsAll,
   ALERT_CLEAR_TICKS,
 } = require('../../src/shared/history');
 const busRoutes = require('../../src/bus/routes');
+
+const PULSE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 const DRY_RUN = process.env.ALERTS_DRY_RUN === '1' || process.argv.includes('--dry-run');
 const KIND = 'bus';
@@ -36,6 +38,24 @@ const TRACKED = new Set(Object.keys(busRoutes.names));
 function isRelevant(alert) {
   if (!isSignificantAlert(alert)) return false;
   return alert.busRoutes.some((r) => TRACKED.has(r));
+}
+
+// Find the most recent bus pulse post on any of the alert's routes so the
+// CTA alert can thread under it. Bus pulse posts are per-route — no
+// station-overlap scoring needed; just take the most-recent across all
+// matching routes.
+function findRecentBusPulse(alert, now = Date.now()) {
+  let best = null;
+  for (const route of alert.busRoutes) {
+    const pulses = getRecentPulsePostsAll(
+      { kind: KIND, line: route, withinMs: PULSE_LOOKBACK_MS },
+      now,
+    );
+    for (const p of pulses) {
+      if (!best || p.ts > best.ts) best = p;
+    }
+  }
+  return best;
 }
 
 async function postNewAlert(alert, agentGetter) {
@@ -53,8 +73,15 @@ async function postNewAlert(alert, agentGetter) {
     postUri: null,
   });
   const agent = await agentGetter();
-  const result = await postText(agent, text);
-  console.log(`Posted alert ${alert.id}: ${result.url}`);
+
+  let replyRef = null;
+  const pulse = findRecentBusPulse(alert);
+  if (pulse) replyRef = await resolveReplyRef(agent, pulse.post_uri);
+
+  const result = await postText(agent, text, replyRef);
+  console.log(
+    `Posted alert ${alert.id}${replyRef ? ' (threaded under bus pulse)' : ''}: ${result.url}`,
+  );
   recordAlertSeen({
     alertId: alert.id,
     kind: KIND,

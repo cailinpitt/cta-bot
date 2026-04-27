@@ -54,6 +54,25 @@ async function main() {
     }
   }
 
+  const stuckBusPulses = db
+    .prepare(`
+    SELECT route, consecutive_ticks, started_ts
+    FROM bus_pulse_state
+    WHERE active_post_uri IS NULL AND consecutive_ticks > 5
+    ORDER BY started_ts
+  `)
+    .all();
+  if (stuckBusPulses.length > 0) {
+    issues.push(
+      `stuck-bus-pulses: ${stuckBusPulses.length} bus_pulse_state rows with consecutive_ticks>5 but no active_post_uri`,
+    );
+    for (const r of stuckBusPulses) {
+      console.warn(
+        `  route=${r.route} ticks=${r.consecutive_ticks} age_min=${r.started_ts ? Math.round((now - r.started_ts) / 60_000) : '?'}`,
+      );
+    }
+  }
+
   const cooldownStats = db
     .prepare(`
     SELECT
@@ -92,6 +111,24 @@ async function main() {
       `orphan-cooldowns: ${orphanCooldowns.length} active train_pulse cooldown(s) with no matching pulse_state row`,
     );
     for (const r of orphanCooldowns.slice(0, 5)) console.warn(`  ${r.key}`);
+  }
+
+  const orphanBusCooldowns = db
+    .prepare(`
+    SELECT c.key
+    FROM cooldowns c
+    WHERE c.key LIKE 'bus_pulse_%'
+      AND (c.expires_at IS NULL OR c.expires_at > ?)
+      AND NOT EXISTS (
+        SELECT 1 FROM bus_pulse_state bps WHERE bps.posted_cooldown_key = c.key
+      )
+  `)
+    .all(now);
+  if (orphanBusCooldowns.length > 0) {
+    issues.push(
+      `orphan-bus-cooldowns: ${orphanBusCooldowns.length} active bus_pulse cooldown(s) with no matching bus_pulse_state row`,
+    );
+    for (const r of orphanBusCooldowns.slice(0, 5)) console.warn(`  ${r.key}`);
   }
 
   if (issues.length === 0) {

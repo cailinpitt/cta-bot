@@ -4,6 +4,8 @@ const {
   buildPostText,
   buildAltText,
   buildClearPostText,
+  buildBusPostText,
+  buildBusClearPostText,
   evidenceLine,
 } = require('../../src/shared/disruption');
 
@@ -106,4 +108,57 @@ test('buildAltText still describes the dimmed segment', () => {
   const alt = buildAltText(observed());
   assert.match(alt, /Map of the Blue Line/);
   assert.match(alt, /between O'Hare and Forest Park/);
+});
+
+test('buildBusPostText (no CTA alert) renders the strict-zero blackout shape', () => {
+  const text = buildBusPostText(
+    { route: '66', name: 'Chicago', lookbackMin: 25, minHeadwayMin: 8 },
+    { ctaAlertOpen: false },
+  );
+  assert.match(text, /^🚌⚠️ #66 Chicago service appears suspended/);
+  assert.match(text, /No buses observed on the route in the last 25 min/);
+  assert.match(text, /currently scheduled every 8 min/);
+  assert.match(text, /CTA hasn't issued an alert for this yet/);
+});
+
+test('buildBusPostText (CTA alert open) defers to the threaded CTA alert', () => {
+  const text = buildBusPostText(
+    { route: '79', name: '79th', lookbackMin: 25, minHeadwayMin: 7 },
+    { ctaAlertOpen: true },
+  );
+  assert.match(text, /See CTA alert in this thread/);
+  assert.doesNotMatch(text, /hasn't issued an alert/);
+});
+
+test('buildBusPostText omits headway clause when GTFS lookup returns null', () => {
+  const text = buildBusPostText({
+    route: '4',
+    name: 'Cottage Grove',
+    lookbackMin: 25,
+    minHeadwayMin: null,
+  });
+  assert.match(text, /No buses observed on the route in the last 25 min\.\n/);
+  assert.doesNotMatch(text, /scheduled every/);
+});
+
+test('buildBusPostText stays under 300 graphemes for typical inputs', () => {
+  const text = buildBusPostText({
+    route: '147',
+    name: 'Outer DuSable Lake Shore Exp.',
+    lookbackMin: 30,
+    minHeadwayMin: 15,
+  });
+  assert.ok(text.length < 300, `text was ${text.length} chars: ${text}`);
+});
+
+test('buildBusClearPostText (no CTA alert) calls out absence', () => {
+  const text = buildBusClearPostText({ route: '66', name: 'Chicago' }, { ctaAlertOpen: false });
+  assert.match(text, /^🚌✅ #66 Chicago buses observed again\./);
+  assert.match(text, /CTA hasn't issued an alert for this/);
+});
+
+test('buildBusClearPostText (CTA alert open) acknowledges the open alert', () => {
+  const text = buildBusClearPostText({ route: '66', name: 'Chicago' }, { ctaAlertOpen: true });
+  assert.match(text, /CTA hasn't cleared their alert yet/);
+  assert.doesNotMatch(text, /hasn't issued an alert/);
 });

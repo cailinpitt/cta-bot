@@ -81,10 +81,33 @@ function buildClearPostText(d, { ctaAlertOpen = false } = {}) {
   return `🚇✅ ${lineName} Line trains running through ${d.suspendedSegment.from} ↔ ${d.suspendedSegment.to} again. ${tail}`;
 }
 
+function buildBusPostText(
+  { route, name, lookbackMin, minHeadwayMin },
+  { ctaAlertOpen = false } = {},
+) {
+  const header = `🚌⚠️ #${route} ${name} service appears suspended`;
+  const headwayClause =
+    minHeadwayMin != null ? ` — currently scheduled every ${minHeadwayMin} min` : '';
+  const evidence = `📡 No buses observed on the route in the last ${lookbackMin} min${headwayClause}.`;
+  const footer = ctaAlertOpen
+    ? 'Inferred from live bus positions. (See CTA alert in this thread.)'
+    : "Inferred from live bus positions; CTA hasn't issued an alert for this yet.";
+  return `${header}\n\n${evidence}\n\n${footer}`;
+}
+
+function buildBusClearPostText({ route, name }, { ctaAlertOpen = false } = {}) {
+  const tail = ctaAlertOpen
+    ? "(CTA hasn't cleared their alert yet.)"
+    : "(CTA hasn't issued an alert for this.)";
+  return `🚌✅ #${route} ${name} buses observed again. ${tail}`;
+}
+
 module.exports = {
   buildPostText,
   buildAltText,
   buildClearPostText,
+  buildBusPostText,
+  buildBusClearPostText,
   titleFor,
   footerFor,
   evidenceLine,

@@ -130,6 +130,40 @@ function getLatestBusSnapshot(routes, maxStaleMs = null, now = Date.now()) {
   return { vehicles, snapshotTs };
 }
 
+// Returns Map<route, observation[]> for every supplied route (empty arrays
+// kept so callers can iterate the watchlist without per-route absence checks).
+// One SQL pass; bucketing in JS.
+function getRecentBusObservationsByRoute(routes, sinceTs) {
+  const result = new Map();
+  if (!routes || routes.length === 0) return result;
+  for (const r of routes) result.set(String(r), []);
+  const placeholders = routes.map(() => '?').join(',');
+  const rows = getDb()
+    .prepare(`
+      SELECT ts, route, direction AS pid, vehicle_id AS vid, destination,
+             lat, lon, pdist, heading, vehicle_ts
+      FROM observations
+      WHERE kind = 'bus' AND route IN (${placeholders}) AND ts >= ?
+    `)
+    .all(...routes.map(String), sinceTs);
+  for (const row of rows) {
+    const bucket = result.get(row.route);
+    if (bucket) bucket.push(row);
+  }
+  return result;
+}
+
+function countDistinctTsInBusObservations(sinceTs) {
+  const row = getDb()
+    .prepare(`
+      SELECT COUNT(DISTINCT ts) AS n
+      FROM observations
+      WHERE kind = 'bus' AND ts >= ?
+    `)
+    .get(sinceTs);
+  return row?.n || 0;
+}
+
 function getRecentTrainPositions(sinceTs) {
   return getDb()
     .prepare(`
@@ -146,6 +180,8 @@ module.exports = {
   getBusObservations,
   getTrainObservations,
   getLatestBusSnapshot,
+  getRecentBusObservationsByRoute,
+  countDistinctTsInBusObservations,
   getRecentTrainPositions,
   rolloffOldObservations,
 };

@@ -1,0 +1,314 @@
+#!/usr/bin/env node
+// Bus pulse — observation-based bus blackout detector. Posts when a tracked
+// route has zero distinct vehicles observed in the lookback while GTFS says
+// the route should be running and other routes are reporting normally.
+//
+// Strict-zero gate (vs train pulse's segment binning): even one bus on the
+// air suppresses the alert. Gaps are bin/bus/gapPost.js's channel — pulse
+// only fires on a "truly nothing running" blackout.
+//
+// PULSE_DRY_RUN=1 / --dry-run: skip posting + DB writes (recommended for
+// any deploy that touches detector logic).
+
+require('../../src/shared/env');
+
+const { setup, runBin } = require('../../src/shared/runBin');
+const { detectBusBlackouts } = require('../../src/bus/pulse');
+const { pulse: pulseRoutes, names: routeNames } = require('../../src/bus/routes');
+const { loadPattern } = require('../../src/bus/patterns');
+const { getVehiclesCachedOrFresh } = require('../../src/bus/api');
+const { loginAlerts, postText, resolveReplyRef } = require('../../src/shared/bluesky');
+const { buildBusPostText, buildBusClearPostText } = require('../../src/shared/disruption');
+const { expectedHeadwayMin, expectedActiveTrips } = require('../../src/shared/gtfs');
+const {
+  getRecentBusObservationsByRoute,
+  countDistinctTsInBusObservations,
+  rolloffOldObservations,
+} = require('../../src/shared/observations');
+const { acquireCooldown, clearCooldown } = require('../../src/shared/state');
+const {
+  getBusPulseState,
+  upsertBusPulseState,
+  clearBusPulseState,
+  recordDisruption,
+  hasObservedClearForPulse,
+  hasUnresolvedCtaAlert,
+  getDb,
+} = require('../../src/shared/history');
+
+const DRY_RUN = process.env.BUS_PULSE_DRY_RUN === '1' || process.argv.includes('--dry-run');
+
+const MIN_CONSECUTIVE_TICKS = 2;
+const CLEAR_TICKS_TO_RESET = 3;
+const POST_COOLDOWN_MS = 90 * 60 * 1000;
+const MIN_HOUR = 5;
+const MAX_HOUR = 24;
+const POLL_LOOKBACK_MS = 60 * 60 * 1000; // upper bound for observation window
+const KNOWN_PIDS_LOOKBACK_MS = 48 * 60 * 60 * 1000; // matches obs rolloff
+
+function chicagoHourNow(now = new Date()) {
+  const h = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hourCycle: 'h23',
+    hour: '2-digit',
+  }).format(now);
+  return parseInt(h, 10) % 24;
+}
+
+function getKnownPidsForRoute(route, now) {
+  const sinceTs = now - KNOWN_PIDS_LOOKBACK_MS;
+  const rows = getDb()
+    .prepare(`
+      SELECT DISTINCT direction AS pid
+      FROM observations
+      WHERE kind = 'bus' AND route = ? AND ts >= ? AND direction IS NOT NULL
+    `)
+    .all(String(route), sinceTs);
+  return rows.map((r) => r.pid);
+}
+
+async function handleCandidate(candidate, agentGetter, now) {
+  const route = candidate.route;
+  const prior = getBusPulseState(route);
+  const consecutive = (prior?.consecutive_ticks || 0) + 1;
+  const startedTs = prior?.started_ts || now;
+  const cooldownKey = `bus_pulse_${route}`;
+  const activePostUri = prior?.active_post_uri || null;
+  const activePostTs = prior?.active_post_ts || null;
+
+  upsertBusPulseState({
+    route,
+    startedTs,
+    lastSeenTs: now,
+    consecutiveTicks: consecutive,
+    clearTicks: 0,
+    postedCooldownKey: cooldownKey,
+    activePostUri,
+    activePostTs,
+  });
+
+  if (activePostUri) {
+    console.log(
+      `[bus/${route}] active pulse ${activePostUri} still in effect — refreshing state, no re-post`,
+    );
+    return;
+  }
+
+  if (consecutive < MIN_CONSECUTIVE_TICKS) {
+    console.log(`[bus/${route}] candidate tick ${consecutive}/${MIN_CONSECUTIVE_TICKS}`);
+    return;
+  }
+
+  const ctaAlertOpenInitial = !!hasUnresolvedCtaAlert({ kind: 'bus', ctaRouteCode: route });
+
+  if (DRY_RUN) {
+    const text = buildBusPostText(candidate, { ctaAlertOpen: ctaAlertOpenInitial });
+    console.log(`--- DRY RUN bus pulse ${route} ---\n${text}`);
+    recordDisruption({
+      kind: 'bus',
+      line: route,
+      direction: null,
+      fromStation: null,
+      toStation: null,
+      source: 'observed',
+      posted: false,
+      postUri: null,
+    });
+    return;
+  }
+
+  if (!acquireCooldown(cooldownKey, now, POST_COOLDOWN_MS)) {
+    console.log(`[bus/${route}] on cooldown ${cooldownKey}, skipping`);
+    recordDisruption({
+      kind: 'bus',
+      line: route,
+      direction: null,
+      fromStation: null,
+      toStation: null,
+      source: 'observed',
+      posted: false,
+      postUri: null,
+    });
+    return;
+  }
+
+  const agent = await agentGetter();
+  const replyRef = await findOpenAlertReplyRefBus(agent, route);
+  const ctaAlertOpen = !!replyRef || ctaAlertOpenInitial;
+  const text = buildBusPostText(candidate, { ctaAlertOpen });
+
+  const result = await postText(agent, text, replyRef);
+  console.log(`Posted bus pulse ${route}: ${result.url}`);
+  recordDisruption({
+    kind: 'bus',
+    line: route,
+    direction: null,
+    fromStation: null,
+    toStation: null,
+    source: 'observed',
+    posted: true,
+    postUri: result.uri,
+  });
+  upsertBusPulseState({
+    route,
+    startedTs,
+    lastSeenTs: now,
+    consecutiveTicks: consecutive,
+    clearTicks: 0,
+    postedCooldownKey: cooldownKey,
+    activePostUri: result.uri,
+    activePostTs: now,
+  });
+}
+
+async function handleClear(route, agentGetter, now) {
+  const prior = getBusPulseState(route);
+  if (!prior) return;
+  const clearTicks = (prior.clear_ticks || 0) + 1;
+  if (clearTicks >= CLEAR_TICKS_TO_RESET) {
+    console.log(`[bus/${route}] cleared after ${clearTicks} clean ticks`);
+    await postClearReply(route, prior, agentGetter);
+    if (prior.posted_cooldown_key) clearCooldown(prior.posted_cooldown_key);
+    clearBusPulseState(route);
+    return;
+  }
+  upsertBusPulseState({
+    route,
+    startedTs: prior.started_ts,
+    lastSeenTs: now,
+    consecutiveTicks: prior.consecutive_ticks,
+    clearTicks,
+    postedCooldownKey: prior.posted_cooldown_key,
+    activePostUri: prior.active_post_uri,
+    activePostTs: prior.active_post_ts,
+  });
+}
+
+async function postClearReply(route, prior, agentGetter) {
+  if (!prior?.active_post_uri) return;
+  if (hasObservedClearForPulse({ kind: 'bus', pulseUri: prior.active_post_uri })) {
+    console.log(
+      `[bus/${route}] clear reply already posted for ${prior.active_post_uri} — skipping`,
+    );
+    return;
+  }
+  const ctaAlertOpen = !!hasUnresolvedCtaAlert({ kind: 'bus', ctaRouteCode: route });
+  const name = routeNames[route] || route;
+  const text = buildBusClearPostText({ route, name }, { ctaAlertOpen });
+
+  if (DRY_RUN) {
+    console.log(`--- DRY RUN bus pulse clear ${route} ---\n${text}`);
+    return;
+  }
+
+  const agent = await agentGetter();
+  const replyRef = await resolveReplyRef(agent, prior.active_post_uri);
+  if (!replyRef) {
+    console.warn(`[bus/${route}] could not resolve reply ref for clear post`);
+    return;
+  }
+  const result = await postText(agent, text, replyRef);
+  console.log(`Posted bus pulse clear ${route}: ${result.url}`);
+  recordDisruption({
+    kind: 'bus',
+    line: route,
+    direction: null,
+    fromStation: null,
+    toStation: null,
+    source: 'observed-clear',
+    posted: true,
+    postUri: result.uri,
+  });
+}
+
+// Find the most relevant open CTA bus alert on this route to thread under.
+// Mirrors bin/train/pulse.js#findOpenAlertReplyRef but route-match scored —
+// the alert's `routes` column carries comma-joined route codes from
+// bin/bus/alerts.js#postNewAlert.
+async function findOpenAlertReplyRefBus(agent, route) {
+  const rows = getDb()
+    .prepare(`
+      SELECT post_uri FROM alert_posts
+      WHERE kind = 'bus' AND resolved_ts IS NULL
+        AND post_uri IS NOT NULL
+        AND (',' || routes || ',') LIKE ?
+      ORDER BY first_seen_ts DESC LIMIT 1
+    `)
+    .get(`%,${route},%`);
+  if (!rows) return null;
+  return resolveReplyRef(agent, rows.post_uri);
+}
+
+async function main() {
+  setup();
+  const now = Date.now();
+  const hour = chicagoHourNow(new Date(now));
+  if (hour < MIN_HOUR || hour >= MAX_HOUR) {
+    console.log(`Skipping bus pulse outside ${MIN_HOUR}–${MAX_HOUR} CT (hour=${hour})`);
+    return;
+  }
+
+  rolloffOldObservations();
+
+  // Fresh poll if cache is stale — observeBuses runs */5 in parallel, so
+  // most ticks reuse its snapshot.
+  try {
+    await getVehiclesCachedOrFresh(pulseRoutes, { maxStaleMs: 4 * 60 * 1000 });
+  } catch (e) {
+    console.warn(`bus pulse: getVehicles failed: ${e.message}`);
+  }
+
+  const sinceTs = now - POLL_LOOKBACK_MS;
+  const observationsByRoute = getRecentBusObservationsByRoute(pulseRoutes, sinceTs);
+  const globalDistinctTs = countDistinctTsInBusObservations(sinceTs);
+
+  const detection = await detectBusBlackouts({
+    routes: pulseRoutes,
+    routeNames,
+    observationsByRoute,
+    loadPattern,
+    getKnownPidsForRoute: (route) => getKnownPidsForRoute(route, now),
+    expectedActive: (route, pattern, when) => expectedActiveTrips(route, pattern, when),
+    expectedHeadway: (route, pattern, when) => expectedHeadwayMin(route, pattern, when),
+    globalDistinctTs,
+    now: new Date(now),
+  });
+
+  if (detection.skipped) {
+    console.log(`bus pulse: skipped (${detection.skipped})`);
+    return;
+  }
+
+  console.log(`bus pulse: ${detection.candidates.length} candidate(s)`);
+
+  let agent = null;
+  const agentGetter = async () => {
+    if (!agent) agent = await loginAlerts();
+    return agent;
+  };
+
+  const candidateRoutes = new Set(detection.candidates.map((c) => c.route));
+  for (const candidate of detection.candidates) {
+    try {
+      await handleCandidate(candidate, agentGetter, now);
+    } catch (e) {
+      console.error(`handleCandidate failed for bus/${candidate.route}: ${e.stack || e.message}`);
+    }
+  }
+
+  // Clear sweep — any pulse_state row whose route is no longer a candidate.
+  const stateRows = getDb().prepare('SELECT route FROM bus_pulse_state').all();
+  for (const row of stateRows) {
+    if (!candidateRoutes.has(row.route)) {
+      try {
+        await handleClear(row.route, agentGetter, now);
+      } catch (e) {
+        console.error(`handleClear failed for bus/${row.route}: ${e.stack || e.message}`);
+      }
+    }
+  }
+}
+
+module.exports = { chicagoHourNow };
+
+if (require.main === module) runBin(main);

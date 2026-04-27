@@ -117,6 +117,17 @@ function db() {
       PRIMARY KEY (line, direction)
     );
 
+    CREATE TABLE IF NOT EXISTS bus_pulse_state (
+      route TEXT PRIMARY KEY,
+      started_ts INTEGER,
+      last_seen_ts INTEGER,
+      consecutive_ticks INTEGER NOT NULL DEFAULT 0,
+      clear_ticks INTEGER NOT NULL DEFAULT 0,
+      posted_cooldown_key TEXT,
+      active_post_uri TEXT,
+      active_post_ts INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS observations (
       ts INTEGER NOT NULL,
       kind TEXT NOT NULL,
@@ -451,6 +462,51 @@ function clearPulseState(line, direction) {
   db().prepare('DELETE FROM pulse_state WHERE line = ? AND direction = ?').run(line, direction);
 }
 
+function getBusPulseState(route) {
+  return db().prepare('SELECT * FROM bus_pulse_state WHERE route = ?').get(String(route)) || null;
+}
+
+function upsertBusPulseState({
+  route,
+  startedTs,
+  lastSeenTs,
+  consecutiveTicks,
+  clearTicks,
+  postedCooldownKey,
+  activePostUri = null,
+  activePostTs = null,
+}) {
+  db()
+    .prepare(`
+    INSERT INTO bus_pulse_state
+      (route, started_ts, last_seen_ts, consecutive_ticks, clear_ticks,
+       posted_cooldown_key, active_post_uri, active_post_ts)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(route) DO UPDATE SET
+      started_ts = excluded.started_ts,
+      last_seen_ts = excluded.last_seen_ts,
+      consecutive_ticks = excluded.consecutive_ticks,
+      clear_ticks = excluded.clear_ticks,
+      posted_cooldown_key = excluded.posted_cooldown_key,
+      active_post_uri = excluded.active_post_uri,
+      active_post_ts = excluded.active_post_ts
+  `)
+    .run(
+      String(route),
+      startedTs || null,
+      lastSeenTs || null,
+      consecutiveTicks || 0,
+      clearTicks || 0,
+      postedCooldownKey || null,
+      activePostUri || null,
+      activePostTs || null,
+    );
+}
+
+function clearBusPulseState(route) {
+  db().prepare('DELETE FROM bus_pulse_state WHERE route = ?').run(String(route));
+}
+
 // DST transitions happen at 2am CT, so any noon-anchored window is safe;
 // "today" queries against this aren't split by the Mar/Nov clock change.
 function chicagoStartOfDay(ts) {
@@ -768,6 +824,9 @@ module.exports = {
   getPulseState,
   upsertPulseState,
   clearPulseState,
+  getBusPulseState,
+  upsertBusPulseState,
+  clearBusPulseState,
   getDb,
   ALERT_FLICKER_RESET_MS,
 };
