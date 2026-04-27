@@ -17,6 +17,14 @@ async function main() {
   const now = Date.now();
   const issues = [];
 
+  console.log(
+    'audit-alerts: checking 6 invariants — stuck CTA alerts (post_uri null >30 min), ' +
+      'stuck train pulses (consecutive_ticks>5, no post), stuck bus pulses (same), ' +
+      'cooldown table size + expired-but-lingering rows, ' +
+      'orphan train_pulse cooldowns (no matching pulse_state row), ' +
+      'orphan bus_pulse cooldowns (no matching bus_pulse_state row)',
+  );
+
   const stuckAlerts = db
     .prepare(`
     SELECT alert_id, kind, headline, first_seen_ts
@@ -132,7 +140,7 @@ async function main() {
   }
 
   if (issues.length === 0) {
-    console.log('audit-alerts: OK');
+    console.log('audit-alerts: OK — all 6 invariants pass');
     return;
   }
   console.error(`audit-alerts: ${issues.length} issue(s):`);

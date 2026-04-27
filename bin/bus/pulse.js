@@ -247,9 +247,14 @@ async function findOpenAlertReplyRefBus(agent, route) {
 async function main() {
   setup();
   const now = Date.now();
+  console.log(
+    `bus-pulse: scanning ${pulseRoutes.length} routes for strict-zero blackouts ` +
+      `(reads observations table written by observe-buses; posts after ${MIN_CONSECUTIVE_TICKS} consecutive ticks, ` +
+      `clears after ${CLEAR_TICKS_TO_RESET} clean ticks; only fires when route is fully silent and ≥5 other routes report normally)`,
+  );
   const hour = chicagoHourNow(new Date(now));
   if (hour < MIN_HOUR || hour >= MAX_HOUR) {
-    console.log(`Skipping bus pulse outside ${MIN_HOUR}–${MAX_HOUR} CT (hour=${hour})`);
+    console.log(`bus-pulse: skipping outside ${MIN_HOUR}–${MAX_HOUR} CT (hour=${hour})`);
     return;
   }
 
@@ -280,11 +285,23 @@ async function main() {
   });
 
   if (detection.skipped) {
-    console.log(`bus pulse: skipped (${detection.skipped})`);
+    const reasonProse =
+      {
+        'no-routes': 'no tracked routes configured',
+        'warming-up': `only ${globalDistinctTs} distinct snapshot(s) in observations table — observe-buses warming up`,
+        'pipeline-wide-quiet':
+          'fewer than 5 routes reporting normally (cross-route guard) — likely an upstream API/observe-buses issue, not a route-specific blackout',
+      }[detection.skipped] || detection.skipped;
+    console.log(`bus-pulse: skipped — ${reasonProse}`);
     return;
   }
 
-  console.log(`bus pulse: ${detection.candidates.length} candidate(s)`);
+  const routesWithObs = [...observationsByRoute.values()].filter((arr) => arr.length > 0).length;
+  console.log(
+    `bus-pulse: evaluated ${pulseRoutes.length} routes, ${routesWithObs} with recent observations, ` +
+      `${pulseRoutes.length - routesWithObs} silent → ${detection.candidates.length} strict-zero candidate(s) ` +
+      '(routes that passed the GTFS expected-active gate AND had zero distinct vehicles in headway-scaled lookback)',
+  );
 
   let agent = null;
   const agentGetter = async () => {

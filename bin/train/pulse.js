@@ -409,6 +409,11 @@ async function main() {
   setup();
   const now = Date.now();
 
+  console.log(
+    `train-pulse: scanning ${ALL_LINES.length} rail lines for cold segments (lookback=${LOOKBACK_MS / 60000} min, ` +
+      `posts after ${MIN_CONSECUTIVE_TICKS} consecutive ticks of ≥50% overlap, clears after ${CLEAR_TICKS_TO_RESET} clean ticks)`,
+  );
+
   if (chicagoHourNow(new Date(now)) < MIN_HOUR) {
     console.log(`Skipping pulse before ${MIN_HOUR} AM CT`);
     return;
@@ -426,13 +431,15 @@ async function main() {
   const allRecent = getRecentTrainPositions(sinceTs);
 
   if (allRecent.length === 0) {
-    console.log('pulse: no train observations in lookback window — skipping');
+    console.log(
+      `train-pulse: no train positions recorded in last ${LOOKBACK_MS / 60000} min across any line — skipping (likely upstream snapshot/API issue)`,
+    );
     return;
   }
   const distinctTs = new Set(allRecent.map((r) => r.ts)).size;
   if (distinctTs < MIN_DISTINCT_TS) {
     console.log(
-      `pulse: only ${distinctTs} distinct snapshot(s) in lookback (need ${MIN_DISTINCT_TS}) — warming up, skipping`,
+      `train-pulse: only ${distinctTs} distinct snapshot(s) in last ${LOOKBACK_MS / 60000} min (need ${MIN_DISTINCT_TS}) — warming up, skipping`,
     );
     return;
   }
@@ -443,7 +450,17 @@ async function main() {
     return agent;
   };
 
+  const tally = {
+    evaluated: 0,
+    noObs: 0,
+    windDown: 0,
+    syntheticChecked: 0,
+    candidates: 0,
+    skippedDetector: 0,
+  };
+
   for (const line of ALL_LINES) {
+    tally.evaluated++;
     // GTFS says fewer than 1 trip active this hour on any direction → line is
     // winding down or between service hours. Don't false-flag the cold tail
     // behind the last train as an outage. Leave any open pulse_state intact:
@@ -459,14 +476,17 @@ async function main() {
       expectedAnyDir = 0;
     }
     if (expectedAnyDir < MIN_EXPECTED_ACTIVE) {
+      tally.windDown++;
       console.log(
-        `pulse: skipped line=${line} reason=below-min-scheduled-service expected=${expectedAnyDir} — leaving pulse_state intact`,
+        `train-pulse: ${line} — winding down (GTFS expects ${expectedAnyDir} trips this hour, threshold ≥${MIN_EXPECTED_ACTIVE}); leaving any open pulse_state intact, no clear-tick advance`,
       );
       continue;
     }
 
     const recent = allRecent.filter((r) => r.line === line);
     if (recent.length === 0) {
+      tally.noObs++;
+      tally.syntheticChecked++;
       await maybeSyntheticFullLineCandidate(line, allRecent, agentGetter, now);
       continue;
     }
@@ -496,8 +516,9 @@ async function main() {
     }
 
     if (detection.skipped) {
+      tally.skippedDetector++;
       console.log(
-        `pulse: skipped line=${line} reason=${detection.skipped} — leaving pulse_state intact`,
+        `train-pulse: ${line} — detector skipped (${detection.skipped}); leaving pulse_state intact`,
       );
       continue;
     }
@@ -512,6 +533,7 @@ async function main() {
     for (const c of detection.candidates) {
       if (seenDirs.has(c.direction)) continue;
       seenDirs.add(c.direction);
+      tally.candidates++;
       try {
         await handleCandidate(line, c.direction, c, agentGetter, now);
       } catch (e) {
@@ -524,6 +546,13 @@ async function main() {
       if (!seenDirs.has(row.direction)) await handleClear(line, row.direction, agentGetter, now);
     }
   }
+
+  console.log(
+    `train-pulse: summary — evaluated ${tally.evaluated} lines: ${tally.windDown} winding down, ` +
+      `${tally.noObs} with zero observations (${tally.syntheticChecked} checked for synthetic full-line candidate), ` +
+      `${tally.skippedDetector} skipped by detector gates, ` +
+      `${tally.candidates} dead-segment candidate(s) handed to handleCandidate`,
+  );
 }
 
 // Bug 2: when an entire line goes dark (rail replaced by shuttles, signal
