@@ -17,7 +17,7 @@ const names = {
   '8A': 'South Halsted',
   9: 'Ashland',
   X9: 'Ashland Express',
-  10: 'Museum of Science & Industry',
+  10: 'Obama Presidential Center/Museum of Science & Industry',
   11: 'Lincoln',
   12: 'Roosevelt',
   J14: 'Jeffery Jump',
