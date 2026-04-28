@@ -14,6 +14,15 @@ const MIN_OTHER_DISTINCT_TS = 3;
 const MIN_DISTINCT_TS = 3;
 const LOOKBACK_FLOOR_MS = 25 * 60 * 1000;
 const LOOKBACK_CEIL_MS = 60 * 60 * 1000;
+// Suppress alerts during the first 30 min of an hour when the prior hour had
+// no scheduled service. activeByHour averages over the hour, so a peak-only
+// route resuming service (e.g. X49 after the midday gap) shows expectedActive≈
+// the hour's average within minute one — even though the first scheduled trip
+// hasn't departed yet. Ghost detection's tail-median guard solves the same
+// problem for partial-shortage signals; pulse's strict-zero signal needs a
+// schedule-side guard since there are no observations to compare against.
+const RAMP_PRIOR_ACTIVE_THRESHOLD = 1;
+const RAMP_MINUTE_THRESHOLD = 30;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -37,6 +46,9 @@ async function detectBusBlackouts({
   const minDistinctTs = opts.minDistinctTs ?? MIN_DISTINCT_TS;
   const lookbackFloorMs = opts.lookbackFloorMs ?? LOOKBACK_FLOOR_MS;
   const lookbackCeilMs = opts.lookbackCeilMs ?? LOOKBACK_CEIL_MS;
+  const rampPriorActiveThreshold = opts.rampPriorActiveThreshold ?? RAMP_PRIOR_ACTIVE_THRESHOLD;
+  const rampMinuteThreshold = opts.rampMinuteThreshold ?? RAMP_MINUTE_THRESHOLD;
+  const minuteOfHour = opts.minuteOfHour;
 
   if (!routes || routes.length === 0) {
     return { skipped: 'no-routes', candidates: [] };
@@ -99,6 +111,24 @@ async function detectBusBlackouts({
 
     if (expectedActiveSum < minExpectedActive) continue;
 
+    // Post-gap ramp guard: if we're in the first half of an hour whose prior
+    // hour had no scheduled service, suppress — the hourly average overstates
+    // how many trips are actually running this early in the ramp-up hour.
+    if (minuteOfHour != null && minuteOfHour < rampMinuteThreshold) {
+      const priorWhen = new Date(now.getTime() - 60 * 60 * 1000);
+      let priorActiveSum = 0;
+      for (const pattern of patterns) {
+        const ea = expectedActive(routeStr, pattern, priorWhen);
+        if (Number.isFinite(ea)) priorActiveSum += ea;
+      }
+      if (priorActiveSum < rampPriorActiveThreshold) {
+        console.log(
+          `bus-pulse: skipping ${routeStr} — post-gap ramp-up (prior-hour active=${priorActiveSum.toFixed(1)}, minute=${minuteOfHour})`,
+        );
+        continue;
+      }
+    }
+
     // Headway-scaled lookback: 3× longest direction's headway, clamped.
     const lookbackMs =
       maxHeadwayMin != null
@@ -130,4 +160,6 @@ module.exports = {
   MIN_DISTINCT_TS,
   LOOKBACK_FLOOR_MS,
   LOOKBACK_CEIL_MS,
+  RAMP_PRIOR_ACTIVE_THRESHOLD,
+  RAMP_MINUTE_THRESHOLD,
 };

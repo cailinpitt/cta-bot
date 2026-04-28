@@ -44,9 +44,10 @@ The bus equivalent is intentionally simpler. Buses don't have a fixed branch geo
 1. Pull every bus observation recorded in the last 25–60 min (window scaled by the route's GTFS headway — 3× the longest direction, clamped) for each tracked route.
 2. For each route, count distinct vehicle IDs in the window.
 3. If the count is **zero** *and* GTFS says the route should have ≥ 2 active trips this hour *and* at least 5 other watchlist routes are reporting normally, that route is a blackout candidate.
-4. Require the same blackout to recur on two consecutive checks before posting (5–10 min of confirmed silence at the `*/5` cadence).
-5. Post text-only — `🚌⚠️ #<route> <name> service appears suspended` — with a footer that calls out the inferred-from-live-positions provenance. If a CTA bus alert on the route is already open, thread under it.
-6. When buses reappear for three consecutive clean ticks, post `🚌✅ #<route> <name> buses observed again` as a reply under the original pulse.
+4. Suppress candidates during the first 30 minutes of an hour whose prior hour had no scheduled service. `activeByHour` averages over the hour, so a peak-only route resuming after a midday gap (e.g. X49 at 14:08) shows expectedActive ≥ 2 even though the first scheduled trip hasn't departed yet — without this guard, every post-gap restart would fire a false-positive blackout. The ghost detector handles the analogous problem with an observation-side tail-median check; pulse needs a schedule-side guard because strict-zero leaves no observations to compare against.
+5. Require the same blackout to recur on two consecutive checks before posting (5–10 min of confirmed silence at the `*/5` cadence).
+6. Post text-only — `🚌⚠️ #<route> <name> service appears suspended` — with a footer that calls out the inferred-from-live-positions provenance. If a CTA bus alert on the route is already open, thread under it.
+7. When buses reappear for three consecutive clean ticks, post `🚌✅ #<route> <name> buses observed again` as a reply under the original pulse.
 
 The strict-zero gate is the key difference from train pulse. Even one bus on the air — including a stuck yard bus broadcasting position from the lot — suppresses pulse. Gaps with ≥ 2 buses still active are `bin/bus/gapPost.js`'s channel, not pulse's. False positives on bus pulse are higher-cost than false negatives, so the bar is deliberately conservative.
 

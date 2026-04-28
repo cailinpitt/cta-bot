@@ -53,6 +53,14 @@ function chicagoHour(now = new Date()) {
   return parseInt(h, 10);
 }
 
+function chicagoMinuteOfHour(now = new Date()) {
+  const m = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    minute: '2-digit',
+  }).format(now);
+  return parseInt(m, 10);
+}
+
 // Service-day transition is fuzzy around 4 AM: CTA encodes a trip that runs
 // at 1:15 AM Sunday as "25:15:00" under Saturday's service_id, so at 1 AM
 // Sunday wall-clock the right bucket is Saturday's. We always consult both
@@ -255,5 +263,6 @@ module.exports = {
   resolveDirection,
   dayTypeFor,
   chicagoHour,
+  chicagoMinuteOfHour,
   hourlyLookup,
 };

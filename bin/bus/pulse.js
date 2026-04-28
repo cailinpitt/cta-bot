@@ -19,7 +19,11 @@ const { loadPattern } = require('../../src/bus/patterns');
 const { getVehiclesCachedOrFresh } = require('../../src/bus/api');
 const { loginAlerts, postText, resolveReplyRef } = require('../../src/shared/bluesky');
 const { buildBusPostText, buildBusClearPostText } = require('../../src/shared/disruption');
-const { expectedHeadwayMin, expectedActiveTrips } = require('../../src/shared/gtfs');
+const {
+  expectedHeadwayMin,
+  expectedActiveTrips,
+  chicagoMinuteOfHour,
+} = require('../../src/shared/gtfs');
 const {
   getRecentBusObservationsByRoute,
   countDistinctTsInBusObservations,
@@ -282,6 +286,7 @@ async function main() {
     expectedHeadway: (route, pattern, when) => expectedHeadwayMin(route, pattern, when),
     globalDistinctTs,
     now: new Date(now),
+    opts: { minuteOfHour: chicagoMinuteOfHour(new Date(now)) },
   });
 
   if (detection.skipped) {
