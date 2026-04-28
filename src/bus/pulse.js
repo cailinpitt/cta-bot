@@ -14,15 +14,15 @@ const MIN_OTHER_DISTINCT_TS = 3;
 const MIN_DISTINCT_TS = 3;
 const LOOKBACK_FLOOR_MS = 25 * 60 * 1000;
 const LOOKBACK_CEIL_MS = 60 * 60 * 1000;
-// Suppress alerts during the first 30 min of an hour when the prior hour had
-// no scheduled service. activeByHour averages over the hour, so a peak-only
-// route resuming service (e.g. X49 after the midday gap) shows expectedActive≈
-// the hour's average within minute one — even though the first scheduled trip
-// hasn't departed yet. Ghost detection's tail-median guard solves the same
-// problem for partial-shortage signals; pulse's strict-zero signal needs a
-// schedule-side guard since there are no observations to compare against.
+// Below this expected-active value, an hour is considered scheduled-quiet
+// for the lookback-window probe. activeByHour averages over the hour, so a
+// peak-only route resuming service (e.g. X49 after the midday gap) shows
+// expectedActive ≈ the hour's average within minute one — even though the
+// first scheduled trip hasn't departed yet. Ghost detection's tail-median
+// guard solves the same problem for partial-shortage signals; pulse's
+// strict-zero signal needs a schedule-side guard since there are no
+// observations to compare against.
 const RAMP_PRIOR_ACTIVE_THRESHOLD = 1;
-const RAMP_MINUTE_THRESHOLD = 30;
 // Mirror image: in the last 30 min of the final hour of service, the hourly
 // average overstates how many trips are still on the road, and the last
 // scheduled departure may already be done. If the next hour has no
@@ -54,7 +54,6 @@ async function detectBusBlackouts({
   const lookbackFloorMs = opts.lookbackFloorMs ?? LOOKBACK_FLOOR_MS;
   const lookbackCeilMs = opts.lookbackCeilMs ?? LOOKBACK_CEIL_MS;
   const rampPriorActiveThreshold = opts.rampPriorActiveThreshold ?? RAMP_PRIOR_ACTIVE_THRESHOLD;
-  const rampMinuteThreshold = opts.rampMinuteThreshold ?? RAMP_MINUTE_THRESHOLD;
   const windDownNextActiveThreshold =
     opts.windDownNextActiveThreshold ?? WIND_DOWN_NEXT_ACTIVE_THRESHOLD;
   const windDownMinuteThreshold = opts.windDownMinuteThreshold ?? WIND_DOWN_MINUTE_THRESHOLD;
@@ -128,30 +127,38 @@ async function detectBusBlackouts({
         ? clamp(3 * maxHeadwayMin * 60_000, lookbackFloorMs, lookbackCeilMs)
         : lookbackFloorMs;
 
-    // Post-gap ramp guard: if we're early enough in an hour that the lookback
-    // window still straddles the prior hour, AND that prior hour had no
-    // scheduled service, suppress — the route is just starting up and the
-    // hourly average overstates how many trips have actually departed yet.
-    // Scaling the threshold to the lookback (rather than a flat 30 min) lets
-    // peak-only routes with longer headways stay protected longer (e.g. #2
-    // Hyde Park Express resuming at 3 PM with 44 min lookback).
-    const dynamicRampThreshold = Math.max(
-      rampMinuteThreshold,
-      Math.ceil(guardLookbackMs / 60_000) + 5,
-    );
-    if (minuteOfHour != null && minuteOfHour < dynamicRampThreshold) {
-      const priorWhen = new Date(now.getTime() - 60 * 60 * 1000);
-      let priorActiveSum = 0;
-      for (const pattern of patterns) {
-        const ea = expectedActive(routeStr, pattern, priorWhen);
-        if (Number.isFinite(ea)) priorActiveSum += ea;
+    // Lookback-window quiet-edge guard: sample the schedule at the start and
+    // midpoint of the lookback window. If either sample falls in a
+    // scheduled-quiet hour, the cold tail behind that quiet period reads as
+    // a blackout but is really just a quiet→active transition the
+    // observation window happened to straddle. Subsumes:
+    //   - dawn ramp-up (lookback starts before service begins)
+    //   - first-trip-of-day delays (first scheduled trip late but the prior
+    //     hour was already quiet, so the window still straddles a transition)
+    //   - inter-peak gaps mid-lookback (midpoint sample lands in the gap)
+    //   - post-midday-gap ramp (e.g. #2 Hyde Park Express resuming PM rush)
+    const lookbackQuietProbe = (() => {
+      const samples = [
+        new Date(now.getTime() - guardLookbackMs),
+        new Date(now.getTime() - guardLookbackMs / 2),
+      ];
+      for (const t of samples) {
+        let active = 0;
+        for (const pattern of patterns) {
+          const ea = expectedActive(routeStr, pattern, t);
+          if (Number.isFinite(ea)) active += ea;
+        }
+        if (active < rampPriorActiveThreshold) {
+          return { quiet: true, active, at: t };
+        }
       }
-      if (priorActiveSum < rampPriorActiveThreshold) {
-        console.log(
-          `bus-pulse: skipping ${routeStr} — post-gap ramp-up (prior-hour active=${priorActiveSum.toFixed(1)}, minute=${minuteOfHour}, threshold=${dynamicRampThreshold})`,
-        );
-        continue;
-      }
+      return { quiet: false };
+    })();
+    if (lookbackQuietProbe.quiet) {
+      console.log(
+        `bus-pulse: skipping ${routeStr} — lookback window straddles scheduled-quiet (active=${lookbackQuietProbe.active.toFixed(1)} at ${lookbackQuietProbe.at.toISOString()})`,
+      );
+      continue;
     }
 
     // Wind-down guard: in the last half of the final hour of service, the
@@ -203,7 +210,6 @@ module.exports = {
   LOOKBACK_FLOOR_MS,
   LOOKBACK_CEIL_MS,
   RAMP_PRIOR_ACTIVE_THRESHOLD,
-  RAMP_MINUTE_THRESHOLD,
   WIND_DOWN_NEXT_ACTIVE_THRESHOLD,
   WIND_DOWN_MINUTE_THRESHOLD,
 };
