@@ -27,10 +27,11 @@ const TRAIN_BUNCH_BBOX_PADDING_DEG = 0.003; // ~300m — zoom out a little past 
 // the primary focal point. Halo/arrow offsets are derived from this.
 const TRAIN_MARKER_RADIUS = 32;
 const TERMINAL_MARKER_RADIUS = TRAIN_MARKER_RADIUS;
-// Threshold for treating a train as "at" a station (white halo + label
-// anchored to the train). Tightened so departing trains visually leave the
-// station promptly instead of trailing the halo for a couple frames.
-const AT_STATION_FT = 250;
+// Threshold for painting the white halo on a train sitting at a station.
+// Tightened to roughly one car length so the halo only appears while the
+// train is actually dwelling — approaching/departing trains shed it
+// immediately instead of trailing it across several frames.
+const AT_STATION_FT = 120;
 
 // True geographic terminals per line, keyed by the CTA `destNm` string. Loop
 // lines (Brown/Orange/Pink/Purple) return "Loop" when heading downtown — those
@@ -230,10 +231,10 @@ function buildTrainOverlaySvg(
 
   // Sort stations along the route (by projected pixel position onto the route
   // bearing) so we can alternate which side of the track each label sits on.
-  // Within that order, hoist train-hosting stations to the front so they get
-  // the best available slots.
+  // Sort key is purely positional — adding a per-frame signal like `hasTrain`
+  // would reorder placement as trains pass through, which makes labels for
+  // bystander stations flip sides between frames.
   const sorted = [...stationsWithPixels].sort((a, b) => {
-    if (a.hasTrain !== b.hasTrain) return a.hasTrain ? -1 : 1;
     const aProj = a.x * globalAlong.x + a.y * globalAlong.y;
     const bProj = b.x * globalAlong.x + b.y * globalAlong.y;
     return aProj - bProj;
@@ -245,10 +246,13 @@ function buildTrainOverlaySvg(
   for (const s of sorted) {
     const text = xmlEscape(shortStationName(s.station.name));
     const approxWidth = text.length * 10 + 16;
-    // Trains get the bigger exclusion radius so labels clear the halo.
-    const pinX = s.hasTrain ? (s.trainX ?? s.x) : s.x;
-    const pinY = s.hasTrain ? s.trainY : s.y;
-    const radius = s.hasTrain ? TRAIN_MARKER_RADIUS + 8 : STATION_PIN_RADIUS;
+    // Always anchor labels to the station pin — never to a train passing
+    // through. Anchoring to the train made the label slide along with the
+    // train, which read as the station moving. The reserved train-marker
+    // boxes still push labels off the train icon.
+    const pinX = s.x;
+    const pinY = s.y;
+    const radius = STATION_PIN_RADIUS;
 
     const cands = candidates(
       pinX,
@@ -656,14 +660,12 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   });
   const trainPixels = separated.map(({ x, y }) => ({ x, y, bearingDeg: view.bearingDeg }));
 
-  const stationsWithPixels = view.visibleStations.map(({ station, x, y, bearingDeg }) => {
-    const nearbyIdx = trains.findIndex(
-      (t) => haversineFt({ lat: station.lat, lon: station.lon }, t) < AT_STATION_FT,
-    );
-    const trainX = nearbyIdx >= 0 ? separated[nearbyIdx].x : null;
-    const trainY = nearbyIdx >= 0 ? separated[nearbyIdx].y : null;
-    return { station, x, y, bearingDeg, hasTrain: nearbyIdx >= 0, trainX, trainY };
-  });
+  const stationsWithPixels = view.visibleStations.map(({ station, x, y, bearingDeg }) => ({
+    station,
+    x,
+    y,
+    bearingDeg,
+  }));
   const atStationPixels = trains
     .map((t, idx) => ({ t, idx }))
     .filter(({ t }) =>
