@@ -227,6 +227,36 @@ async function collectTrains(line, durationMs, pollIntervalMs) {
   return { tracks, destByRnDir };
 }
 
+// Collapse runs of adjacent observations at the same lat/lon (within
+// STATIONARY_RADIUS_FT) to a single record. Each kept record carries:
+//   - `t`: earliest timestamp in the run, used as the start of motion when
+//     paired with the next position (so a train that sat at Howard for 5 min
+//     then accelerated to d=3667 ft produces a low avg speed instead of the
+//     30-second-poll artifact of ~83 mph that trips maxMph).
+//   - `lastSeenAt`: latest timestamp in the run, used to bound the
+//     "vanished from feed" check (gap = p2.t − p1.lastSeenAt). A 5-min
+//     stationary period followed by a 30-sec motion gap is fine; an actual
+//     5-min feed dropout is still dropped by maxDtMs.
+const STATIONARY_RADIUS_FT = 50;
+
+function dedupeStationary(positions) {
+  if (positions.length < 2) return positions.map((p) => ({ ...p, lastSeenAt: p.t }));
+  const out = [{ ...positions[0], lastSeenAt: positions[0].t }];
+  for (let i = 1; i < positions.length; i++) {
+    const prev = out[out.length - 1];
+    const dft = haversineFt(
+      { lat: prev.lat, lon: prev.lon },
+      { lat: positions[i].lat, lon: positions[i].lon },
+    );
+    if (dft < STATIONARY_RADIUS_FT) {
+      prev.lastSeenAt = positions[i].t;
+      continue;
+    }
+    out.push({ ...positions[i], lastSeenAt: positions[i].t });
+  }
+  return out;
+}
+
 // `maxPerpFt` rejects off-branch projections (Green Ashland vs Cottage Grove).
 function computeTrainSamples(tracks, linePoints, cumDist, opts = {}) {
   const { maxDtMs, maxMph, minAlongFt, maxPerpFt } = { ...DEFAULT_TRAIN_SAMPLE_OPTS, ...opts };
@@ -235,13 +265,20 @@ function computeTrainSamples(tracks, linePoints, cumDist, opts = {}) {
   const stats = { offLine: 0, stationary: 0, dropped: 0 };
 
   for (const [rn, byDirForTrain] of tracks) {
-    for (const [trDr, positions] of byDirForTrain) {
-      positions.sort((a, b) => a.t - b.t);
+    for (const [trDr, rawPositions] of byDirForTrain) {
+      rawPositions.sort((a, b) => a.t - b.t);
+      const positions = dedupeStationary(rawPositions);
       for (let i = 1; i < positions.length; i++) {
         const p1 = positions[i - 1];
         const p2 = positions[i];
         const dt = p2.t - p1.t;
-        if (dt <= 0 || dt > maxDtMs) {
+        // Gap between when we LAST saw p1's location and when p2 was reported.
+        // For un-collapsed positions this equals dt; for stationary runs it's
+        // the post-stationary motion window. The "vanished" check uses gap so
+        // legitimate layovers don't get dropped, while real feed dropouts
+        // (train missing en route, no in-between observations) still are.
+        const gap = p2.t - p1.lastSeenAt;
+        if (dt <= 0 || gap > maxDtMs) {
           stats.dropped++;
           continue;
         }

@@ -21,6 +21,25 @@ const {
 // rendered path straying far from the physical track.
 const DUAL_DIR_OFFSET_FT = 250;
 
+// First/last bins of the train polyline are systematically null because the
+// CTA tracker has a position-update lag at terminals: legitimate
+// terminal-departure pairs compute to 80–100 mph (artifact of dt being our
+// poll cadence rather than actual motion time) and get dropped by the maxMph
+// filter. For DISPLAY only — leaving binSpeeds untouched so summary.avg and
+// recordSpeedmap stay measurement-accurate — fall back to the nearest interior
+// bin's color so the visible ribbon doesn't have a grey notch at each end.
+// Interior nulls are NOT filled — they're honest no-data signal.
+function speedForTrainRender(binSpeeds, idx) {
+  if (binSpeeds[idx] != null) return binSpeeds[idx];
+  const last = binSpeeds.length - 1;
+  if (idx === 0) {
+    for (let i = 1; i <= last; i++) if (binSpeeds[i] != null) return binSpeeds[i];
+  } else if (idx === last) {
+    for (let i = last - 1; i >= 0; i--) if (binSpeeds[i] != null) return binSpeeds[i];
+  }
+  return null;
+}
+
 async function renderSpeedmap(pattern, binSpeeds) {
   const points = pattern.points; // { lat, lon, ... }
   const cumDist = cumulativeDistances(points);
@@ -74,7 +93,7 @@ async function renderTrainSpeedmap(branches, _lineColor) {
         if (slices[b].length < 2) continue;
         const pairSlice = slices[b].map((p) => [p.lat, p.lon]);
         const encoded = encodeURIComponent(encode(pairSlice));
-        const color = colorForTrainSpeed(binSpeeds[b]);
+        const color = colorForTrainSpeed(speedForTrainRender(binSpeeds, b));
         overlays.push(`path-${SPEEDMAP_SEGMENT_STROKE}+${color}(${encoded})`);
       }
     });
