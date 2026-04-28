@@ -52,13 +52,33 @@ function splitSegments(segments, fromLoc, toLoc) {
       active.push(seg);
       continue;
     }
+    // Replace the nearest-vertex boundaries with the real station coords so
+    // the dim/bright join lands at the station instead of a few hundred feet
+    // shy of it (polyline vertices aren't placed at stations).
+    const snapped = seg.slice();
+    snapped[fromIdx] = [fromLoc.lat, fromLoc.lon];
+    snapped[toIdx] = [toLoc.lat, toLoc.lon];
     const lo = Math.min(fromIdx, toIdx);
     const hi = Math.max(fromIdx, toIdx);
-    if (lo > 0) active.push(seg.slice(0, lo + 1));
-    suspended.push(seg.slice(lo, hi + 1));
-    if (hi < seg.length - 1) active.push(seg.slice(hi));
+    if (lo > 0) active.push(snapped.slice(0, lo + 1));
+    suspended.push(snapped.slice(lo, hi + 1));
+    if (hi < snapped.length - 1) active.push(snapped.slice(hi));
   }
   return { active, suspended };
+}
+
+function estimateTextWidth(text, fontSize) {
+  let w = 0;
+  for (const ch of text) {
+    if (ch === ' ' || ch === '·' || /[.,:;'`]/.test(ch)) w += fontSize * 0.32;
+    else if (ch.codePointAt(0) > 0x2000)
+      w += fontSize * 1.05; // emoji / wide symbols
+    else if (/[A-Z]/.test(ch)) w += fontSize * 0.62;
+    else if (/[mw]/.test(ch)) w += fontSize * 0.62;
+    else if (/[ijl]/.test(ch)) w += fontSize * 0.32;
+    else w += fontSize * 0.52;
+  }
+  return Math.round(w);
 }
 
 function nearestVertexIdx(seg, loc) {
@@ -142,7 +162,11 @@ async function renderDisruption({
 
   const lineName = LINE_NAMES[line] || line;
   const titleText = title || `⚠ ${lineName} Line suspended`;
-  const titleWidth = 90 + titleText.length * 24;
+  const titleFontSize = 42;
+  // Per-glyph width estimate. The earlier flat 24px/char overshot heavily on
+  // titles containing " · " or many lowercase letters, leaving a long dead
+  // pill stretching past the text.
+  const titleWidth = 60 + estimateTextWidth(titleText, titleFontSize);
 
   const fromPx = project(fromLoc.lat, fromLoc.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
   const toPx = project(toLoc.lat, toLoc.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
