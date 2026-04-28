@@ -148,73 +148,9 @@ const names = {
   206: 'Evanston Circulator',
 };
 
-// Routes polled for bunching events. Favors coverage — any high-frequency route
-// where "two buses within 1000 ft" is meaningful content.
-const bunching = [
-  '6',
-  '8',
-  '9',
-  'X9',
-  'J14',
-  '15',
-  '20',
-  '22',
-  '26',
-  '29',
-  '36',
-  '49',
-  'X49',
-  '55',
-  '56',
-  '60',
-  '62',
-  '66',
-  '72',
-  '76',
-  '77',
-  '79',
-  '80',
-  '82',
-  '94',
-  '95',
-  '146',
-  '147',
-  '151',
-];
-
-// Routes eligible for the 60-minute speedmap. Favors density — only routes with
-// enough active buses to fill most segments with real data during a one-hour window.
-const speedmap = [
-  '8',
-  '9',
-  'X9',
-  'J14',
-  '15',
-  '22',
-  '26',
-  '36',
-  '49',
-  'X49',
-  '50',
-  '53',
-  '55',
-  '56',
-  '66',
-  '72',
-  '73',
-  '76',
-  '77',
-  '79',
-  '80',
-  '94',
-  '95',
-  '151',
-];
-
-// Routes polled for gap detection. Starts aligned with `bunching` — any route
-// where "two buses close together" is meaningful is also one where "no bus for
-// a long stretch" is meaningful — but kept as its own list so the two can
-// diverge as we tune each feature independently.
+// Routes polled for gap detection. Curated to high-frequency routes where
+// "no bus for a long stretch" is meaningful content — low-frequency routes
+// trip the threshold during normal scheduled gaps.
 const gaps = [
   '6',
   '8',
@@ -282,9 +218,10 @@ const ghosts = [
 ];
 
 // Every active CTA bus route. Used by observeBuses (the single API call site
-// for the all-routes workload), bus pulse, and bunching — all three read the
-// same snapshot, so this list also keeps pulse symmetric with bin/bus/alerts.js
-// so a CTA alert and a pulse signal can converge on the same thread.
+// for the all-routes workload), bus pulse, bunching, and speedmap — all four
+// read the same snapshot or rotate across the full list, so this list also
+// keeps pulse symmetric with bin/bus/alerts.js so a CTA alert and a pulse
+// signal can converge on the same thread.
 const allRoutes = Object.keys(names);
 
-module.exports = { names, bunching, speedmap, gaps, ghosts, allRoutes };
+module.exports = { names, gaps, ghosts, allRoutes };

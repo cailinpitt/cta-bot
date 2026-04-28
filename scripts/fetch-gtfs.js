@@ -14,10 +14,11 @@ const GTFS_URL = 'https://www.transitchicago.com/downloads/sch_data/google_trans
 const ZIP_PATH = '/tmp/cta-gtfs.zip';
 const OUT_PATH = Path.join(__dirname, '..', 'data', 'gtfs', 'index.json');
 
-// Union of all polled lists — a route in ghosts/gaps but not bunching would
-// otherwise silently have no schedule. Rail is always all 8 lines.
-const { bunching, ghosts, gaps, speedmap } = require('../src/bus/routes');
-const BUS_ROUTES = [...new Set([...bunching, ...ghosts, ...gaps, ...speedmap])].sort();
+// Index every active CTA bus route so any consumer (bunching, speedmap,
+// pulse, gaps, ghosts) can resolve schedule data without per-list bookkeeping.
+// Rail is always all 8 lines.
+const { allRoutes } = require('../src/bus/routes');
+const BUS_ROUTES = [...allRoutes].sort();
 const RAIL_ROUTES = ['Red', 'Blue', 'Brn', 'G', 'Org', 'P', 'Pink', 'Y'];
 
 async function downloadGtfs() {

@@ -80,3 +80,10 @@ The 40-bin granularity is a compromise: fine enough to highlight specific inters
 - `src/train/speedmap.js` — train equivalents plus polyline building, perpendicular projection, loop-line trimming.
 - `src/map/` — image rendering (route polyline + colored segments + station markers).
 - `bin/bus/speedmap.js`, `bin/train/speedmap.js` — cron entry points (one route per run; rotation handled by `history.leastRecentlyPostedSpeedmapRoute`).
+
+## Route selection
+
+Bus speedmaps rotate across **every active CTA bus route** (`allRoutes` in `src/bus/routes.js`). Two filters happen before the picker chooses a route:
+
+1. **In-service window check.** A route is only eligible if `expectedBusRouteActiveTrips` (sum of GTFS `activeByHour` across all directions) is ≥ 2 at both the start and end of the planned 60-minute collection window. This drops peak-only routes about to wind down (would burn 120 polls collecting near-empty data) and routes outside their service hours entirely.
+2. **Least-recently-posted picker.** Among the eligible routes, `history.leastRecentlyPostedSpeedmapRoute` picks the one whose most recent posted speedmap is oldest. Never-picked routes are treated as "infinitely old" and jump to the front, so coverage fans out evenly before any route gets a second turn. With ~130 routes and the cron at `0 */2`, expect each route to get a fresh speedmap roughly every 11 days.

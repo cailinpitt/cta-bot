@@ -162,6 +162,27 @@ function expectedActiveTrips(route, pattern, now = new Date()) {
   return busLookup(route, pattern, 'activeByHour', now);
 }
 
+// Route-level active trips: sums activeByHour across every GTFS direction for
+// the given route, no pattern required. Returns null when the route is
+// unindexed or has no entry for the hour (= no scheduled service). Used by
+// speedmap to filter out routes that won't be running during a collection
+// window.
+function expectedBusRouteActiveTrips(route, now = new Date()) {
+  const index = loadIndex();
+  const byDir = index.routes[route];
+  if (!byDir) return null;
+  let sum = 0;
+  let any = false;
+  for (const dirInfo of Object.values(byDir)) {
+    const v = hourlyLookup(dirInfo.activeByHour, now);
+    if (v != null) {
+      sum += v;
+      any = true;
+    }
+  }
+  return any ? sum : null;
+}
+
 // Train Tracker line codes (lowercase) → GTFS route_id in the index. These
 // are the only eight rail "routes" CTA publishes and the mapping is static.
 const TRAIN_LINE_TO_GTFS = {
@@ -257,6 +278,7 @@ module.exports = {
   expectedTripMinutes,
   expectedTrainTripMinutes,
   expectedActiveTrips,
+  expectedBusRouteActiveTrips,
   expectedTrainActiveTrips,
   expectedTrainActiveTripsAnyDir,
   isTrainLoopLine,

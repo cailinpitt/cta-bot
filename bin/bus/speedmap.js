@@ -4,7 +4,7 @@ require('../../src/shared/env');
 const _ = require('lodash');
 const argv = require('minimist')(process.argv.slice(2));
 
-const { names: routeNames, speedmap: speedmapRoutes } = require('../../src/bus/routes');
+const { names: routeNames, allRoutes } = require('../../src/bus/routes');
 const {
   collect,
   computeSamples,
@@ -18,10 +18,15 @@ const { loginBus, postWithImage } = require('../../src/bus/bluesky');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { formatTimeCT } = require('../../src/shared/format');
+const { expectedBusRouteActiveTrips } = require('../../src/shared/gtfs');
 
 const NUM_BINS = 40;
 const POLL_INTERVAL_MS = 30 * 1000;
 const DEFAULT_DURATION_MIN = 60;
+// Minimum scheduled active trips required at both ends of the collection
+// window. 2 ensures multiple buses overlap in the window so bins fill in
+// reasonably across the route.
+const MIN_ACTIVE_FOR_PICK = 2;
 
 function buildPostText(route, pattern, summary, startTime, endTime, callouts = []) {
   const displayName = routeNames[route];
@@ -50,11 +55,37 @@ function buildAltText(route, pattern, summary) {
 
 async function main() {
   setup();
-  const route = argv.route
-    ? String(argv.route)
-    : history.leastRecentlyPostedSpeedmapRoute('bus', speedmapRoutes);
   const durationMin = argv.duration ? Number(argv.duration) : DEFAULT_DURATION_MIN;
   const durationMs = durationMin * 60 * 1000;
+
+  let route;
+  if (argv.route) {
+    route = String(argv.route);
+  } else {
+    // Filter to routes scheduled to run for the full collection window.
+    // Check both bookends so a route winding down mid-window (last hour of
+    // service) gets skipped before we burn 120 polls on it.
+    const now = new Date();
+    const endOfWindow = new Date(now.getTime() + durationMs);
+    const inService = allRoutes.filter((r) => {
+      const startActive = expectedBusRouteActiveTrips(r, now);
+      const endActive = expectedBusRouteActiveTrips(r, endOfWindow);
+      return (
+        startActive != null &&
+        startActive >= MIN_ACTIVE_FOR_PICK &&
+        endActive != null &&
+        endActive >= MIN_ACTIVE_FOR_PICK
+      );
+    });
+    if (inService.length === 0) {
+      console.log(
+        `No bus routes scheduled to be in service across the next ${durationMin} min — skipping`,
+      );
+      return;
+    }
+    console.log(`${inService.length} of ${allRoutes.length} routes pass the in-service filter`);
+    route = history.leastRecentlyPostedSpeedmapRoute('bus', inService);
+  }
 
   if (!routeNames[route]) {
     console.error(`Route ${route} is not a known route`);
