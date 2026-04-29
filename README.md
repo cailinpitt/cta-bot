@@ -13,7 +13,7 @@ This README is written for operators running their own copy. If you just want to
 > Each major feature has a deep-dive in [`docs/`](docs/): [bunching](docs/BUNCHING.md), [gaps](docs/GAPS.md), [ghosting](docs/GHOSTING.md), [speedmaps](docs/SPEEDMAP.md), [alerts + pulse](docs/ALERTS.md).
 
 ### Bus (`@ctabusinsights`)
-- **Bunching** — clusters of buses on the same route/direction, as an annotated map. Reply includes a ~10-minute timelapse video of the cluster, with traffic signals annotated.
+- **Bunching** — clusters of buses on the same route/direction, as an annotated map. Reply includes a ~10-minute timelapse video of the cluster, with traffic signals and bus stops annotated.
 - **Gaps** — long stretches with no bus service, compared against the scheduled headway from GTFS.
 - **Speedmap** — a bus route color-coded by observed speed over a 1-hour window.
 - **Heatmap** — weekly/monthly rollup of chronic bunching + gap stops, plotted across Chicago.
@@ -221,7 +221,7 @@ Local state (gitignored, operator-managed):
 
 ![Bus bunching example](docs/images/bus-bunching.jpg)
 
-Reply: ~10-minute timelapse video of the cluster, with intersection traffic signals annotated.
+Reply: ~10-minute timelapse video of the cluster, with intersection traffic signals and bus stops annotated.
 
 ### Bus gap
 > 🕳 Route 76 (Diversey) — Westbound

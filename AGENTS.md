@@ -24,6 +24,7 @@ when, with stagger comments), `docs/{ALERTS,BUNCHING,GAPS,GHOSTING,SPEEDMAP}.md`
   substitute at install time (see `scripts/install-logrotate.sh`).
 - Husky pre-commit runs `biome check --write` on staged `*.{js,json}`. If
   it fails, fix the underlying issue and create a new commit (don't amend).
+- Documentation should be updated whenever a change is made, so it doesn't get stale.
 
 ## Dev commands
 
