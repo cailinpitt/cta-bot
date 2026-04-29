@@ -59,6 +59,10 @@ async function detectBusBlackouts({
   const windDownMinuteThreshold = opts.windDownMinuteThreshold ?? WIND_DOWN_MINUTE_THRESHOLD;
   const minuteOfHour = opts.minuteOfHour;
 
+  // Accept either a Date or a millisecond timestamp. Tests pass a number;
+  // production passes new Date(). Normalize once so downstream math/Date
+  // construction is consistent.
+  const nowMs = typeof now === 'number' ? now : now.getTime();
   if (!routes || routes.length === 0) {
     return { skipped: 'no-routes', candidates: [] };
   }
@@ -138,10 +142,7 @@ async function detectBusBlackouts({
     //   - inter-peak gaps mid-lookback (midpoint sample lands in the gap)
     //   - post-midday-gap ramp (e.g. #2 Hyde Park Express resuming PM rush)
     const lookbackQuietProbe = (() => {
-      const samples = [
-        new Date(now.getTime() - guardLookbackMs),
-        new Date(now.getTime() - guardLookbackMs / 2),
-      ];
+      const samples = [new Date(nowMs - guardLookbackMs), new Date(nowMs - guardLookbackMs / 2)];
       for (const t of samples) {
         let active = 0;
         for (const pattern of patterns) {
@@ -166,7 +167,7 @@ async function detectBusBlackouts({
     // scheduled trips, the cold tail reads as a blackout but is just the
     // route shutting down for the night.
     if (minuteOfHour != null && minuteOfHour >= 60 - windDownMinuteThreshold) {
-      const nextWhen = new Date(now.getTime() + 60 * 60 * 1000);
+      const nextWhen = new Date(nowMs + 60 * 60 * 1000);
       let nextActiveSum = 0;
       for (const pattern of patterns) {
         const ea = expectedActive(routeStr, pattern, nextWhen);
@@ -183,7 +184,7 @@ async function detectBusBlackouts({
     // Headway-scaled lookback: 3× longest direction's headway, clamped.
     // Identical to the guard-side lookback above.
     const lookbackMs = guardLookbackMs;
-    const sinceTs = now - lookbackMs;
+    const sinceTs = nowMs - lookbackMs;
     const inWindow = obs.filter((o) => o.ts >= sinceTs);
     const distinctVids = new Set(inWindow.map((o) => o.vid).filter(Boolean));
 
