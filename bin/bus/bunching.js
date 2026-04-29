@@ -14,6 +14,7 @@ const {
   dedupeNearbySignals,
   annotateSignalOrientations,
 } = require('../../src/bus/trafficSignals');
+const { getPatternStops, dedupeStopsNearSignals } = require('../../src/bus/stops');
 const { captureBunchingVideo } = require('../../src/bus/bunchingVideo');
 const { loginBus, postWithImage, postWithVideo, postText } = require('../../src/bus/bluesky');
 const { isOnCooldown } = require('../../src/shared/state');
@@ -162,9 +163,12 @@ async function main() {
   console.log(
     `Signals: ${bboxSignals.length} in pattern bbox → ${onRoute.length} on route → ${signals.length} after dedupe`,
   );
+  const allStops = getPatternStops(pattern);
+  const stops = dedupeStopsNearSignals(allStops, signals);
+  console.log(`Stops: ${allStops.length} in pattern → ${stops.length} after signal dedupe`);
   let image;
   try {
-    image = await renderBunchingMap(bunch, pattern, signals);
+    image = await renderBunchingMap(bunch, pattern, signals, stops);
   } catch (e) {
     console.warn(`Map render failed (${e.message}); will post text-only`);
     image = null;
@@ -191,6 +195,7 @@ async function main() {
         tickMs,
         interpolate,
         signals,
+        stops,
       });
       if (!result) {
         console.log('Video capture produced <2 frames, skipped');
@@ -234,7 +239,7 @@ async function main() {
   // Timelapse reply is non-fatal — the primary alert already went out.
   try {
     console.log('Capturing bunching timelapse...');
-    const video = await captureBunchingVideo(bunch, pattern, { signals });
+    const video = await captureBunchingVideo(bunch, pattern, { signals, stops });
     if (!video) {
       console.log('Timelapse capture produced <2 frames, skipping reply');
       return;

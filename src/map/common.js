@@ -114,6 +114,26 @@ const TWEMOJI_FLAG_INNER = [
   '<rect fill="none" stroke="#000" stroke-width="0.6" x="9.5" y="6" width="22" height="12"/>',
 ].join('');
 
+// Bus-stop sign: square amber placard with a white mini-bus glyph. Amber
+// (#f57c00) sits well clear of the cyan route line and the pink buses on a
+// dark basemap. Drawn from primitives for cross-host stability. Sized for a
+// 36×36 viewBox — fills the box edge-to-edge so callers can size by `size`.
+const TWEMOJI_BUS_STOP_INNER = [
+  // square sign placard, full viewBox
+  '<rect fill="#f57c00" stroke="#fff" stroke-width="2" x="2" y="2" width="32" height="32" rx="3" ry="3"/>',
+  // mini bus body
+  '<rect fill="#fff" x="7" y="10" width="22" height="16" rx="2" ry="2"/>',
+  // window strip
+  '<rect fill="#f57c00" x="9" y="12" width="18" height="6" rx="0.8" ry="0.8"/>',
+  // wheels
+  '<circle fill="#222" cx="12" cy="26" r="2.3"/>',
+  '<circle fill="#222" cx="24" cy="26" r="2.3"/>',
+].join('');
+
+function buildStopMarker(x, y, size) {
+  return `<svg x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" viewBox="0 0 36 36">${TWEMOJI_BUS_STOP_INNER}</svg>`;
+}
+
 // Articulated marker uses a deeper magenta — same family as the standard
 // hot-pink, but visibly distinct so the easter egg reads at a glance.
 const ARTIC_MARKER_COLOR = 'a8175a';
@@ -295,8 +315,10 @@ module.exports = {
   TWEMOJI_TRAIN_INNER,
   TWEMOJI_HOUSE_INNER,
   TWEMOJI_FLAG_INNER,
+  TWEMOJI_BUS_STOP_INNER,
   buildBusMarker,
   buildTerminalMarker,
+  buildStopMarker,
   xmlEscape,
   requireMapboxToken,
   fetchMapboxStatic,

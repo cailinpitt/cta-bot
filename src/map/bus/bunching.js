@@ -14,6 +14,7 @@ const {
   TWEMOJI_FLAG_INNER,
   buildBusMarker,
   buildTerminalMarker,
+  buildStopMarker,
   buildDirectionArrow,
   requireMapboxToken,
   fetchMapboxStatic,
@@ -26,6 +27,11 @@ const BUS_COLOR = 'ff2a6d'; // hot pink/red reads well on dark
 const CONTEXT_PAD_FT = 1500; // feet of route context on each side of the bunch
 const BUS_MARKER_RADIUS = 34;
 const TERMINAL_MARKER_RADIUS = BUS_MARKER_RADIUS;
+const STOP_MARKER_SIZE = 32;
+// Push stops sideways off the route so the route line stays unbroken and
+// the glyph isn't competing with the polyline for the same pixels. Offset
+// is in the right-of-travel direction (perpendicular to view bearing).
+const STOP_OFFSET_PX = 22;
 
 /**
  * Slice pattern points to a window around the bunched buses' geographic position.
@@ -121,10 +127,10 @@ async function fetchBunchingBaseMap(view) {
   return fetchMapboxStatic(url, 20000);
 }
 
-// Composite bus markers, traffic-signal dots, and the direction arrow onto a
-// pre-fetched base map. The base map, signals, and arrow are static across a
-// video; only marker positions vary.
-async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
+// Composite bus markers, traffic-signal dots, stop glyphs, and the direction
+// arrow onto a pre-fetched base map. The base map, signals, stops, and arrow
+// are static across a video; only marker positions vary.
+async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops = []) {
   // Signals render below buses — small traffic-light glyphs that read clearly
   // without competing with the primary markers. Drawn inline (not via Unicode)
   // so librsvg renders the same shape on every host. Housings rotate to sit
@@ -164,6 +170,21 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
         : `<circle cx="${left + greenOff}" cy="${y}" r="4" fill="#43a047"/>`,
     ].join('');
   });
+  // Stop glyphs render below buses (and below terminals/arrow) so a bus
+  // sitting at a stop still reads on top. Push each stop perpendicular to
+  // route bearing so the sign sits beside the route, not on top of it.
+  // Skip stops whose offset position falls outside the viewport.
+  const perp = perpendicularFromBearing(view.bearingDeg);
+  const stopElements = stops
+    .map((s) => {
+      const p = project(s.lat, s.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+      const x = p.x + perp.x * STOP_OFFSET_PX;
+      const y = p.y + perp.y * STOP_OFFSET_PX;
+      if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) return '';
+      return buildStopMarker(x, y, STOP_MARKER_SIZE);
+    })
+    .filter(Boolean);
+
   // Nudge markers apart so a tight bunch (buses within a few feet on-street) still
   // shows every vehicle instead of one disc covering the others. Push sideways
   // (perpendicular to the route bearing) so buses on a straight road don't look
@@ -207,7 +228,7 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
     terminalElements.push(...buildTerminalMarker(x, y, TERMINAL_MARKER_RADIUS, glyph));
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${stopElements.join('\n')}${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
@@ -215,10 +236,10 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = []) {
     .toBuffer();
 }
 
-async function renderBunchingMap(bunch, pattern, signals = []) {
+async function renderBunchingMap(bunch, pattern, signals = [], stops = []) {
   const view = computeBunchingView(bunch, pattern);
   const baseMap = await fetchBunchingBaseMap(view);
-  return renderBunchingFrame(view, baseMap, bunch.vehicles, signals);
+  return renderBunchingFrame(view, baseMap, bunch.vehicles, signals, stops);
 }
 
 module.exports = {
