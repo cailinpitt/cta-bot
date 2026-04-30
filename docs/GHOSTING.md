@@ -41,7 +41,9 @@ active_in_hour_H += (min(arrival, H_end) - max(departure, H_start)) / 3600
 
 A 90-minute trip that runs 16:30–18:00 contributes 0.5 to hour 16, 1.0 to hour 17, and 0 to hour 18. Summed across all scheduled trips, this gives the mean number of vehicles that should be simultaneously running, hour by hour. It's the apples-to-apples comparison for snapshot counts of live vehicles.
 
-(An earlier version used `duration / headway` as a stand-in for active trips. That works at steady state but breaks during ramp-up/ramp-down hours, where headway is computed from a handful of clustered trip-starts and the formula overestimates by 3-5×. Switching to the area-under-curve definition eliminated a class of false-positive "ghost" calls during morning service start.)
+Unlike the headway and duration buckets, **active-trip counts include every revenue trip** — short-turn variants and non-dominant service overlays are not filtered out. Headway and duration apply two filters (dominant `service_id` per hour, dominant origin terminal per route+direction) so that "every ~X min" tracks rider-facing frequency without garage pullouts and short-turns collapsing the median. But for "how many buses should be on the street right now", a revenue trip counts regardless of which terminal it left from. Earlier the active counter inherited those filters and chronically underestimated multi-terminal routes (e.g. Route 79 EB at 4 PM read as 6 expected when ~17 were observed); splitting the active loop out fixed this.
+
+(An even earlier version used `duration / headway` as a stand-in for active trips. That works at steady state but breaks during ramp-up/ramp-down hours, where headway is computed from a handful of clustered trip-starts and the formula overestimates by 3-5×. Switching to the area-under-curve definition eliminated a class of false-positive "ghost" calls during morning service start.)
 
 ### Step 2 — observing live service
 

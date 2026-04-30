@@ -104,6 +104,11 @@ load-bearing — see invariants below.
 - **GTFS index throws past 7 days old** (calendar_dates makes it
   date-specific). After laptop sleep / cron outage, run `npm run fetch-gtfs`
   before manual runs.
+- **`activeByHour` counts every revenue trip; `headways` / `durations` are
+  filtered by dominant service_id + dominant origin.** Don't merge the loops
+  in `scripts/fetch-gtfs.js` — applying the dominance filters to active
+  counts chronically underestimates multi-terminal routes and suppresses
+  bus ghost detection.
 - **Pids are stringified everywhere** (`parseVehicle`) so cache and
   fresh-API rows compare strict-equal.
 - **`alert_posts` rows are never hard-deleted by the alerts pipeline** —

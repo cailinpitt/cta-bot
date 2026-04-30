@@ -353,6 +353,27 @@ async function main() {
   }
   const lastStopSample = new Map();
 
+  // Active counts include every revenue trip in scope — short-turn variants
+  // and non-dominant service overlays still put buses on the street, so the
+  // ground-truth "how many should be active right now" must count them.
+  // Headway and duration buckets stay filtered below (rider-facing frequency
+  // shouldn't include garage pullouts and short-turns).
+  for (const [tripId, meta] of tripMeta) {
+    const dep = firstDeparture.get(tripId);
+    const arr = lastArrival.get(tripId);
+    if (dep == null || arr == null || arr <= dep) continue;
+    const startHour = Math.floor(dep / 3600);
+    const endHour = Math.floor((arr - 1) / 3600);
+    for (let h = startHour; h <= endHour; h++) {
+      const hStart = h * 3600;
+      const hEnd = hStart + 3600;
+      const overlap = Math.min(arr, hEnd) - Math.max(dep, hStart);
+      if (overlap <= 0) continue;
+      const k = bucketKey(meta.route, meta.dir, meta.dayType, h % 24);
+      activeBuckets.set(k, (activeBuckets.get(k) || 0) + overlap / 3600);
+    }
+  }
+
   for (const [tripId, meta] of tripMeta) {
     const dep = firstDeparture.get(tripId);
     if (dep == null) continue;
@@ -376,20 +397,6 @@ async function main() {
       const durMin = (arr - dep) / 60;
       if (!durationBuckets.has(key)) durationBuckets.set(key, []);
       durationBuckets.get(key).push(durMin);
-
-      // Mean simultaneously-active count: weight each hour by the fraction
-      // the trip spent in progress. Naive +1 per overlapping hour conflates
-      // "appeared at any point" with "simultaneously in service."
-      const startHour = Math.floor(dep / 3600);
-      const endHour = Math.floor((arr - 1) / 3600);
-      for (let h = startHour; h <= endHour; h++) {
-        const hStart = h * 3600;
-        const hEnd = hStart + 3600;
-        const overlap = Math.min(arr, hEnd) - Math.max(dep, hStart);
-        if (overlap <= 0) continue;
-        const k = bucketKey(meta.route, meta.dir, meta.dayType, h % 24);
-        activeBuckets.set(k, (activeBuckets.get(k) || 0) + overlap / 3600);
-      }
     }
 
     const rdKey = `${meta.route}|${meta.dir}`;
