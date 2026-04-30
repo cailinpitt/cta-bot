@@ -58,6 +58,8 @@ The chosen cluster is rendered as a map showing the line with each train marked 
 
 A successful post records the pid (or line/trDr) on cooldown so we don't keep firing on the same incident. Pattern-level *and* route-level cooldowns exist for buses; line-level cooldowns for trains. There's also a daily cap (3 bus bunches/day) so a bad day doesn't drown the feed.
 
+Both the daily cap and the route/line-level cooldown carry a strict-dominance override: a candidate that's strictly worse than every prior post within the window (more vehicles, or same count + larger span for buses; tighter span for trains) bypasses the gate. A 3-bus pileup at 3 PM shouldn't suppress a 5-bus pileup at 3:30 PM on the same route. The pid (bus) and direction (train) cooldowns stay strict — same direction within the hour is almost always the same incident.
+
 ## Why this approach
 
 The signal is geometric, not statistical: vehicles on the same pattern, close together, in service territory. Most of the code is filtering — terminal layovers, ghost reports, opposite-direction noise — to make sure the post matches what a rider on the street would actually see.

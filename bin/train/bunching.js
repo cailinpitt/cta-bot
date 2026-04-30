@@ -54,7 +54,16 @@ async function main() {
     if (!argv['dry-run']) {
       const dirCd = isOnCooldown(candDirKey);
       const lineCd = isOnCooldown(candLineKey);
-      if (dirCd || lineCd) {
+      // Direction cooldown stays strict; line cooldown allows a strictly-more-
+      // severe escalation through, mirroring the daily cap's dominance override.
+      const lineCdOverride =
+        lineCd &&
+        history.bunchingCooldownAllows({
+          kind: 'train',
+          route: candidate.line,
+          candidate: { vehicleCount: candidate.trains.length, severityFt: candidate.spanFt },
+        });
+      if (dirCd || (lineCd && !lineCdOverride)) {
         console.log(
           `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${dirCd ? 'direction' : 'line'} on cooldown`,
         );
@@ -68,6 +77,11 @@ async function main() {
           posted: false,
         });
         continue;
+      }
+      if (lineCdOverride) {
+        console.log(
+          `  override line cooldown for ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${candidate.trains.length} trains / ${Math.round(candidate.spanFt)} ft beats prior post`,
+        );
       }
       const capAllows = history.bunchingCapAllows({
         kind: 'train',

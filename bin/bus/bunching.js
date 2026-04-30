@@ -86,7 +86,17 @@ async function main() {
     if (!argv['dry-run']) {
       const pidCd = isOnCooldown(candidate.pid);
       const routeCd = isOnCooldown(routeKey);
-      if (pidCd || routeCd) {
+      // Pid cooldown stays strict (same direction = same incident). Route
+      // cooldown allows strictly-more-severe escalations through, mirroring
+      // the daily cap's dominance override.
+      const routeCdOverride =
+        routeCd &&
+        history.bunchingCooldownAllows({
+          kind: 'bus',
+          route: candidate.route,
+          candidate: { vehicleCount: candidate.vehicles.length, severityFt: candidate.spanFt },
+        });
+      if (pidCd || (routeCd && !routeCdOverride)) {
         console.log(`  skip pid ${candidate.pid}: ${pidCd ? 'pid' : 'route'} on cooldown`);
         history.recordBunching({
           kind: 'bus',
@@ -98,6 +108,11 @@ async function main() {
           posted: false,
         });
         continue;
+      }
+      if (routeCdOverride) {
+        console.log(
+          `  override route cooldown for pid ${candidate.pid}: ${candidate.vehicles.length} buses / ${candidate.spanFt} ft beats prior post`,
+        );
       }
       const capAllows = history.bunchingCapAllows({
         kind: 'bus',

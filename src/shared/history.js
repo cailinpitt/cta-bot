@@ -760,6 +760,32 @@ function bunchingCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
   });
 }
 
+// Cooldown-bypass for bunching: an active route-level cooldown shouldn't
+// suppress a strictly-more-severe escalation on the same route. Returns true
+// when the candidate dominates every posted bunch on this route within
+// `withinMs` (default 1h to match COOLDOWN_MS).
+function bunchingCooldownAllows(
+  { kind, route, candidate, withinMs = 60 * 60 * 1000 },
+  now = Date.now(),
+) {
+  const events = db()
+    .prepare(`
+    SELECT vehicle_count AS vc, severity_ft AS sev
+    FROM bunching_events
+    WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
+  `)
+    .all(kind, route, now - withinMs);
+  if (events.length === 0) return true;
+  return events.every((ev) => {
+    if (kind === 'bus') {
+      if (candidate.vehicleCount > ev.vc) return true;
+      if (candidate.vehicleCount === ev.vc && candidate.severityFt > ev.sev) return true;
+      return false;
+    }
+    return candidate.severityFt < ev.sev;
+  });
+}
+
 function gapCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
   const events = db()
     .prepare(`
@@ -808,6 +834,7 @@ module.exports = {
   formatCallouts,
   leastRecentlyPostedSpeedmapRoute,
   bunchingCapAllows,
+  bunchingCooldownAllows,
   gapCapAllows,
   getAlertPost,
   recordAlertSeen,
