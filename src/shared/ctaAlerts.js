@@ -184,6 +184,9 @@ const MINOR_PATTERNS = [
   // mentions "bus stop" repeatedly to describe shuttle pickup locations.
   // Require "bus stop" to be paired with a minor-disruption verb.
   /\bbus\s+stop\s+(closed|closure|relocat|temporar|chang)/i,
+  // "Boarding Change" alerts cover platform/track-side shuffles where trains
+  // share a track but service still runs.
+  /\bboarding\s+change/i,
   /\belevator\b/i,
   /\bescalator\b/i,
   /\bentrance\b/i,

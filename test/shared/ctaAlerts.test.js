@@ -229,6 +229,19 @@ test('not significant: elevator outage', () => {
   );
 });
 
+test('not significant: boarding change with same-track running', () => {
+  assert.equal(
+    isSignificantAlert(
+      makeAlert({
+        headline: 'Boarding Change, Delays Between LaSalle and Grand',
+        shortDescription:
+          'Blue Line trains will operate on the same track between LaSalle and Grand, resulting in boarding changes and minor delays.',
+      }),
+    ),
+    false,
+  );
+});
+
 test('not significant: weekend track work', () => {
   assert.equal(
     isSignificantAlert(
