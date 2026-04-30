@@ -15,6 +15,7 @@ const {
   buildBusMarker,
   buildTerminalMarker,
   buildStopMarker,
+  buildStopDot,
   buildDirectionArrow,
   requireMapboxToken,
   fetchMapboxStatic,
@@ -28,10 +29,12 @@ const CONTEXT_PAD_FT = 1500; // feet of route context on each side of the bunch
 const BUS_MARKER_RADIUS = 34;
 const TERMINAL_MARKER_RADIUS = BUS_MARKER_RADIUS;
 const STOP_MARKER_SIZE = 32;
+const STOP_DOT_RADIUS = 6;
 // Push stops sideways off the route so the route line stays unbroken and
 // the glyph isn't competing with the polyline for the same pixels. Offset
 // is in the right-of-travel direction (perpendicular to view bearing).
 const STOP_OFFSET_PX = 22;
+const STOP_DOT_OFFSET_PX = 14;
 
 /**
  * Slice pattern points to a window around the bunched buses' geographic position.
@@ -130,7 +133,8 @@ async function fetchBunchingBaseMap(view) {
 // Composite bus markers, traffic-signal dots, stop glyphs, and the direction
 // arrow onto a pre-fetched base map. The base map, signals, stops, and arrow
 // are static across a video; only marker positions vary.
-async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops = []) {
+async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops = [], opts = {}) {
+  const compactStops = opts.compactStops === true;
   // Signals render below buses — small traffic-light glyphs that read clearly
   // without competing with the primary markers. Drawn inline (not via Unicode)
   // so librsvg renders the same shape on every host. Housings rotate to sit
@@ -179,19 +183,25 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
   // while the stop sits cleanly beside the same intersection. Stops that
   // land within a marker-width of an already-placed stop are dropped, so
   // paired near-side/far-side stops don't read as one blob.
-  const STOP_MIN_SEPARATION = STOP_MARKER_SIZE + 6;
+  // In compact mode (used by video frames where the full sign reads as
+  // visual noise on dense routes) stops render as small amber dots and sit
+  // closer to the route. Still images keep the full sign glyph.
+  const offsetPx = compactStops ? STOP_DOT_OFFSET_PX : STOP_OFFSET_PX;
+  const minSeparation = compactStops ? STOP_DOT_RADIUS * 2 + 4 : STOP_MARKER_SIZE + 6;
   const placedStops = [];
   const stopElements = [];
   for (const s of stops) {
     const perp = perpendicularFromBearing(s.bearing ?? view.bearingDeg);
     const p = project(s.lat, s.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
-    const x = p.x + perp.x * STOP_OFFSET_PX;
-    const y = p.y + perp.y * STOP_OFFSET_PX;
+    const x = p.x + perp.x * offsetPx;
+    const y = p.y + perp.y * offsetPx;
     if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) continue;
-    const tooClose = placedStops.some((q) => Math.hypot(q.x - x, q.y - y) < STOP_MIN_SEPARATION);
+    const tooClose = placedStops.some((q) => Math.hypot(q.x - x, q.y - y) < minSeparation);
     if (tooClose) continue;
     placedStops.push({ x, y });
-    stopElements.push(buildStopMarker(x, y, STOP_MARKER_SIZE));
+    stopElements.push(
+      compactStops ? buildStopDot(x, y, STOP_DOT_RADIUS) : buildStopMarker(x, y, STOP_MARKER_SIZE),
+    );
   }
 
   // Nudge markers apart so a tight bunch (buses within a few feet on-street) still

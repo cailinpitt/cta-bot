@@ -134,6 +134,13 @@ function buildStopMarker(x, y, size) {
   return `<svg x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" viewBox="0 0 36 36">${TWEMOJI_BUS_STOP_INNER}</svg>`;
 }
 
+// Compact form: a small amber dot. Used in video frames where the full
+// sign-and-glyph reads as visual noise on dense routes — the dot still
+// marks "there's a stop here" without taking over the frame.
+function buildStopDot(x, y, radius) {
+  return `<circle cx="${x}" cy="${y}" r="${radius}" fill="#f57c00" stroke="#fff" stroke-width="1.5"/>`;
+}
+
 // Articulated marker uses electric violet — a vivid hue clearly distinct
 // from the standard hot-pink, so the easter egg reads at a glance against
 // the dark basemap.
@@ -320,6 +327,7 @@ module.exports = {
   buildBusMarker,
   buildTerminalMarker,
   buildStopMarker,
+  buildStopDot,
   xmlEscape,
   requireMapboxToken,
   fetchMapboxStatic,
