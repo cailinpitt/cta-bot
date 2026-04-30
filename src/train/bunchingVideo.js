@@ -21,7 +21,40 @@ const DEFAULT_TICKS = 40; // 10 min of real time
 const DEFAULT_INTERPOLATE = 4;
 const DEFAULT_FRAMERATE = 16;
 
+// CTA occasionally returns a single-tick GPS teleport (~0.5–1 mi off-route
+// and back). At ~15 s tick spacing, anything past this caps real train motion
+// (top speed ~70 mph = ~1540 ft / 15 s). The bound is generous on purpose —
+// real express stretches can clear ~1500 ft/tick — but cleanly rejects the
+// multi-thousand-foot jumps we see in the wild.
+const MAX_TRACK_STEP_FT = 3000;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Polyline orientation isn't fixed per line — for some lines/branches the
+// train's destination is at trackDist=0, for others at the max. We infer
+// "forward" from the series' net travel, reject single-tick teleports, and
+// clamp monotonic in the forward direction. A non-decreasing clamp alone
+// (the prior implementation) silently accepted a glitched step in the
+// polyline-forward direction even when the train was physically moving the
+// other way — a single CTA GPS spike then froze the train at the bogus
+// position for the remainder of the video.
+function clampTrackSeries(rawSeries) {
+  if (rawSeries.length === 0) return [];
+  const first = rawSeries[0];
+  const last = rawSeries[rawSeries.length - 1];
+  const forward = last >= first ? 1 : -1;
+  let prev = null;
+  return rawSeries.map((raw) => {
+    if (prev == null) {
+      prev = raw;
+      return raw;
+    }
+    if (Math.abs(raw - prev) > MAX_TRACK_STEP_FT) return prev;
+    if ((raw - prev) * forward < 0) return prev;
+    prev = raw;
+    return raw;
+  });
+}
 
 function trainsSpanFt(trains, linePts, lineCum) {
   if (trains.length < 2) return null;
@@ -68,9 +101,9 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
 
   if (snapshots.length < 2) return null;
 
-  // Per-rn cleanup: snap to polyline → clamp non-decreasing → smooth.
-  // Removes lateral jitter and backward GPS/prediction swaps that would flip
-  // adjacent trains' apparent order.
+  // Per-rn cleanup: snap to polyline → reject teleports → clamp toward
+  // destination → smooth. Removes lateral jitter and backward GPS/prediction
+  // swaps that would flip adjacent trains' apparent order.
   const { points: linePts, cumDist: lineCum } = buildLinePolyline(trainLines, bunch.line);
   const hasPolyline = linePts.length >= 2;
   if (hasPolyline) {
@@ -83,12 +116,7 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
       }
     }
     for (const series of seriesByRn.values()) {
-      let prev = null;
-      const clamped = series.map(({ raw }) => {
-        const next = prev == null ? raw : Math.max(prev, raw);
-        prev = next;
-        return next;
-      });
+      const clamped = clampTrackSeries(series.map((s) => s.raw));
       const smoothed = smoothSeries(clamped);
       for (let i = 0; i < series.length; i++) {
         const { t } = series[i];
@@ -190,4 +218,4 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
   }
 }
 
-module.exports = { captureTrainBunchingVideo };
+module.exports = { captureTrainBunchingVideo, clampTrackSeries, MAX_TRACK_STEP_FT };
