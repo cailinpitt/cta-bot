@@ -138,7 +138,6 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
   // N-S streets get horizontal ones — matching how real lights face drivers.
   const SIGNAL_LONG = 36;
   const SIGNAL_SHORT = 16;
-  const signalRects = [];
   const signalElements = signals.map((s) => {
     const { x, y } = project(
       s.lat,
@@ -155,7 +154,6 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
     const h = vertical ? SIGNAL_LONG : SIGNAL_SHORT;
     const left = x - w / 2;
     const top = y - h / 2;
-    signalRects.push({ left, top, right: left + w, bottom: top + h });
     const redOff = 7;
     const yellowOff = 18;
     const greenOff = 29;
@@ -173,43 +171,28 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
     ].join('');
   });
   // Stop glyphs render below buses (and below terminals/arrow) so a bus
-  // sitting at a stop still reads on top. Push each stop perpendicular to
-  // route bearing so the sign sits beside the route. If the offset position
-  // overlaps a signal box at the same intersection, step the perpendicular
-  // push further out (with small gap) until clear, so stop and signal sit
-  // side-by-side instead of stacked.
-  const perp = perpendicularFromBearing(view.bearingDeg);
-  const STOP_HALF = STOP_MARKER_SIZE / 2;
-  const STOP_SIGNAL_GAP = 4;
-  const stopElements = stops
-    .map((s) => {
-      const p = project(s.lat, s.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
-      let push = STOP_OFFSET_PX;
-      for (let iter = 0; iter < 8; iter++) {
-        const x = p.x + perp.x * push;
-        const y = p.y + perp.y * push;
-        const sLeft = x - STOP_HALF;
-        const sTop = y - STOP_HALF;
-        const sRight = x + STOP_HALF;
-        const sBottom = y + STOP_HALF;
-        const collision = signalRects.find(
-          (r) =>
-            sLeft < r.right + STOP_SIGNAL_GAP &&
-            sRight > r.left - STOP_SIGNAL_GAP &&
-            sTop < r.bottom + STOP_SIGNAL_GAP &&
-            sBottom > r.top - STOP_SIGNAL_GAP,
-        );
-        if (!collision) {
-          if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) return '';
-          return buildStopMarker(x, y, STOP_MARKER_SIZE);
-        }
-        // Step out by enough to clear the worst-case projection of the rect
-        // along the perpendicular axis on this iteration.
-        push += STOP_HALF + STOP_SIGNAL_GAP;
-      }
-      return '';
-    })
-    .filter(Boolean);
+  // sitting at a stop still reads on top. Each stop carries its own local
+  // bearing from getPatternStops, so curved sections push perpendicular
+  // to the local segment instead of skewing to one side. Every stop sits
+  // at the same fixed offset for a uniform parade-of-signs look — signals
+  // are NOT pushed around, so they may sit adjacent to the route line
+  // while the stop sits cleanly beside the same intersection. Stops that
+  // land within a marker-width of an already-placed stop are dropped, so
+  // paired near-side/far-side stops don't read as one blob.
+  const STOP_MIN_SEPARATION = STOP_MARKER_SIZE + 6;
+  const placedStops = [];
+  const stopElements = [];
+  for (const s of stops) {
+    const perp = perpendicularFromBearing(s.bearing ?? view.bearingDeg);
+    const p = project(s.lat, s.lon, view.centerLat, view.centerLon, view.zoom, WIDTH, HEIGHT);
+    const x = p.x + perp.x * STOP_OFFSET_PX;
+    const y = p.y + perp.y * STOP_OFFSET_PX;
+    if (x < 0 || x > WIDTH || y < 0 || y > HEIGHT) continue;
+    const tooClose = placedStops.some((q) => Math.hypot(q.x - x, q.y - y) < STOP_MIN_SEPARATION);
+    if (tooClose) continue;
+    placedStops.push({ x, y });
+    stopElements.push(buildStopMarker(x, y, STOP_MARKER_SIZE));
+  }
 
   // Nudge markers apart so a tight bunch (buses within a few feet on-street) still
   // shows every vehicle instead of one disc covering the others. Push sideways
