@@ -137,6 +137,7 @@ function buildTrainOverlaySvg(
   originPixel,
   bearingDeg = 0,
   arrowBearingDeg = null,
+  unlabeledPinPixels = [],
 ) {
   const fontSize = 18;
   const labelHeight = fontSize + 8;
@@ -166,8 +167,14 @@ function buildTrainOverlaySvg(
   }
   // Station pins too — a label covering a neighboring station's pin hides
   // the thing the label is pointing at and confuses the reader. Tight pad
-  // since pins are small (~14px).
+  // since pins are small (~14px). Reserve unlabeled pins as well: distant
+  // stops get a pin but no label, and labels for nearby stations must still
+  // avoid covering them.
   for (const { x, y } of stationsWithPixels) {
+    const r = STATION_PIN_RADIUS + 2;
+    reserved.push({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
+  }
+  for (const { x, y } of unlabeledPinPixels) {
     const r = STATION_PIN_RADIUS + 2;
     reserved.push({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
   }
@@ -551,15 +558,24 @@ function computeTrainBunchingView(
     return bearing(bestA, bestB);
   }
 
-  const visibleStations = onLineStations
-    .filter((s) => labeledSet.has(s.name))
+  // Pin every on-line station that falls inside the frame, but only label the
+  // ones in `labeledSet`. As the video plays, the trains travel beyond the
+  // initial bunch area and the bbox widens via `extraTrains`; without pins
+  // for the further-out stops, viewers lose track-context once trains leave
+  // the labeled cluster. Keeping the pin density high but the label density
+  // low gives orientation without crowding text near the bunch event.
+  const pinStations = onLineStations
     .map((s) => {
       const pixels = project(s.lat, s.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
-      return { station: s, ...pixels, bearingDeg: localBearingFor(s) };
+      return { station: s, ...pixels };
     })
     .filter(({ x, y }) => x >= 0 && x <= WIDTH && y >= 0 && y <= HEIGHT);
 
-  for (const { station: s } of visibleStations) {
+  const visibleStations = pinStations
+    .filter(({ station: s }) => labeledSet.has(s.name))
+    .map(({ station: s, x, y }) => ({ station: s, x, y, bearingDeg: localBearingFor(s) }));
+
+  for (const { station: s } of pinStations) {
     overlays.push(`pin-s+ffffff(${s.lon.toFixed(5)},${s.lat.toFixed(5)})`);
   }
 
@@ -635,6 +651,7 @@ function computeTrainBunchingView(
     centerLon,
     zoom,
     visibleStations,
+    pinStations,
     bearingDeg,
     arrowBearingDeg,
     terminal,
@@ -691,6 +708,11 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   const terminalPixel = projectIfVisible(view.terminal);
   const originPixel = projectIfVisible(view.origin);
 
+  const labeledNames = new Set(view.visibleStations.map((v) => v.station.name));
+  const unlabeledPinPixels = (view.pinStations || [])
+    .filter(({ station }) => !labeledNames.has(station.name))
+    .map(({ x, y }) => ({ x, y }));
+
   const svg = buildTrainOverlaySvg(
     stationsWithPixels,
     atStationPixels,
@@ -702,6 +724,7 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
     originPixel,
     view.bearingDeg,
     view.arrowBearingDeg,
+    unlabeledPinPixels,
   );
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
