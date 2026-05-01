@@ -21,6 +21,8 @@ const {
   fetchMapboxStatic,
   separateMarkers,
   perpendicularFromBearing,
+  measureTextWidth,
+  xmlEscape,
 } = require('../common');
 const { isArticulated } = require('../../bus/fleet');
 
@@ -30,6 +32,9 @@ const BUS_MARKER_RADIUS = 34;
 const TERMINAL_MARKER_RADIUS = BUS_MARKER_RADIUS;
 const STOP_MARKER_SIZE = 32;
 const STOP_DOT_RADIUS = 6;
+const RECORD_BADGE_TITLE = 'CTA BUS BUNCHING RECORD';
+const RECORD_BADGE_SUBTITLE = 'Network-highest in last 30 days';
+let recordBadgeLayoutPromise = null;
 // Push stops sideways off the route so the route line stays unbroken and
 // the glyph isn't competing with the polyline for the same pixels. Offset
 // is in the right-of-travel direction (perpendicular to view bearing).
@@ -130,12 +135,101 @@ async function fetchBunchingBaseMap(view) {
   return fetchMapboxStatic(url, 20000);
 }
 
+async function getRecordBadgeLayout() {
+  if (!recordBadgeLayoutPromise) {
+    recordBadgeLayoutPromise = (async () => {
+      const titleSize = 24;
+      const subtitleSize = 15;
+      const titleWidth = await measureTextWidth(RECORD_BADGE_TITLE, titleSize, { bold: true });
+      const subtitleWidth = await measureTextWidth(RECORD_BADGE_SUBTITLE, subtitleSize);
+      const sparkleGap = 22;
+      const sparkleSize = 16;
+      const padX = 20;
+      const x = 44;
+      const y = 48;
+      const titleX = padX + sparkleSize + sparkleGap;
+      const rightSparkleX = titleX + titleWidth + sparkleGap;
+      const width = rightSparkleX + sparkleSize + padX;
+      const height = 82;
+      return {
+        x,
+        y,
+        width,
+        height,
+        titleSize,
+        subtitleSize,
+        titleWidth,
+        subtitleWidth,
+        titleX,
+        titleY: 31,
+        subtitleY: 56,
+        leftSparkleCx: padX + sparkleSize / 2,
+        rightSparkleCx: rightSparkleX + sparkleSize / 2,
+        sparkleCy: 24,
+      };
+    })();
+  }
+  return recordBadgeLayoutPromise;
+}
+
+function buildSparkle(cx, cy, { scale, opacity, rotationDeg }) {
+  const long = 12 * scale;
+  const short = 6 * scale;
+  const stroke = 2.4 * scale;
+  return `
+    <g transform="translate(${cx} ${cy}) rotate(${rotationDeg})" opacity="${opacity}">
+      <path d="M 0 -${long} L 0 ${long} M -${long} 0 L ${long} 0 M -${short} -${short} L ${short} ${short} M -${short} ${short} L ${short} -${short}" stroke="#ffd86c" stroke-width="${stroke}" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="${1.8 * scale}" fill="#fff7d1"/>
+    </g>
+  `;
+}
+
+async function buildRecordBadgeSvg(phase = 0) {
+  const layout = await getRecordBadgeLayout();
+  const pulseA = phase * Math.PI * 2;
+  const pulseB = pulseA + Math.PI;
+  const sparkleA = {
+    scale: 0.78 + 0.42 * ((Math.sin(pulseA) + 1) / 2),
+    opacity: 0.25 + 0.75 * ((Math.sin(pulseA) + 1) / 2),
+    rotationDeg: -12 + 10 * Math.sin(pulseA),
+  };
+  const sparkleB = {
+    scale: 0.78 + 0.42 * ((Math.sin(pulseB) + 1) / 2),
+    opacity: 0.25 + 0.75 * ((Math.sin(pulseB) + 1) / 2),
+    rotationDeg: 12 + 10 * Math.sin(pulseB),
+  };
+  const subtitleW = Math.max(130, Math.round(layout.subtitleWidth + 8));
+
+  return `
+    <defs>
+      <filter id="recordBadgeShadow" x="-20%" y="-20%" width="160%" height="180%">
+        <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.35"/>
+      </filter>
+      <filter id="recordSparkleGlow" x="-80%" y="-80%" width="260%" height="260%">
+        <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#ffd86c" flood-opacity="0.55"/>
+      </filter>
+    </defs>
+    <g transform="translate(${layout.x} ${layout.y})" filter="url(#recordBadgeShadow)">
+      <rect x="0" y="0" width="${layout.width}" height="${layout.height}" rx="20" fill="#08141d" fill-opacity="0.9" stroke="#d2bf84" stroke-opacity="0.7" stroke-width="1.5"/>
+      <g filter="url(#recordSparkleGlow)">
+        ${buildSparkle(layout.leftSparkleCx, layout.sparkleCy, sparkleA)}
+        ${buildSparkle(layout.rightSparkleCx, layout.sparkleCy, sparkleB)}
+      </g>
+      <text x="${layout.titleX}" y="${layout.titleY}" fill="#fff8e0" font-family="Arial, sans-serif" font-size="${layout.titleSize}" font-weight="700" letter-spacing="0.5">${xmlEscape(RECORD_BADGE_TITLE)}</text>
+      <rect x="${layout.titleX}" y="39" width="${subtitleW}" height="2" rx="1" fill="#d2bf84" fill-opacity="0.75"/>
+      <text x="${layout.titleX}" y="${layout.subtitleY}" fill="#d7e2ea" font-family="Arial, sans-serif" font-size="${layout.subtitleSize}" font-weight="600">${xmlEscape(RECORD_BADGE_SUBTITLE)}</text>
+    </g>
+  `;
+}
+
 // Composite bus markers, traffic-signal dots, stop glyphs, and the direction
 // arrow onto a pre-fetched base map. The base map, signals, stops, and arrow
 // are static across a video; only marker positions vary.
 async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops = [], opts = {}) {
   const compactStops = opts.compactStops === true;
   const compactSignals = opts.compactSignals === true;
+  const recordBadgePhase = typeof opts.recordBadgePhase === 'number' ? opts.recordBadgePhase : 0;
+  const recordBadge = opts.recordBadge === true ? await buildRecordBadgeSvg(recordBadgePhase) : '';
   // Signals render below buses — small traffic-light glyphs that read clearly
   // without competing with the primary markers. Drawn inline (not via Unicode)
   // so librsvg renders the same shape on every host. Housings rotate to sit
@@ -256,7 +350,7 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
     terminalElements.push(...buildTerminalMarker(x, y, TERMINAL_MARKER_RADIUS, glyph));
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${stopElements.join('\n')}${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${stopElements.join('\n')}${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}${recordBadge}</svg>`;
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])

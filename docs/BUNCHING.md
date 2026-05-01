@@ -21,6 +21,10 @@ A bus post looks like this:
 
 > 🚌 Route 22 (Clark) Northbound — 3 buses bunched within 2,400 ft
 
+If that bus bunch is the strongest posted CTA bus bunch in the last 30 days, the post leads with:
+
+> 🏆 CTA BUS BUNCHING RECORD 🏆
+
 The map shows the route line with each clustered vehicle marked along it, plus nearby intersections so a rider can recognize where they are.
 
 ## The technical version
@@ -59,6 +63,8 @@ The chosen cluster is rendered as a map showing the line with each train marked 
 A successful post records the pid (or line/trDr) on cooldown so we don't keep firing on the same incident. Pattern-level *and* route-level cooldowns exist for buses; line-level cooldowns for trains. There's also a daily cap (3 bus bunches/day) so a bad day doesn't drown the feed.
 
 Both the daily cap and the route/line-level cooldown carry a strict-dominance override: a candidate that's strictly worse than every prior post within the window (more vehicles, or same count + larger span for buses; tighter span for trains) bypasses the gate. A 3-bus pileup at 3 PM shouldn't suppress a 5-bus pileup at 3:30 PM on the same route. The pid (bus) and direction (train) cooldowns stay strict — same direction within the hour is almost always the same incident.
+
+Bus bunching has one extra severity callout above the route-level wording: when a posted bus bunch strictly beats every other posted CTA bus bunch in the last 30 days (more buses, or the same count in a larger span), the post swaps the usual *"worst reported on this route in 30 days"* footer for a `🏆 CTA BUS BUNCHING RECORD 🏆` lead line. The timelapse reply gets a matching badge overlay in the upper-left corner so the record status survives screenshot crops and quote-posts.
 
 ## Why this approach
 

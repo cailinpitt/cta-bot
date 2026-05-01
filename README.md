@@ -33,7 +33,7 @@ This README is written for operators running their own copy. If you just want to
 - **Pulse** — a bot-side detector that infers a rail service suspension from live train positions when a ≥2-mile stretch of a line goes cold for 15+ min. Often surfaces outages before CTA issues an alert; threaded under the official alert when one appears.
 
 ### Both bus and train
-- **Historical callouts** — posts carry frequency and severity context from prior posts in `history.sqlite`, e.g. *"3rd Route 66 bunch reported today"* or *"tightest reported on this line in 30 days"*.
+- **Historical callouts** — posts carry frequency and severity context from prior posts in `history.sqlite`, e.g. *"3rd Route 66 bunch reported today"* or *"tightest reported on this line in 30 days"*. Bus bunches that set a new 30-day network high swap the route-only callout for a `🏆 CTA BUS BUNCHING RECORD 🏆` lead and a matching timelapse badge.
 
 The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train bot covers all 8 L lines.
 
@@ -175,7 +175,7 @@ Bus routes not touched by bunching or gaps need an explicit observer run to show
 ### History DB and callouts
 `state/history.sqlite` records every detection (posted or cooldown-suppressed) and every observation. Retention is 90 days. Two things feed off it:
 - **Cooldown** — posts for the same route/direction inside a short window are suppressed to avoid spam. Tracked in `state/posted.json`.
-- **Callouts** — each post is annotated with frequency and severity from prior records, e.g. *"3rd Route 66 bunch reported today"* or *"largest gap reported on this line in 30 days"*.
+- **Callouts** — each post is annotated with frequency and severity from prior records, e.g. *"3rd Route 66 bunch reported today"* or *"largest gap reported on this line in 30 days"*. Bus bunching also tracks a 30-day network-wide high-water mark and promotes qualifying posts to `🏆 CTA BUS BUNCHING RECORD 🏆`.
 
 SQLite runs in **WAL mode**. If you inspect `history.sqlite` with a CLI while jobs are running, recent rows may still live in `history.sqlite-wal` until checkpoint.
 
@@ -222,6 +222,7 @@ Local state (gitignored, operator-managed):
 ![Bus bunching example](docs/images/bus-bunching.jpg)
 
 Reply: ~10-minute timelapse video of the cluster, with intersection traffic signals and bus stops annotated.
+If the bunch is the strongest posted CTA bus bunch in the last 30 days, the lead line becomes `🏆 CTA BUS BUNCHING RECORD 🏆` and the timelapse reply gets a matching record badge overlay.
 
 ### Bus gap
 > 🕳 Route 76 (Diversey) — Westbound
