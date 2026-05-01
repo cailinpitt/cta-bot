@@ -34,12 +34,17 @@ function formatAvg(summary) {
 }
 
 // Branched lines (Green) have ambiguous trDr — pick the dominant destination
-// among rns that contributed to this branch+direction.
-function destForBranchDir(rns, trDr, destByRnDir) {
+// among rns that contributed to this branch+direction. `allowedDests` (the
+// branch's terminus station names) excludes off-branch trains that snapped
+// onto the shared trunk: e.g. Cottage Grove trains on the Ashland branch's
+// trunk would otherwise outvote Ashland-bound trains and collapse both
+// branches to the same dest in dedupe.
+function destForBranchDir(rns, trDr, destByRnDir, allowedDests = null) {
   const counts = new Map();
   for (const rn of rns) {
     const dest = destByRnDir.get(rn)?.get(trDr);
     if (!dest) continue;
+    if (allowedDests && !allowedDests.has(dest)) continue;
     counts.set(dest, (counts.get(dest) || 0) + 1);
   }
   let best = null;
@@ -47,6 +52,33 @@ function destForBranchDir(rns, trDr, destByRnDir) {
     if (!best || count > best.count) best = { dest, count };
   }
   return best?.dest;
+}
+
+function nearestStationName(lat, lon, stations) {
+  let best = null;
+  let bestD = Infinity;
+  for (const st of stations) {
+    const d = (st.lat - lat) ** 2 + (st.lon - lon) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = st;
+    }
+  }
+  return best?.name;
+}
+
+function branchTerminusDests(branch, stations) {
+  const pts = branch.points;
+  if (!pts || pts.length < 2) return new Set();
+  const [a0, a1] = Array.isArray(pts[0]) ? pts[0] : [pts[0].lat, pts[0].lon];
+  const last = pts[pts.length - 1];
+  const [b0, b1] = Array.isArray(last) ? last : [last.lat, last.lon];
+  const names = new Set();
+  const start = nearestStationName(a0, a1, stations);
+  const end = nearestStationName(b0, b1, stations);
+  if (start) names.add(start);
+  if (end) names.add(end);
+  return names;
 }
 
 function dirLabel(dest) {
@@ -143,10 +175,16 @@ async function main() {
     }
     const numBins = Math.max(MIN_BINS, Math.round(totalFt / FT_PER_BIN));
     const binSpeedsByDir = {};
+    const allowedDests = branchTerminusDests(branches[i], trainStations);
     for (const [trDr, samples] of byDir) {
       binSpeedsByDir[trDr] = binSegments(samples, totalFt, numBins);
       const s = summarize(binSpeedsByDir[trDr], TRAIN_THRESHOLDS);
-      const dest = destForBranchDir(rnsByDir.get(trDr) || new Set(), trDr, destByRnDir);
+      const dest = destForBranchDir(
+        rnsByDir.get(trDr) || new Set(),
+        trDr,
+        destByRnDir,
+        allowedDests,
+      );
       const label = dirLabel(dest);
       console.log(
         `Branch ${i} / ${label} (dir ${trDr}): ${samples.length} samples · avg ${s.avg?.toFixed(1)} mph · red=${s.red} orange=${s.orange} yellow=${s.yellow} purple=${s.purple} green=${s.green}`,
