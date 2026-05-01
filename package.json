@@ -1,6 +1,6 @@
 {
   "name": "cta-insights",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Bluesky bots that turn CTA train and bus tracker data into Chicago-specific transit visualizations",
   "main": "index.js",
   "dependencies": {
