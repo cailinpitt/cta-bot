@@ -23,6 +23,8 @@ const { expectedBusRouteActiveTrips } = require('../../src/shared/gtfs');
 const NUM_BINS = 40;
 const POLL_INTERVAL_MS = 30 * 1000;
 const DEFAULT_DURATION_MIN = 60;
+// Mostly-grey maps aren't informative — skip if too few bins have data.
+const MIN_COVERAGE = 0.3;
 // Minimum scheduled active trips required at both ends of the collection
 // window. 2 ensures multiple buses overlap in the window so bins fill in
 // reasonably across the route.
@@ -138,6 +140,29 @@ async function main() {
   console.log(
     `Avg ${summary.avg?.toFixed(1)} mph · red=${summary.red} orange=${summary.orange} yellow=${summary.yellow} green=${summary.green}`,
   );
+
+  const validBins = summary.red + summary.orange + summary.yellow + summary.green;
+  const coverage = NUM_BINS > 0 ? validBins / NUM_BINS : 0;
+  if (coverage < MIN_COVERAGE) {
+    console.log(
+      `Sparse coverage for route ${route}: ${validBins}/${NUM_BINS} bins (${(coverage * 100).toFixed(0)}%) — not posting`,
+    );
+    if (!argv['dry-run']) {
+      history.recordSpeedmap({
+        kind: 'bus',
+        route,
+        direction: targetPid,
+        avgMph: null,
+        pctRed: 0,
+        pctOrange: 0,
+        pctYellow: 0,
+        pctGreen: 0,
+        binSpeeds: [],
+        posted: false,
+      });
+    }
+    return;
+  }
 
   const callouts = history.speedmapCallouts({
     kind: 'bus',
