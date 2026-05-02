@@ -29,7 +29,7 @@ function latLonDistMeters([lat, lon], loc) {
 // California↔Western, ~0.5 mi). Truncate at the apex (vertex farthest from
 // the start) so we render only one direction of the loop. Mirrors the same
 // logic in src/train/speedmap.js processSegment used by the detector.
-function truncateRoundTrip(seg) {
+function truncateRoundTrip(seg, fromLoc = null, toLoc = null) {
   if (seg.length < 3) return seg;
   const first = { lat: seg[0][0], lon: seg[0][1] };
   const last = { lat: seg[seg.length - 1][0], lon: seg[seg.length - 1][1] };
@@ -50,6 +50,35 @@ function truncateRoundTrip(seg) {
     if (latLonDistMeters(seg[i], first) < plateauThreshold) {
       exitIdx = i - 1;
       break;
+    }
+  }
+  // If either disruption endpoint is closer to the dropped (return-leg) half
+  // than to the kept half, the disruption sits on the apex — typically a Loop
+  // section for Brown/Orange/Pink/Purple. Truncating in that case chops the
+  // very geometry the suspended segment lives on, leaving splitSegments
+  // unable to find from/to and producing weird overlay/bbox output. Skip
+  // truncation and return the full polyline; for Loop segments the active2
+  // overlap doesn't visibly compete because the dim stretch covers the
+  // entire apex.
+  if (fromLoc || toLoc) {
+    const distToKept = (loc) => {
+      let best = Infinity;
+      for (let i = 0; i <= exitIdx; i++) {
+        const d = latLonDistMeters(seg[i], loc);
+        if (d < best) best = d;
+      }
+      return best;
+    };
+    const distToDropped = (loc) => {
+      let best = Infinity;
+      for (let i = exitIdx + 1; i < seg.length; i++) {
+        const d = latLonDistMeters(seg[i], loc);
+        if (d < best) best = d;
+      }
+      return best;
+    };
+    for (const loc of [fromLoc, toLoc].filter(Boolean)) {
+      if (distToDropped(loc) < distToKept(loc)) return seg;
     }
   }
   return seg.slice(0, exitIdx + 1);
@@ -79,7 +108,7 @@ function splitSegments(segments, fromLoc, toLoc) {
   const active = [];
   const suspended = [];
   for (const rawSeg of segments) {
-    const seg = truncateRoundTrip(rawSeg);
+    const seg = truncateRoundTrip(rawSeg, fromLoc, toLoc);
     if (seg.length < 2) continue;
     const fromIdx = nearestVertexIdx(seg, fromLoc);
     const toIdx = nearestVertexIdx(seg, toLoc);
