@@ -497,18 +497,20 @@ async function main() {
     try {
       detection = detectDeadSegments({
         line,
-        recentPositions: recent.map((r) => ({
-          ts: r.ts,
-          lat: r.lat,
-          lon: r.lon,
-          rn: r.rn,
-          trDr: r.trDr,
-        })),
         trainLines,
         stations: trainStations,
         headwayMin,
         now,
-        opts: { lookbackMs: LOOKBACK_MS },
+        opts: {
+          lookbackMs: LOOKBACK_MS,
+          recentPositions: recent.map((r) => ({
+            ts: r.ts,
+            lat: r.lat,
+            lon: r.lon,
+            rn: r.rn,
+            trDr: r.trDr,
+          })),
+        },
       });
     } catch (e) {
       console.error(`pulse detect failed for ${line}: ${e.stack || e.message}`);
