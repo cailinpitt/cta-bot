@@ -166,9 +166,14 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
   for (let i = 0; i < snapshots.length - 1; i++) {
     const a = new Map(snapshots[i].vehicles.map((v) => [v.vid, v]));
     const b = new Map(snapshots[i + 1].vehicles.map((v) => [v.vid, v]));
-    // Tail-dropped VIDs are rendered separately as fading ghosts — exclude
-    // them from the regular interpolation path so we don't also freeze them.
-    const vids = allVids.filter((vid) => !tailDrops.has(vid) && (a.has(vid) || b.has(vid)));
+    // Tail-dropped VIDs render normally up to their last-seen snapshot, then
+    // hand off to the fading ghost from that timestamp onward — so the bus
+    // appears as usual, then turns gray and fades when the signal is lost.
+    const vids = allVids.filter((vid) => {
+      const drop = tailDrops.get(vid);
+      if (drop && i >= drop.lastSeenIdx) return false;
+      return a.has(vid) || b.has(vid);
+    });
     for (let k = 0; k < interpolate; k++) {
       const t = k / interpolate;
       const vehicles = [];

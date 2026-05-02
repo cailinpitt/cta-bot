@@ -213,7 +213,14 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
   for (let i = 0; i < snapshots.length - 1; i++) {
     const a = new Map(snapshots[i].trains.map((t) => [t.rn, t]));
     const b = new Map(snapshots[i + 1].trains.map((t) => [t.rn, t]));
-    const rns = allRns.filter((rn) => !tailDrops.has(rn) && (a.has(rn) || b.has(rn)));
+    // Tail-dropped RNs render normally up to their last-seen snapshot, then
+    // hand off to the fading ghost so the train appears as usual before the
+    // signal loss instead of materializing gray near the end.
+    const rns = allRns.filter((rn) => {
+      const drop = tailDrops.get(rn);
+      if (drop && i >= drop.lastSeenIdx) return false;
+      return a.has(rn) || b.has(rn);
+    });
     for (let k = 0; k < interpolate; k++) {
       const t = k / interpolate;
       const frame = [];
