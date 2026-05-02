@@ -27,6 +27,7 @@ const {
 const {
   getRecentBusObservationsByRoute,
   countDistinctTsInBusObservations,
+  getActiveBusRoutesSince,
   rolloffOldObservations,
 } = require('../../src/shared/observations');
 const { acquireCooldown, clearCooldown } = require('../../src/shared/state');
@@ -275,6 +276,11 @@ async function main() {
   const sinceTs = now - POLL_LOOKBACK_MS;
   const observationsByRoute = getRecentBusObservationsByRoute(pulseRoutes, sinceTs);
   const globalDistinctTs = countDistinctTsInBusObservations(sinceTs);
+  // Cold-start grace window: routes with at least one observation in the past
+  // 6 hours are eligible for blackout detection. Routes that haven't been
+  // seen at all today are likely just service-not-yet-started.
+  const COLD_START_GRACE_MS = 6 * 60 * 60 * 1000;
+  const recentlyActiveRoutes = getActiveBusRoutesSince(now - COLD_START_GRACE_MS);
 
   const detection = await detectBusBlackouts({
     routes: pulseRoutes,
@@ -285,6 +291,7 @@ async function main() {
     expectedActive: (route, pattern, when) => expectedActiveTrips(route, pattern, when),
     expectedHeadway: (route, pattern, when) => expectedHeadwayMin(route, pattern, when),
     globalDistinctTs,
+    recentlyActiveRoutes,
     now: new Date(now),
     opts: { minuteOfHour: chicagoMinuteOfHour(new Date(now)) },
   });

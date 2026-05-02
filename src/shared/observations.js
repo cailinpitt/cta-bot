@@ -192,6 +192,19 @@ function getRecentTrainPositions(sinceTs) {
 // window — used to constrain pulse detection to the actual revenue corridor
 // (e.g. weekend Purple runs Linden ↔ Howard, not the full Express to Loop).
 // Returns null when the line has had zero observations in the window.
+// Set of bus routes that have had at least one observation since `sinceTs`.
+// Used by bus-pulse's cold-start grace: a route with no obs in the past 6h
+// is service-not-yet-started rather than blackout, so suppress the alert.
+function getActiveBusRoutesSince(sinceTs) {
+  const rows = getDb()
+    .prepare(`
+      SELECT DISTINCT route FROM observations
+      WHERE kind = 'bus' AND ts >= ?
+    `)
+    .all(sinceTs);
+  return new Set(rows.map((r) => String(r.route)));
+}
+
 function getLineCorridorBbox(line, sinceTs) {
   const row = getDb()
     .prepare(`
@@ -218,5 +231,6 @@ module.exports = {
   countDistinctTsInBusObservations,
   getRecentTrainPositions,
   getLineCorridorBbox,
+  getActiveBusRoutesSince,
   rolloffOldObservations,
 };

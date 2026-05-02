@@ -30,6 +30,7 @@ const RAMP_PRIOR_ACTIVE_THRESHOLD = 1;
 // a blackout but is just end-of-day shutdown.
 const WIND_DOWN_NEXT_ACTIVE_THRESHOLD = 1;
 const WIND_DOWN_MINUTE_THRESHOLD = 30;
+const COLD_START_GRACE_MS = 6 * 60 * 60 * 1000;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -44,6 +45,7 @@ async function detectBusBlackouts({
   expectedActive,
   expectedHeadway,
   globalDistinctTs,
+  recentlyActiveRoutes,
   now,
   opts = {},
 }) {
@@ -123,6 +125,19 @@ async function detectBusBlackouts({
     }
 
     if (expectedActiveSum < minExpectedActive) continue;
+
+    // Cold-start grace: if the route has had ZERO observations across the
+    // entire grace window (default 6h), this is service-not-yet-started, not
+    // a blackout. Mirrors the train-side fix; catches early-morning ramp-up
+    // FPs where the GTFS hour says service should have begun but the first
+    // bus hadn't pulled out of the garage yet (e.g. route 50 today: alert
+    // posted at 5:08, first observation at 5:10).
+    if (recentlyActiveRoutes && !recentlyActiveRoutes.has(routeStr)) {
+      console.log(
+        `bus-pulse: skipping ${routeStr} — cold-start grace (no observations in past ${Math.round((opts.coldStartGraceMs ?? COLD_START_GRACE_MS) / 60_000)} min)`,
+      );
+      continue;
+    }
 
     // Headway-scaled lookback computed below — but we need it here for the
     // ramp guard, so derive it ahead of the observation slice.
@@ -213,4 +228,5 @@ module.exports = {
   RAMP_PRIOR_ACTIVE_THRESHOLD,
   WIND_DOWN_NEXT_ACTIVE_THRESHOLD,
   WIND_DOWN_MINUTE_THRESHOLD,
+  COLD_START_GRACE_MS,
 };
