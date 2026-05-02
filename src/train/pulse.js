@@ -16,7 +16,7 @@
 // Returns { skipped, candidates } so the bin can distinguish "no signal"
 // (don't touch existing pulse_state) from "all clear" (advance clear ticks).
 
-const { buildLineBranches, snapToLineWithPerp } = require('./speedmap');
+const { buildLineBranches, snapToLineWithPerp, inLoopTrunk } = require('./speedmap');
 const { terminalZoneFt } = require('../shared/geo');
 
 const MAX_PERP_FT = 1500; // reject projections from off-branch trains
@@ -73,10 +73,26 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
 
     // Round-trip lines split into outbound/inbound branches sharing geometry
     // — filter observations by Train Tracker direction code so each branch
-    // sees only its half of the traffic.
-    const branchObs = trDrFilter ? fresh.filter((p) => p.trDr === trDrFilter) : fresh;
+    // sees only its half of the traffic. Exception: bins on the Loop trunk
+    // (Lake/Wabash/Van Buren/Wells) accept either direction, because
+    // TrainTracker flips trDr at the Loop apex mid-circuit and a Brown
+    // inbound train tagged "outbound" while still on the south Loop would
+    // otherwise leave inbound bins falsely cold.
+    const branchObs = fresh;
 
     const numBins = Math.max(2, Math.ceil(totalFt / binFt));
+    const binLengthFt = totalFt / numBins;
+    const loopTrunkBin = new Array(numBins).fill(false);
+    if (trDrFilter) {
+      for (let i = 0; i < points.length; i++) {
+        const pt = points[i];
+        const lat = pt.lat != null ? pt.lat : pt[0];
+        const lon = pt.lon != null ? pt.lon : pt[1];
+        if (!inLoopTrunk(lat, lon)) continue;
+        const idx = Math.min(numBins - 1, Math.max(0, Math.floor(cumDist[i] / binLengthFt)));
+        loopTrunkBin[idx] = true;
+      }
+    }
     const lastSeenPerBin = new Array(numBins).fill(-Infinity);
     const binIdxOfPos = [];
     // Per-train trajectories, used downstream to detect trains that crossed
@@ -99,6 +115,7 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       const { cumDist: along, perpDist } = snapToLineWithPerp(p.lat, p.lon, points, cumDist);
       if (perpDist > MAX_PERP_FT) continue;
       const idx = Math.min(numBins - 1, Math.max(0, Math.floor(along / (totalFt / numBins))));
+      if (trDrFilter && p.trDr !== trDrFilter && !loopTrunkBin[idx]) continue;
       if (p.ts > lastSeenPerBin[idx]) lastSeenPerBin[idx] = p.ts;
       binIdxOfPos.push(idx);
       if (p.rn) {
@@ -183,7 +200,6 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     }
     if (bestStart < 0) continue;
 
-    const binLengthFt = totalFt / numBins;
     const runLoFt = bestStart * binLengthFt;
     const runHiFt = (bestEnd + 1) * binLengthFt;
     const runLengthFt = runHiFt - runLoFt;

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { detectDeadSegments } = require('../../src/train/pulse');
-const { buildLineBranches } = require('../../src/train/speedmap');
+const { buildLineBranches, inLoopTrunk } = require('../../src/train/speedmap');
 const trainLines = require('../../src/train/data/trainLines.json');
 const trainStations = require('../../src/train/data/trainStations.json');
 
@@ -59,10 +59,17 @@ test('Pulse on Brown southbound: northbound passes do not warm southbound bins',
     // Drop a phantom inbound train near each station along the polyline.
     for (let j = 0; j < outbound.points.length; j += Math.ceil(outbound.points.length / 8)) {
       const p = outbound.points[j];
+      const lat = p[0] !== undefined ? p[0] : p.lat;
+      const lon = p[1] !== undefined ? p[1] : p.lon;
+      // Skip Loop-trunk points: those bins now accept either trDr by design
+      // (Loop apex flips direction code mid-circuit). Bug 16 was about
+      // inbound trains warming Kimball-spur outbound bins, so we keep the
+      // phantom inbound trains on non-Loop-trunk geometry only.
+      if (inLoopTrunk(lat, lon)) continue;
       observations.push({
         ts,
-        lat: p[0] !== undefined ? p[0] : p.lat,
-        lon: p[1] !== undefined ? p[1] : p.lon,
+        lat,
+        lon,
         rn: `r${i}`,
         trDr: '5', // inbound — fills inbound branch but NOT outbound branch
       });
@@ -84,5 +91,78 @@ test('Pulse on Brown southbound: northbound passes do not warm southbound bins',
   // inbound trains.
   for (const c of candidates) {
     assert.notEqual(c.direction, 'branch-0-outbound');
+  }
+});
+
+test('Pulse on Brown inbound: outbound-tagged trains on Loop trunk warm inbound bins', () => {
+  // Real-world false positive (2026-05-02): TrainTracker flips direction
+  // from inbound → outbound at the Loop apex (~Tower 18), so a Brown train
+  // still physically traversing the south Loop trunk (Wells/Library/Wabash)
+  // gets tagged trDr='1' (outbound) for the rest of the circuit. The strict
+  // inbound filter excluded those obs and the south Loop went falsely cold,
+  // firing a Washington/Wells → Library alert while trains were visibly
+  // present. Loop-trunk bins now accept either trDr.
+  const branches = buildLineBranches(trainLines, 'brn');
+  const inbound = branches.find((b) => b.directionHint === 'inbound');
+  assert.ok(inbound);
+
+  const now = 1_700_000_000_000;
+  const observations = [];
+  const tsCount = 12;
+  for (let i = 0; i < tsCount; i++) {
+    const ts = now - (20 - i) * 60_000;
+    for (let j = 0; j < inbound.points.length; j += Math.ceil(inbound.points.length / 24)) {
+      const p = inbound.points[j];
+      const lat = p[0] !== undefined ? p[0] : p.lat;
+      const lon = p[1] !== undefined ? p[1] : p.lon;
+      // On the Loop trunk, drop outbound-tagged obs (mid-circuit flip).
+      // Off-trunk, drop inbound-tagged obs so the Kimball spur is also warmed
+      // (so coverage gate passes and a candidate could fire if Loop bins
+      // were treated as cold).
+      observations.push({
+        ts,
+        lat,
+        lon,
+        rn: `r${i}-${j}`,
+        trDr: inLoopTrunk(lat, lon) ? '1' : '5',
+      });
+    }
+  }
+
+  const { candidates } = detectDeadSegments({
+    line: 'brn',
+    trainLines,
+    stations: trainStations,
+    headwayMin: 8,
+    now,
+    opts: { recentPositions: observations, lookbackMs: 20 * 60 * 1000 },
+  });
+
+  // No inbound candidate should fire on Loop-trunk territory — outbound-tagged
+  // trains warm those bins under the new behavior.
+  for (const c of candidates) {
+    if (c.direction !== 'branch-1-inbound') continue;
+    // If something does fire on inbound, ensure it's not in the Loop-trunk
+    // section we're testing. Endpoint stations should be off-trunk.
+    const trunkStations = [
+      'Washington/Wells',
+      'Quincy',
+      'LaSalle/Van Buren',
+      'Harold Washington Library-State/Van Buren',
+      'Adams/Wabash',
+      'Madison/Wabash',
+      'Washington/Wabash',
+      'Lake',
+      'Clark/Lake',
+      'State/Lake',
+    ];
+    assert.ok(
+      !trunkStations.includes(c.from),
+      `inbound candidate should not start at Loop-trunk station ${c.from}`,
+    );
+    assert.ok(
+      !trunkStations.includes(c.to),
+      `inbound candidate should not end at Loop-trunk station ${c.to}`,
+    );
   }
 });

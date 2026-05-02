@@ -148,6 +148,31 @@ function processSegment(seg) {
   return branch;
 }
 
+// CTA Loop elevated trunk (Lake/Wabash/Van Buren/Wells rectangle), padded
+// slightly to cover snapped polyline vertices. Used by pulse to relax the
+// per-direction trDr filter on bins that fall on this shared geometry: at the
+// Loop apex (~Tower 18), TrainTracker flips a Brown/Orange/Pink/Purple train's
+// direction code from "inbound" to "outbound" mid-circuit, so a train still
+// physically traversing the south Loop gets tagged as the wrong direction and
+// fails to warm inbound bins. Treating the trunk as direction-agnostic keeps
+// these flapping false positives from firing while still distinguishing
+// per-direction outages on the actual branches.
+const LOOP_TRUNK_BBOX = {
+  minLat: 41.874,
+  maxLat: 41.888,
+  minLon: -87.637,
+  maxLon: -87.624,
+};
+
+function inLoopTrunk(lat, lon) {
+  return (
+    lat >= LOOP_TRUNK_BBOX.minLat &&
+    lat <= LOOP_TRUNK_BBOX.maxLat &&
+    lon >= LOOP_TRUNK_BBOX.minLon &&
+    lon <= LOOP_TRUNK_BBOX.maxLon
+  );
+}
+
 // Per-line trDr code that means "outbound" (away from the Loop / downtown).
 // Verified against 24h of observations + destination strings — see
 // research.md Bug 16. Loop lines round-trip on shared track, so we want pulse
@@ -377,4 +402,5 @@ module.exports = {
   pointAlongLine,
   offsetPolyline,
   truncateBranchToDistance,
+  inLoopTrunk,
 };
