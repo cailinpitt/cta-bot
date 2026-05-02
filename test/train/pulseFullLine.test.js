@@ -38,5 +38,5 @@ test('zero-obs detection: synthetic candidate has runLengthFt = totalFt and synt
     },
   };
   const text = buildPostText(synthetic);
-  assert.match(text, /service appears suspended line-wide/);
+  assert.match(text, /No trains observed anywhere on the line/);
 });

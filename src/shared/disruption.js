@@ -9,7 +9,12 @@ const { LINE_NAMES } = require('../train/api');
 
 function titleFor(d) {
   const lineName = LINE_NAMES[d.line] || d.line;
-  return `🚇⚠️ ${lineName} Line service suspended`;
+  // CTA-confirmed alerts use the strong "suspended" framing because CTA is
+  // authoritative. Observed pulses are an inference from sparse position
+  // snapshots, so they hedge — "possible service gap" reads as a flag worth
+  // checking rather than an official outage declaration.
+  if (d.source === 'cta-alert') return `🚇⚠️ ${lineName} Line service suspended`;
+  return `🚇⚠️ ${lineName} Line: trains not seen`;
 }
 
 function buildPostText(d, { ctaAlertOpen = false } = {}) {
@@ -32,7 +37,7 @@ function buildPostText(d, { ctaAlertOpen = false } = {}) {
 function evidenceLine(e) {
   if (e.synthetic) {
     const stations = e.coldStations >= 2 ? ` (${e.coldStations} stations affected)` : '';
-    return `📡 No trains observed on this line in the last ${e.lookbackMin || 20} min${stations} — service appears suspended line-wide.`;
+    return `📡 No trains observed anywhere on the line in the last ${e.lookbackMin || 20} min${stations}.`;
   }
   const stretch = e.runLengthMi != null ? `${e.runLengthMi}-mi stretch` : 'this stretch';
   const stations = e.coldStations >= 2 ? ` (${e.coldStations} stations affected)` : '';
@@ -53,7 +58,11 @@ function evidenceLine(e) {
 
 function buildAltText(d) {
   const lineName = LINE_NAMES[d.line] || d.line;
-  const base = `Map of the ${lineName} Line with the segment between ${d.suspendedSegment.from} and ${d.suspendedSegment.to} dimmed to indicate service is suspended.`;
+  const dimDescription =
+    d.source === 'cta-alert'
+      ? 'dimmed to indicate service is suspended'
+      : 'dimmed to indicate no trains were seen on this segment';
+  const base = `Map of the ${lineName} Line with the segment between ${d.suspendedSegment.from} and ${d.suspendedSegment.to} ${dimDescription}.`;
   if (d.alternative?.type === 'shortTurn') {
     return `${base} Trains are running short-turned between ${d.alternative.from} and ${d.alternative.to}.`;
   }

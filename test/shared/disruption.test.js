@@ -36,6 +36,24 @@ test('buildPostText for observed disruption includes evidence sentence', () => {
   assert.match(text, /Inferred from live train positions/);
 });
 
+test('observed pulse title says "trains not seen" rather than "suspended"', () => {
+  const text = buildPostText(observed());
+  assert.match(text, /^🚇⚠️ Blue Line: trains not seen/);
+  assert.doesNotMatch(text, /service suspended/);
+});
+
+test('cta-alert title keeps the strong "service suspended" framing', () => {
+  const text = buildPostText({
+    line: 'red',
+    suspendedSegment: { from: 'Belmont', to: 'Howard' },
+    alternative: null,
+    reason: null,
+    source: 'cta-alert',
+    detectedAt: 1_700_000_000_000,
+  });
+  assert.match(text, /^🚇⚠️ Red Line service suspended/);
+});
+
 test('evidenceLine falls back to lookback minutes when nothing was ever observed', () => {
   const text = evidenceLine({
     runLengthMi: 5.2,

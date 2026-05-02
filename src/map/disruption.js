@@ -21,6 +21,40 @@ function latLonDistMeters([lat, lon], loc) {
   return Math.hypot(dLat, dLon);
 }
 
+// Round-trip lines (Pink, Brown, Orange, Purple) ship as a single polyline
+// going outbound terminal → Loop → back to outbound terminal. Splitting
+// such a polyline naively means the "second active" half on the return leg
+// physically passes through the suspended span, drawing bright stroke over
+// the dim overlay and making short-stretch suspensions invisible (Pink
+// California↔Western, ~0.5 mi). Truncate at the apex (vertex farthest from
+// the start) so we render only one direction of the loop. Mirrors the same
+// logic in src/train/speedmap.js processSegment used by the detector.
+function truncateRoundTrip(seg) {
+  if (seg.length < 3) return seg;
+  const first = { lat: seg[0][0], lon: seg[0][1] };
+  const last = { lat: seg[seg.length - 1][0], lon: seg[seg.length - 1][1] };
+  const closingDist = latLonDistMeters([last.lat, last.lon], first);
+  if (closingDist > 150) return seg; // open polyline — terminus to terminus
+  let apexIdx = 0;
+  let apexDist = 0;
+  for (let i = 1; i < seg.length; i++) {
+    const d = latLonDistMeters(seg[i], first);
+    if (d > apexDist) {
+      apexDist = d;
+      apexIdx = i;
+    }
+  }
+  const plateauThreshold = apexDist * 0.9;
+  let exitIdx = seg.length - 1;
+  for (let i = apexIdx + 1; i < seg.length; i++) {
+    if (latLonDistMeters(seg[i], first) < plateauThreshold) {
+      exitIdx = i - 1;
+      break;
+    }
+  }
+  return seg.slice(0, exitIdx + 1);
+}
+
 function _findNearestIndex(poly, loc) {
   let best = 0;
   let bestD = Infinity;
@@ -44,15 +78,35 @@ function _findNearestIndex(poly, loc) {
 function splitSegments(segments, fromLoc, toLoc) {
   const active = [];
   const suspended = [];
-  for (const seg of segments) {
+  for (const rawSeg of segments) {
+    const seg = truncateRoundTrip(rawSeg);
     if (seg.length < 2) continue;
     const fromIdx = nearestVertexIdx(seg, fromLoc);
     const toIdx = nearestVertexIdx(seg, toLoc);
-    // If from/to don't both land on this segment with a meaningful split,
-    // leave the whole thing bright. Picking an arbitrary slice would dim
-    // the wrong branch on multi-segment lines.
-    if (fromIdx == null || toIdx == null || fromIdx === toIdx) {
+    if (fromIdx == null || toIdx == null) {
       active.push(seg);
+      continue;
+    }
+    if (fromIdx === toIdx) {
+      // Close-together stations (e.g. California ↔ Western on Pink, ~0.3 mi)
+      // can both snap to the same polyline vertex. Earlier this fell through
+      // to "leave whole thing bright," producing a map with no dim segment
+      // at all. Synthesize a short dim slice through the shared vertex,
+      // ordering the endpoints by which side of the vertex each falls on.
+      const k = fromIdx;
+      const before = k > 0 ? seg[k - 1] : null;
+      const after = k < seg.length - 1 ? seg[k + 1] : null;
+      const fromNearBefore =
+        before &&
+        (after ? latLonDistMeters(before, fromLoc) < latLonDistMeters(after, fromLoc) : true);
+      const [first, second] = fromNearBefore ? [fromLoc, toLoc] : [toLoc, fromLoc];
+      const firstPt = [first.lat, first.lon];
+      const secondPt = [second.lat, second.lon];
+      const head = seg.slice(0, k);
+      const tail = seg.slice(k + 1);
+      if (head.length > 0) active.push([...head, firstPt]);
+      suspended.push([firstPt, seg[k], secondPt]);
+      if (tail.length > 0) active.push([secondPt, ...tail]);
       continue;
     }
     // Replace the nearest-vertex boundaries with the real station coords so
@@ -125,14 +179,27 @@ async function renderDisruption({
   const { active, suspended } = splitSegments(segments, fromLoc, toLoc);
 
   const overlays = [];
-  // Suspended: line color at reduced opacity + thinner stroke for contrast.
-  for (const seg of suspended) {
-    if (!seg || seg.length < 2) continue;
-    overlays.push(`path-4+${color}-0.4(${encodeURIComponent(encode(seg))})`);
-  }
+  // Active polylines first, suspended last. Mapbox draws overlays in URL
+  // order with later overlays on top, so we want the dim segment ON TOP of
+  // the active strokes. Each active polyline ends with a rounded line cap
+  // at the station endpoint (cap radius = strokeWidth/2). On short
+  // stretches like Pink California→Western (~85px between stations) the
+  // caps from each side extend ~5px into the suspended span and visually
+  // bridge it — the dim segment got buried under bright caps and looked
+  // continuous. Drawing suspended last covers the cap overlap so the dim
+  // is unambiguous edge-to-edge.
   for (const seg of active) {
     if (!seg || seg.length < 2) continue;
     overlays.push(`path-10+${color}-0.95(${encodeURIComponent(encode(seg))})`);
+  }
+  // Suspended: same stroke width as active so the dim is visually "the
+  // route line, dimmed" rather than a thinner side-trace. 0.4 opacity is
+  // the same value that's worked on long-stretch Blue/Red disruptions for
+  // months — what was failing on short stretches was the draw order, not
+  // the styling.
+  for (const seg of suspended) {
+    if (!seg || seg.length < 2) continue;
+    overlays.push(`path-10+${color}-0.4(${encodeURIComponent(encode(seg))})`);
   }
   for (const t of trains) {
     if (t.line !== line) continue;
@@ -156,7 +223,11 @@ async function renderDisruption({
   const baseMap = await fetchMapboxStatic(url);
 
   const lineName = LINE_NAMES[line] || line;
-  const titleText = title || `⚠ ${lineName} Line suspended`;
+  const defaultTitle =
+    disruption.source === 'cta-alert'
+      ? `⚠ ${lineName} Line suspended`
+      : `⚠ ${lineName} Line: trains not seen`;
+  const titleText = title || defaultTitle;
   const titleFontSize = 42;
   // Real glyph measurement via the same renderer that draws the SVG. Earlier
   // estimators (flat 24px/char, then per-glyph ratios) drifted on each new
@@ -165,11 +236,10 @@ async function renderDisruption({
 
   const fromPx = project(fromLoc.lat, fromLoc.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
   const toPx = project(toLoc.lat, toLoc.lon, centerLat, centerLon, zoom, WIDTH, HEIGHT);
-  const labels = (
-    await Promise.all([stationLabel(fromLoc.name, fromPx), stationLabel(toLoc.name, toPx)])
-  )
-    .filter(Boolean)
-    .join('\n');
+  const labels = await pairedStationLabels([
+    { name: fromLoc.name, px: fromPx },
+    { name: toLoc.name, px: toPx },
+  ]);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">
     <rect x="24" y="24" width="${titleWidth}" height="88" fill="#000" fill-opacity="0.78" rx="10"/>
@@ -187,33 +257,67 @@ async function renderDisruption({
 // Title-pill keepout — labels that would intersect get flipped below the dot.
 const TITLE_KEEPOUT = { x: 0, y: 0, w: 800, h: 130 };
 
-async function stationLabel(name, px) {
-  if (!name || !Number.isFinite(px.x) || !Number.isFinite(px.y)) return '';
-  const text = name.split(' (')[0]; // drop "(Red)" style line disambiguation
-  const fontSize = 28;
-  const pad = 12;
-  // Real measurement so long names ("Cumberland", "Garfield (Green)" etc.)
-  // never overrun the pill regardless of glyph mix.
-  const textW = await measureTextWidth(text, fontSize);
-  const pillW = textW + pad * 2;
-  const h = fontSize + pad * 1.4;
-  const xPill = Math.round(px.x - pillW / 2);
+async function pairedStationLabels(stations) {
+  // Resolve each label's geometry first, then assign above/below so that
+  // when two close-together stations would collide horizontally we put one
+  // above the dot and the other below instead of stacking them on top of
+  // each other.
+  const layouts = [];
+  for (const s of stations) {
+    if (!s.name || !Number.isFinite(s.px.x) || !Number.isFinite(s.px.y)) continue;
+    const text = s.name.split(' (')[0]; // drop "(Red)" style disambiguation
+    const fontSize = 28;
+    const pad = 12;
+    const textW = await measureTextWidth(text, fontSize);
+    const pillW = textW + pad * 2;
+    const h = fontSize + pad * 1.4;
+    const xPill = Math.round(s.px.x - pillW / 2);
+    const above = Math.round(s.px.y - h - 14);
+    const below = Math.round(s.px.y + 14);
+    const wouldHitTitle =
+      above < TITLE_KEEPOUT.y + TITLE_KEEPOUT.h &&
+      xPill < TITLE_KEEPOUT.x + TITLE_KEEPOUT.w &&
+      xPill + pillW > TITLE_KEEPOUT.x;
+    const forcedBelow = above < 8 || wouldHitTitle;
+    layouts.push({ px: s.px, text, fontSize, pad, pillW, h, xPill, above, below, forcedBelow });
+  }
 
-  // Default: pill above the dot. Flip below if it would cross the title
-  // keepout or go off the top edge.
-  const above = Math.round(px.y - h - 14);
-  const below = Math.round(px.y + 14);
-  const wouldHitTitle =
-    above < TITLE_KEEPOUT.y + TITLE_KEEPOUT.h &&
-    xPill < TITLE_KEEPOUT.x + TITLE_KEEPOUT.w &&
-    xPill + pillW > TITLE_KEEPOUT.x;
-  const y = above < 8 || wouldHitTitle ? below : above;
+  function rectsOverlap(a, b) {
+    return !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top);
+  }
+  function pillRect(l, y) {
+    return { left: l.xPill, right: l.xPill + l.pillW, top: y, bottom: y + l.h };
+  }
 
-  return [
-    `<rect x="${xPill}" y="${y}" width="${Math.round(pillW)}" height="${Math.round(h)}" fill="#000" fill-opacity="0.82" rx="8"/>`,
-    `<text x="${Math.round(px.x)}" y="${Math.round(y + h - pad)}" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600">${xmlEscape(text)}</text>`,
-    `<circle cx="${Math.round(px.x)}" cy="${Math.round(px.y)}" r="7" fill="#fff" stroke="#000" stroke-width="3"/>`,
-  ].join('');
+  // First pass: each label takes its preferred slot.
+  const ys = layouts.map((l) => (l.forcedBelow ? l.below : l.above));
+
+  // If two labels collide and neither is forced, flip the second to below.
+  for (let i = 0; i < layouts.length; i++) {
+    for (let j = i + 1; j < layouts.length; j++) {
+      const a = pillRect(layouts[i], ys[i]);
+      const b = pillRect(layouts[j], ys[j]);
+      if (!rectsOverlap(a, b)) continue;
+      if (!layouts[j].forcedBelow && ys[j] !== layouts[j].below) {
+        ys[j] = layouts[j].below;
+      } else if (!layouts[i].forcedBelow && ys[i] !== layouts[i].below) {
+        ys[i] = layouts[i].below;
+      }
+      // If both are forced or already split and still collide, leave it —
+      // we'd rather have readable overlap than push a pill off-screen.
+    }
+  }
+
+  return layouts
+    .map((l, i) => {
+      const y = ys[i];
+      return [
+        `<rect x="${l.xPill}" y="${y}" width="${Math.round(l.pillW)}" height="${Math.round(l.h)}" fill="#000" fill-opacity="0.82" rx="8"/>`,
+        `<text x="${Math.round(l.px.x)}" y="${Math.round(y + l.h - l.pad)}" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${l.fontSize}" font-weight="600">${xmlEscape(l.text)}</text>`,
+        `<circle cx="${Math.round(l.px.x)}" cy="${Math.round(l.px.y)}" r="7" fill="#fff" stroke="#000" stroke-width="3"/>`,
+      ].join('');
+    })
+    .join('\n');
 }
 
 module.exports = { renderDisruption, splitSegments, resolveStation };
