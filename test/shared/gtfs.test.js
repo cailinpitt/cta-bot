@@ -39,11 +39,13 @@ test('hourlyLookup: late-night Saturday uses weekday (prior Friday) first', () =
   assert.equal(hourlyLookup({ weekday: { 1: 22 }, saturday: { 1: 99 } }, SAT_1AM), 22);
 });
 
-test('hourlyLookup: post-cutoff uses today, with prior as fallback', () => {
-  // 5 AM Saturday: today (saturday) preferred.
+test('hourlyLookup: post-cutoff uses today only, no prior-day fallback', () => {
+  // 5 AM Saturday: today (saturday) preferred over Friday's weekday bucket.
   assert.equal(hourlyLookup({ saturday: { 5: 7 }, weekday: { 5: 99 } }, SAT_5AM), 7);
-  // Today missing → prior (weekday Friday) still tried since it may still be mid-route.
-  assert.equal(hourlyLookup({ weekday: { 5: 22 } }, SAT_5AM), 22);
+  // Today missing → null. We must NOT fall back to prior-day weekday, or
+  // M-F-only routes look "scheduled" on Saturday morning and trigger FP
+  // pulse alerts when CTA correctly returns no vehicles.
+  assert.equal(hourlyLookup({ weekday: { 5: 22 } }, SAT_5AM), null);
 });
 
 test('hourlyLookup: regression — no nearest-hour interpolation', () => {

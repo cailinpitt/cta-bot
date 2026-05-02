@@ -80,7 +80,12 @@ function hourlyLookup(byDayType, now) {
   const todayDt = dayTypeFor(now);
   const priorDt = dayTypeFor(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 
-  const candidates = hour < LATE_NIGHT_CUTOFF_HOUR ? [priorDt, todayDt] : [todayDt, priorDt];
+  // Before 4 AM, prefer prior day's bucket — yesterday's service is still
+  // running its late-night tail (CTA encodes 1:15 AM Sunday as 25:15:00 under
+  // Saturday's service_id). After 4 AM, today's bucket is authoritative; do
+  // NOT fall back to prior day, because an M-F-only route would otherwise
+  // pick up Friday's counts on Saturday morning and look "scheduled."
+  const candidates = hour < LATE_NIGHT_CUTOFF_HOUR ? [priorDt, todayDt] : [todayDt];
   if (candidates.some((dt) => dt === 'saturday' || dt === 'sunday')) candidates.push('weekend');
 
   for (const dt of candidates) {
