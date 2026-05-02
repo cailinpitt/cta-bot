@@ -86,16 +86,24 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     // inside it. Without this check, fast traversals look identical to true
     // outages.
     const trajByRun = new Map();
-    let onBranch = 0;
+    // Track unique runs seen anywhere on the branch + which of those touched
+    // a bin inside the cold run, so trainsOutsideRun counts trains, not raw
+    // observation rows (with ~15s observation cadence, each train contributes
+    // ~80 rows in a 20 min lookback — counting rows produced absurd numbers
+    // like "171 trains active elsewhere on the line" for a 5-train line).
+    const runsOnBranch = new Set();
+    const runsInRunBins = [];
+    const binIdxOfRun = [];
 
     for (const p of branchObs) {
       const { cumDist: along, perpDist } = snapToLineWithPerp(p.lat, p.lon, points, cumDist);
       if (perpDist > MAX_PERP_FT) continue;
-      onBranch++;
       const idx = Math.min(numBins - 1, Math.max(0, Math.floor(along / (totalFt / numBins))));
       if (p.ts > lastSeenPerBin[idx]) lastSeenPerBin[idx] = p.ts;
       binIdxOfPos.push(idx);
       if (p.rn) {
+        runsOnBranch.add(p.rn);
+        binIdxOfRun.push({ rn: p.rn, idx });
         let traj = trajByRun.get(p.rn);
         if (!traj) {
           traj = [];
@@ -179,14 +187,15 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     if (crossed) continue;
 
     let lastSeenInRun = -Infinity;
-    let positionsInRun = 0;
     for (let i = bestStart; i <= bestEnd; i++) {
       if (lastSeenPerBin[i] > lastSeenInRun) lastSeenInRun = lastSeenPerBin[i];
     }
-    for (const idx of binIdxOfPos) {
-      if (idx >= bestStart && idx <= bestEnd) positionsInRun++;
+    const runsInRun = new Set();
+    for (const { rn, idx } of binIdxOfRun) {
+      if (idx >= bestStart && idx <= bestEnd) runsInRun.add(rn);
     }
-    const trainsOutsideRun = Math.max(0, onBranch - positionsInRun);
+    let trainsOutsideRun = 0;
+    for (const rn of runsOnBranch) if (!runsInRun.has(rn)) trainsOutsideRun++;
 
     const lastSeenInRunMs = lastSeenInRun > -Infinity ? lastSeenInRun : null;
     const coldMs = lastSeenInRunMs ? now - lastSeenInRunMs : lookbackMs;
@@ -208,6 +217,7 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     candidates.push({
       line,
       direction: directionKeyFor(branches, branchIdx, directionHint),
+      directionHint: directionHint || null,
       runLoFt,
       runHiFt,
       runLengthFt,
@@ -215,7 +225,7 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       toStation: toStation.station,
       coldBins: bestEnd - bestStart + 1,
       totalBins: numBins,
-      observedTrainsInWindow: onBranch,
+      observedTrainsInWindow: runsOnBranch.size,
       lastSeenInRunMs,
       coldThresholdMs,
       lookbackMs,

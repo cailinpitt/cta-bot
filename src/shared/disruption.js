@@ -7,6 +7,22 @@
 
 const { LINE_NAMES } = require('../train/api');
 
+// Terminus label per line + direction for round-trip Loop lines. Used in
+// post titles so readers know which direction's trains are missing — saying
+// "trains toward 54th/Cermak not seen" is far clearer than "outbound" for
+// a non-rider audience.
+const DIRECTION_TERMINUS = {
+  brn: { outbound: 'Kimball', inbound: 'the Loop' },
+  org: { outbound: 'Midway', inbound: 'the Loop' },
+  pink: { outbound: '54th/Cermak', inbound: 'the Loop' },
+  p: { outbound: 'Linden', inbound: 'the Loop' },
+};
+
+function terminusFor(d) {
+  if (!d.directionHint) return null;
+  return DIRECTION_TERMINUS[d.line]?.[d.directionHint] || null;
+}
+
 function titleFor(d) {
   const lineName = LINE_NAMES[d.line] || d.line;
   // CTA-confirmed alerts use the strong "suspended" framing because CTA is
@@ -14,6 +30,15 @@ function titleFor(d) {
   // snapshots, so they hedge — "possible service gap" reads as a flag worth
   // checking rather than an official outage declaration.
   if (d.source === 'cta-alert') return `🚇⚠️ ${lineName} Line service suspended`;
+  // Round-trip lines (Brown/Orange/Pink/Purple) detect per-direction; without
+  // a direction qualifier in the title, "trains not seen" reads as both
+  // directions which is misleading when the other direction is running. Use
+  // the terminus name rather than "outbound/inbound" so the audience doesn't
+  // need to know rail-system jargon to read the post.
+  const terminus = terminusFor(d);
+  if (terminus) {
+    return `🚇⚠️ ${lineName} Line: trains to ${terminus} not seen`;
+  }
   return `🚇⚠️ ${lineName} Line: trains not seen`;
 }
 
@@ -47,7 +72,7 @@ function evidenceLine(e) {
       : `the last ${e.lookbackMin || 20} min`;
   const missing =
     e.expectedTrains != null && e.expectedTrains >= 1
-      ? ` — ~${e.expectedTrains} trains missed`
+      ? ` — ~${e.expectedTrains} train${e.expectedTrains === 1 ? '' : 's'} missed`
       : '';
   const elsewhere =
     e.trainsOutsideRun != null
@@ -58,10 +83,12 @@ function evidenceLine(e) {
 
 function buildAltText(d) {
   const lineName = LINE_NAMES[d.line] || d.line;
+  const terminus = terminusFor(d);
+  const directionPhrase = terminus ? ` heading to ${terminus}` : '';
   const dimDescription =
     d.source === 'cta-alert'
       ? 'dimmed to indicate service is suspended'
-      : 'dimmed to indicate no trains were seen on this segment';
+      : `dimmed to indicate no trains${directionPhrase} were seen on this segment`;
   const base = `Map of the ${lineName} Line with the segment between ${d.suspendedSegment.from} and ${d.suspendedSegment.to} ${dimDescription}.`;
   if (d.alternative?.type === 'shortTurn') {
     return `${base} Trains are running short-turned between ${d.alternative.from} and ${d.alternative.to}.`;

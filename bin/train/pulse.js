@@ -157,6 +157,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       from: candidate.fromStation.name,
       to: candidate.toStation.name,
     },
+    directionHint: candidate.directionHint || null,
     alternative: null,
     reason: null,
     source: 'observed',
