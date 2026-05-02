@@ -96,7 +96,7 @@ function buildBusPostText(
 ) {
   const header = `🚌⚠️ #${route} ${name} service appears suspended`;
   const headwayClause =
-    minHeadwayMin != null ? ` — currently scheduled every ${minHeadwayMin} min` : '';
+    minHeadwayMin != null ? ` — currently scheduled every ${Math.round(minHeadwayMin)} min` : '';
   const evidence = `📡 No buses observed on the route in the last ${lookbackMin} min${headwayClause}.`;
   const footer = ctaAlertOpen
     ? 'Inferred from live bus positions. (See CTA alert in this thread.)'
