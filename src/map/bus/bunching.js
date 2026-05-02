@@ -238,7 +238,7 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
   const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, view.bearingDeg)];
   // Ghost legend: top-left corner, only when this clip contains tail-dropped
   // vehicles. The arrow lives top-right; legend top-left so they don't fight.
-  const legendElements = opts.showGhostLegend ? [buildGhostLegend(20, 20)] : [];
+  const legendElements = opts.showGhostLegend ? [await buildGhostLegend(20, 20)] : [];
 
   // Origin (house) and destination (flag) markers — render below buses (so a
   // bus sitting at either still reads clearly) but above signals. Each is

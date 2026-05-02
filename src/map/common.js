@@ -171,14 +171,23 @@ function buildBusMarker({ x, y, radius, color, articulated = false, ghost = fals
 // In-frame legend explaining what a faded/dashed marker means. Rendered when
 // a video clip contains at least one tail-dropped vehicle so viewers can
 // interpret the ghost without context from the post text.
-function buildGhostLegend(x, y) {
+//
+// Width is measured via librsvg (the same renderer that draws the SVG
+// composite) and cached per-process. A baked-in constant doesn't work:
+// librsvg's font fallback differs by host, so the same 26pt bold string
+// renders ~10–15% wider where Helvetica is unavailable and the renderer
+// falls through to DejaVu. A constant tuned on one host either clipped
+// the text on the other or left dead space.
+let cachedGhostLegendTextWidth = null;
+async function buildGhostLegend(x, y) {
   const discR = 16;
   const padX = 16;
   const fontSize = 26;
   const text = 'Faded = signal lost from CTA';
-  // Width measured via measureTextWidth (librsvg) for the fixed string at
-  // fontSize 26 bold; baked in so this builder can stay synchronous.
-  const textWidth = 360;
+  if (cachedGhostLegendTextWidth == null) {
+    cachedGhostLegendTextWidth = await measureTextWidth(text, fontSize, { bold: true });
+  }
+  const textWidth = cachedGhostLegendTextWidth;
   const boxW = padX + discR * 2 + 8 + textWidth + padX;
   const boxH = discR * 2 + 12;
   const cy = y + boxH / 2;

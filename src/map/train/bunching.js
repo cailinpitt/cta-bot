@@ -139,7 +139,7 @@ function buildTrainOverlaySvg(
   bearingDeg = 0,
   arrowBearingDeg = null,
   unlabeledPinPixels = [],
-  { showGhostLegend = false } = {},
+  { ghostLegendSvg = null } = {},
 ) {
   const fontSize = 18;
   const labelHeight = fontSize + 8;
@@ -382,9 +382,9 @@ function buildTrainOverlaySvg(
 
   // Draw labels before trains+halos so a stray overlap never hides a train.
   // Placement already avoids reserved train boxes, so this is belt-and-suspenders.
-  // Ghost legend: top-left corner, only when this clip contains tail-dropped
-  // trains. Arrow lives top-right; legend top-left so they don't fight.
-  const legendElements = showGhostLegend ? [buildGhostLegend(20, 20)] : [];
+  // Ghost legend (top-left): pre-rendered by the async caller since width
+  // measurement is async. Arrow lives top-right so they don't fight.
+  const legendElements = ghostLegendSvg ? [ghostLegendSvg] : [];
   const elements = [
     ...terminalElements,
     ...labelElements,
@@ -734,6 +734,9 @@ async function renderTrainBunchingFrame(view, baseMap, trains, opts = {}) {
     .filter(({ station }) => !labeledNames.has(station.name))
     .map(({ x, y }) => ({ x, y }));
 
+  // Pre-render the ghost legend (async — measures text width via librsvg)
+  // so the otherwise-sync overlay builder can splice it in directly.
+  const ghostLegendSvg = opts.showGhostLegend ? await buildGhostLegend(20, 20) : null;
   const svg = buildTrainOverlaySvg(
     stationsWithPixels,
     atStationPixels,
@@ -746,7 +749,7 @@ async function renderTrainBunchingFrame(view, baseMap, trains, opts = {}) {
     view.bearingDeg,
     view.arrowBearingDeg,
     unlabeledPinPixels,
-    { showGhostLegend: opts.showGhostLegend === true },
+    { ghostLegendSvg },
   );
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
