@@ -60,6 +60,21 @@ A successful post records the pid (or line/trDr) on cooldown so we don't keep fi
 
 Both the daily cap and the route/line-level cooldown carry a strict-dominance override: a candidate that's strictly worse than every prior post within the window (more vehicles, or same count + larger span for buses; tighter span for trains) bypasses the gate. A 3-bus pileup at 3 PM shouldn't suppress a 5-bus pileup at 3:30 PM on the same route. The pid (bus) and direction (train) cooldowns stay strict — same direction within the hour is almost always the same incident.
 
+### Timelapse video
+
+Each bunching post replies with a ~10-minute timelapse of the cluster (`src/{bus,train}/bunchingVideo.js`). The capture polls vehicle positions every 15 s for 40 ticks, snaps each track to the route polyline, and renders interpolated frames between snapshots so vehicles glide instead of teleport.
+
+CTA's tracker occasionally stops reporting a vehicle mid-clip — GPS dropouts, prediction suppression near terminals, missed polls. Without special handling these vehicles vanish abruptly from the video. For **tail drops** (vehicle present in some snapshot but missing from the final snapshot), the renderer:
+
+1. Estimates last-known speed from the prior sample's `track` delta.
+2. Dead-reckons the position forward along the polyline at that speed for up to **30 s** of clip time.
+3. Fades opacity from 1.0 → 0.15 over the window.
+4. Past the cap, drops the marker entirely.
+
+The ghost marker uses a desaturated gray fill and a dashed white ring so viewers read it as "tracking lost" rather than a normal vehicle. When at least one ghost is rendered, a **"Faded = signal lost from CTA"** legend appears top-left for the duration of the clip. The shared legend builder lives in `src/map/common.js#buildGhostLegend`.
+
+Note: this "ghost" is distinct from the ghost-bus detection in `src/{bus,train}/ghosts.js` (scheduled trips with no live vehicle reporting all hour) — it's purely a video-rendering treatment for tail-dropped GPS reports.
+
 ## Why this approach
 
 The signal is geometric, not statistical: vehicles on the same pattern, close together, in service territory. Most of the code is filtering — terminal layovers, ghost reports, opposite-direction noise — to make sure the post matches what a rider on the street would actually see.
