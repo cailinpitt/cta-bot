@@ -20,6 +20,11 @@ const DEFAULT_TICK_MS = 15_000;
 const DEFAULT_TICKS = 40; // 10 min of real time
 const DEFAULT_INTERPOLATE = 4;
 const DEFAULT_FRAMERATE = 16;
+// CTA's train tracker can briefly drop a train (GPS loss, prediction
+// suppression near terminals/yards). For tail drops (train never reappears),
+// advance last-known position along the polyline at last-known speed and
+// fade opacity to zero over this window, then drop entirely.
+const MAX_DEAD_RECKON_MS = 30_000;
 
 // CTA occasionally returns a single-tick GPS teleport (~0.5–1 mi off-route
 // and back). At ~15 s tick spacing, anything past this caps real train motion
@@ -138,10 +143,77 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
   // order — otherwise the perpendicular nudge flips for overlapped trains.
   const trainFrames = [];
   const allRns = [...new Set(snapshots.flatMap((s) => s.trains.map((t) => t.rn)))].sort();
+
+  // Tail drops: RNs missing from the final snapshot. Render as fading ghosts
+  // (dead-reckoned along the polyline) instead of an abrupt disappearance.
+  const lastSnapIdx = snapshots.length - 1;
+  const finalByRn = new Map(snapshots[lastSnapIdx].trains.map((t) => [t.rn, t]));
+  const tailDrops = new Map();
+  for (const rn of allRns) {
+    if (finalByRn.has(rn)) continue;
+    let lsi = -1;
+    let lst = null;
+    for (let i = lastSnapIdx - 1; i >= 0; i--) {
+      const t = snapshots[i].trains.find((x) => x.rn === rn);
+      if (t) {
+        lsi = i;
+        lst = t;
+        break;
+      }
+    }
+    if (lsi < 0) continue;
+    let speedFtPerSec = 0;
+    if (lsi > 0 && hasPolyline && lst.track != null) {
+      const prev = snapshots[lsi - 1].trains.find((x) => x.rn === rn);
+      const dt = (snapshots[lsi].ts - snapshots[lsi - 1].ts) / 1000;
+      if (prev && prev.track != null && dt > 0) {
+        speedFtPerSec = (lst.track - prev.track) / dt;
+      }
+    }
+    tailDrops.set(rn, {
+      lastSeenIdx: lsi,
+      lastSeenTs: snapshots[lsi].ts,
+      lastT: lst,
+      speedFtPerSec,
+    });
+  }
+
+  function ghostsAt(frameTs) {
+    const out = [];
+    for (const [rn, drop] of tailDrops) {
+      const ageMs = frameTs - drop.lastSeenTs;
+      if (ageMs <= 0 || ageMs > MAX_DEAD_RECKON_MS) continue;
+      let lat = drop.lastT.lat;
+      let lon = drop.lastT.lon;
+      if (hasPolyline && drop.lastT.track != null) {
+        const newTrack = drop.lastT.track + drop.speedFtPerSec * (ageMs / 1000);
+        const p = pointAlongLine(linePts, lineCum, newTrack);
+        if (p) {
+          lat = p.lat;
+          lon = p.lon;
+        }
+      }
+      const opacity = Math.max(0.15, 1 - ageMs / MAX_DEAD_RECKON_MS);
+      out.push({
+        rn,
+        line: drop.lastT.line,
+        lat,
+        lon,
+        heading: drop.lastT.heading,
+        destination: drop.lastT.destination,
+        nextStation: drop.lastT.nextStation,
+        trDr: drop.lastT.trDr,
+        ghost: true,
+        opacity,
+      });
+    }
+    return out;
+  }
+
   for (let i = 0; i < snapshots.length - 1; i++) {
     const a = new Map(snapshots[i].trains.map((t) => [t.rn, t]));
     const b = new Map(snapshots[i + 1].trains.map((t) => [t.rn, t]));
-    const rns = allRns.filter((rn) => a.has(rn) || b.has(rn));
+    const rns = allRns.filter((rn) => !tailDrops.has(rn) && (a.has(rn) || b.has(rn)));
     for (let k = 0; k < interpolate; k++) {
       const t = k / interpolate;
       const frame = [];
@@ -175,16 +247,21 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
           trDr: from.trDr,
         });
       }
+      const frameTs = snapshots[i].ts + (snapshots[i + 1].ts - snapshots[i].ts) * t;
+      frame.push(...ghostsAt(frameTs));
       trainFrames.push(frame);
     }
   }
-  const finalByRn = new Map(snapshots[snapshots.length - 1].trains.map((t) => [t.rn, t]));
-  trainFrames.push(allRns.filter((rn) => finalByRn.has(rn)).map((rn) => finalByRn.get(rn)));
+  const finalFrame = allRns.filter((rn) => finalByRn.has(rn)).map((rn) => finalByRn.get(rn));
+  finalFrame.push(...ghostsAt(snapshots[lastSnapIdx].ts));
+  trainFrames.push(finalFrame);
 
   const tmpDir = await Fs.mkdtemp(Path.join(Os.tmpdir(), 'cta-train-video-'));
   try {
     for (let i = 0; i < trainFrames.length; i++) {
-      const buf = await renderTrainBunchingFrame(view, baseMap, trainFrames[i]);
+      const buf = await renderTrainBunchingFrame(view, baseMap, trainFrames[i], {
+        showGhostLegend: tailDrops.size > 0,
+      });
       const framePath = Path.join(tmpDir, `frame_${String(i).padStart(3, '0')}.jpg`);
       await Fs.writeFile(framePath, buf);
     }
@@ -212,7 +289,14 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
     const finalDistFt = trainsSpanFt(snapshots[snapshots.length - 1].trains, linePts, lineCum);
     const elapsedSec = Math.round((snapshots[snapshots.length - 1].ts - snapshots[0].ts) / 1000);
 
-    return { buffer, ticksCaptured: snapshots.length, elapsedSec, initialDistFt, finalDistFt };
+    return {
+      buffer,
+      ticksCaptured: snapshots.length,
+      elapsedSec,
+      initialDistFt,
+      finalDistFt,
+      hadGhosts: tailDrops.size > 0,
+    };
   } finally {
     await Fs.remove(tmpDir).catch(() => {});
   }

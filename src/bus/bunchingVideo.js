@@ -16,6 +16,12 @@ const DEFAULT_TICK_MS = 15_000;
 const DEFAULT_TICKS = 40; // 10 min of real time
 const DEFAULT_INTERPOLATE = 4; // turns 16 real samples → 61 smoothed frames
 const DEFAULT_FRAMERATE = 16; // ~4s clip at 16× speed
+// CTA's getvehicles can briefly drop a vehicle (GPS loss, prediction
+// suppression near terminals, single missed poll). Without bridging, a bus
+// "vanishes" mid-clip. For tail drops (vehicle never reappears), advance the
+// last known position along the polyline at last-known speed and fade out
+// over this window. Past the cap we stop rendering it entirely.
+const MAX_DEAD_RECKON_MS = 30_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -91,10 +97,78 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
   // orders each tick, which flips the perpendicular nudge in separateMarkers.
   const vehicleFrames = [];
   const allVids = [...new Set(snapshots.flatMap((s) => s.vehicles.map((v) => v.vid)))].sort();
+
+  // Tail drops: VIDs missing from the final snapshot that the API stopped
+  // reporting before the clip ended. Without special handling these vanish
+  // abruptly. We dead-reckon them along the polyline at last-known speed and
+  // fade opacity to zero over MAX_DEAD_RECKON_MS, then drop them entirely.
+  const lastSnapIdx = snapshots.length - 1;
+  const finalByVid = new Map(snapshots[lastSnapIdx].vehicles.map((v) => [v.vid, v]));
+  const tailDrops = new Map();
+  for (const vid of allVids) {
+    if (finalByVid.has(vid)) continue;
+    let lsi = -1;
+    let lsv = null;
+    for (let i = lastSnapIdx - 1; i >= 0; i--) {
+      const v = snapshots[i].vehicles.find((x) => x.vid === vid);
+      if (v) {
+        lsi = i;
+        lsv = v;
+        break;
+      }
+    }
+    if (lsi < 0) continue;
+    let speedFtPerSec = 0;
+    if (lsi > 0 && hasPolyline && lsv.track != null) {
+      const prev = snapshots[lsi - 1].vehicles.find((x) => x.vid === vid);
+      const dt = (snapshots[lsi].ts - snapshots[lsi - 1].ts) / 1000;
+      if (prev && prev.track != null && dt > 0) {
+        speedFtPerSec = (lsv.track - prev.track) / dt;
+      }
+    }
+    tailDrops.set(vid, {
+      lastSeenIdx: lsi,
+      lastSeenTs: snapshots[lsi].ts,
+      lastV: lsv,
+      speedFtPerSec,
+    });
+  }
+
+  function ghostsAt(frameTs) {
+    const out = [];
+    for (const [vid, drop] of tailDrops) {
+      const ageMs = frameTs - drop.lastSeenTs;
+      if (ageMs <= 0 || ageMs > MAX_DEAD_RECKON_MS) continue;
+      let lat = drop.lastV.lat;
+      let lon = drop.lastV.lon;
+      if (hasPolyline && drop.lastV.track != null) {
+        const newTrack = drop.lastV.track + drop.speedFtPerSec * (ageMs / 1000);
+        const p = pointAlongLine(linePts, lineCum, newTrack);
+        if (p) {
+          lat = p.lat;
+          lon = p.lon;
+        }
+      }
+      const opacity = Math.max(0.15, 1 - ageMs / MAX_DEAD_RECKON_MS);
+      out.push({
+        vid,
+        lat,
+        lon,
+        heading: drop.lastV.heading,
+        pdist: drop.lastV.pdist,
+        ghost: true,
+        opacity,
+      });
+    }
+    return out;
+  }
+
   for (let i = 0; i < snapshots.length - 1; i++) {
     const a = new Map(snapshots[i].vehicles.map((v) => [v.vid, v]));
     const b = new Map(snapshots[i + 1].vehicles.map((v) => [v.vid, v]));
-    const vids = allVids.filter((vid) => a.has(vid) || b.has(vid));
+    // Tail-dropped VIDs are rendered separately as fading ghosts — exclude
+    // them from the regular interpolation path so we don't also freeze them.
+    const vids = allVids.filter((vid) => !tailDrops.has(vid) && (a.has(vid) || b.has(vid)));
     for (let k = 0; k < interpolate; k++) {
       const t = k / interpolate;
       const vehicles = [];
@@ -126,14 +200,16 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
           pdist: from.pdist,
         });
       }
+      const frameTs = snapshots[i].ts + (snapshots[i + 1].ts - snapshots[i].ts) * t;
+      vehicles.push(...ghostsAt(frameTs));
       vehicleFrames.push(vehicles);
     }
   }
-  // Final real snapshot → last frame, in the same stable vid order.
-  const finalByVid = new Map(snapshots[snapshots.length - 1].vehicles.map((v) => [v.vid, v]));
-  vehicleFrames.push(
-    allVids.filter((vid) => finalByVid.has(vid)).map((vid) => finalByVid.get(vid)),
-  );
+  // Final real snapshot → last frame, in the same stable vid order, plus any
+  // ghosts still inside their fade window at the final timestamp.
+  const finalFrame = allVids.filter((vid) => finalByVid.has(vid)).map((vid) => finalByVid.get(vid));
+  finalFrame.push(...ghostsAt(snapshots[lastSnapIdx].ts));
+  vehicleFrames.push(finalFrame);
 
   const tmpDir = await Fs.mkdtemp(Path.join(Os.tmpdir(), 'cta-bunch-video-'));
   try {
@@ -141,6 +217,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
       const buf = await renderBunchingFrame(view, baseMap, vehicleFrames[i], signals, stops, {
         compactStops: true,
         compactSignals: true,
+        showGhostLegend: tailDrops.size > 0,
       });
       const framePath = Path.join(tmpDir, `frame_${String(i).padStart(3, '0')}.jpg`);
       await Fs.writeFile(framePath, buf);
@@ -186,6 +263,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
       elapsedSec,
       initialSpanFt,
       finalSpanFt,
+      hadGhosts: tailDrops.size > 0,
     };
   } finally {
     await Fs.remove(tmpDir).catch(() => {});

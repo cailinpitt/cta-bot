@@ -14,6 +14,7 @@ const {
   TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
   buildDirectionArrow,
+  buildGhostLegend,
   xmlEscape,
   requireMapboxToken,
   fetchMapboxStatic,
@@ -138,6 +139,7 @@ function buildTrainOverlaySvg(
   bearingDeg = 0,
   arrowBearingDeg = null,
   unlabeledPinPixels = [],
+  { showGhostLegend = false } = {},
 ) {
   const fontSize = 18;
   const labelHeight = fontSize + 8;
@@ -316,15 +318,20 @@ function buildTrainOverlaySvg(
     return `<circle cx="${x}" cy="${y}" r="${TRAIN_MARKER_RADIUS + 8}" fill="none" stroke="#fff" stroke-width="4"/>`;
   });
 
-  // Custom train markers.
+  // Custom train markers. Ghost = "lost-signal" (CTA stopped reporting the
+  // train mid-clip): desaturated gray fill + dashed ring + faded opacity so
+  // viewers read it as tracking lost rather than a normal train.
   const iconSize = TRAIN_MARKER_RADIUS * 1.6;
-  const trainMarkers = trainPixels.map(({ x, y }) => {
+  const trainMarkers = trainPixels.map(({ x, y, ghost, opacity }) => {
     const iconX = x - iconSize / 2;
     const iconY = y - iconSize / 2;
-    return [
-      `<circle cx="${x}" cy="${y}" r="${TRAIN_MARKER_RADIUS}" fill="#${lineColor}" stroke="#fff" stroke-width="4"/>`,
+    const fill = ghost ? '888888' : lineColor;
+    const dashAttr = ghost ? ' stroke-dasharray="6 4"' : '';
+    const body = [
+      `<circle cx="${x}" cy="${y}" r="${TRAIN_MARKER_RADIUS}" fill="#${fill}" stroke="#fff" stroke-width="4"${dashAttr}/>`,
       `<svg x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 36 36">${TWEMOJI_TRAIN_INNER}</svg>`,
     ].join('');
+    return ghost ? `<g opacity="${opacity}">${body}</g>` : body;
   });
 
   // Direction-of-travel arrow in the top-right corner.
@@ -375,12 +382,16 @@ function buildTrainOverlaySvg(
 
   // Draw labels before trains+halos so a stray overlap never hides a train.
   // Placement already avoids reserved train boxes, so this is belt-and-suspenders.
+  // Ghost legend: top-left corner, only when this clip contains tail-dropped
+  // trains. Arrow lives top-right; legend top-left so they don't fight.
+  const legendElements = showGhostLegend ? [buildGhostLegend(20, 20)] : [];
   const elements = [
     ...terminalElements,
     ...labelElements,
     ...halos,
     ...trainMarkers,
     ...arrows,
+    ...legendElements,
   ].join('\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">${elements}</svg>`;
 }
@@ -665,7 +676,7 @@ async function fetchTrainBunchingBaseMap(view) {
   return fetchMapboxStatic(url);
 }
 
-async function renderTrainBunchingFrame(view, baseMap, trains) {
+async function renderTrainBunchingFrame(view, baseMap, trains, opts = {}) {
   // Project each train, then nudge overlapping markers apart so a tight bunch
   // still shows every train instead of stacking them into one disc. Halos and
   // labels anchor to the separated pixels so they follow the visible markers.
@@ -675,7 +686,13 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   const separated = separateMarkers(rawTrainPixels, TRAIN_MARKER_RADIUS * 2 + 4, {
     axis: perpendicularFromBearing(view.bearingDeg),
   });
-  const trainPixels = separated.map(({ x, y }) => ({ x, y, bearingDeg: view.bearingDeg }));
+  const trainPixels = separated.map(({ x, y }, idx) => ({
+    x,
+    y,
+    bearingDeg: view.bearingDeg,
+    ghost: trains[idx]?.ghost === true,
+    opacity: trains[idx]?.opacity ?? 1,
+  }));
 
   const stationsWithPixels = view.visibleStations.map(({ station, x, y, bearingDeg }) => ({
     station,
@@ -685,10 +702,14 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
   }));
   const atStationPixels = trains
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) =>
-      view.visibleStations.some(
-        (v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT,
-      ),
+    // Ghosts are dead-reckoned positions, not real GPS — don't paint
+    // at-station halos on them since we don't actually know they stopped.
+    .filter(
+      ({ t }) =>
+        !t.ghost &&
+        view.visibleStations.some(
+          (v) => haversineFt({ lat: v.station.lat, lon: v.station.lon }, t) < AT_STATION_FT,
+        ),
     )
     .map(({ idx }) => ({ x: separated[idx].x, y: separated[idx].y }));
 
@@ -725,6 +746,7 @@ async function renderTrainBunchingFrame(view, baseMap, trains) {
     view.bearingDeg,
     view.arrowBearingDeg,
     unlabeledPinPixels,
+    { showGhostLegend: opts.showGhostLegend === true },
   );
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)

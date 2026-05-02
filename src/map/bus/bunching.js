@@ -13,6 +13,7 @@ const {
   TWEMOJI_HOUSE_INNER,
   TWEMOJI_FLAG_INNER,
   buildBusMarker,
+  buildGhostLegend,
   buildTerminalMarker,
   buildStopMarker,
   buildStopDot,
@@ -230,9 +231,14 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
       radius: BUS_MARKER_RADIUS,
       color: BUS_COLOR,
       articulated: isArticulated(vehicles[i]?.vid),
+      ghost: vehicles[i]?.ghost === true,
+      opacity: vehicles[i]?.opacity ?? 1,
     }),
   );
   const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, view.bearingDeg)];
+  // Ghost legend: top-left corner, only when this clip contains tail-dropped
+  // vehicles. The arrow lives top-right; legend top-left so they don't fight.
+  const legendElements = opts.showGhostLegend ? [buildGhostLegend(20, 20)] : [];
 
   // Origin (house) and destination (flag) markers — render below buses (so a
   // bus sitting at either still reads clearly) but above signals. Each is
@@ -256,7 +262,7 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
     terminalElements.push(...buildTerminalMarker(x, y, TERMINAL_MARKER_RADIUS, glyph));
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${stopElements.join('\n')}${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">${signalElements.join('\n')}${stopElements.join('\n')}${terminalElements.join('\n')}${markerElements.join('\n')}${arrowElements.join('\n')}${legendElements.join('\n')}</svg>`;
   return sharp(baseMap)
     .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])

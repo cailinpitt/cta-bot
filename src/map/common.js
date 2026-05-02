@@ -149,16 +149,43 @@ const ARTIC_MARKER_COLOR = 'c026ff';
 // Bus marker. Articulated buses get both a distinct glyph (two coach
 // segments + bellows + 3 axles) and a deeper background color. `articulated`
 // is optional; omitting it yields the standard fleet marker.
-function buildBusMarker({ x, y, radius, color, articulated = false }) {
+function buildBusMarker({ x, y, radius, color, articulated = false, ghost = false, opacity = 1 }) {
   const size = radius * 1.6;
   const inner = articulated ? ARTIC_BUS_INNER : TWEMOJI_BUS_INNER;
-  const fill = articulated ? ARTIC_MARKER_COLOR : color;
+  // Ghost = "lost-signal" rendering for buses the API stopped reporting
+  // mid-clip: desaturated gray fill + dashed ring so viewers read it as
+  // "tracking lost" rather than missing data.
+  const fill = ghost ? '888888' : articulated ? ARTIC_MARKER_COLOR : color;
+  const dashAttr = ghost ? ' stroke-dasharray="6 4"' : '';
+  const opacityAttr = ghost ? ` opacity="${opacity}"` : '';
   // Layer order: fill circle → bus glyph → white stroke ring on top, so the
   // ring crisply frames the bus instead of being clipped beneath it.
-  return [
+  const body = [
     `<circle cx="${x}" cy="${y}" r="${radius}" fill="#${fill}"/>`,
     `<svg x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" viewBox="0 0 36 36">${inner}</svg>`,
-    `<circle cx="${x}" cy="${y}" r="${radius}" fill="none" stroke="#fff" stroke-width="4"/>`,
+    `<circle cx="${x}" cy="${y}" r="${radius}" fill="none" stroke="#fff" stroke-width="4"${dashAttr}/>`,
+  ].join('');
+  return ghost ? `<g${opacityAttr}>${body}</g>` : body;
+}
+
+// In-frame legend explaining what a faded/dashed marker means. Rendered when
+// a video clip contains at least one tail-dropped vehicle so viewers can
+// interpret the ghost without context from the post text.
+function buildGhostLegend(x, y) {
+  const discR = 16;
+  const padX = 16;
+  const fontSize = 26;
+  const text = 'Faded = signal lost from CTA';
+  // Width measured via measureTextWidth (librsvg) for the fixed string at
+  // fontSize 26 bold; baked in so this builder can stay synchronous.
+  const textWidth = 360;
+  const boxW = padX + discR * 2 + 8 + textWidth + padX;
+  const boxH = discR * 2 + 12;
+  const cy = y + boxH / 2;
+  return [
+    `<rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="6" fill="#000" fill-opacity="0.7"/>`,
+    `<circle cx="${x + padX + discR}" cy="${cy}" r="${discR}" fill="#888888" stroke="#fff" stroke-width="3" stroke-dasharray="6 4" opacity="0.85"/>`,
+    `<text x="${x + padX + discR * 2 + 8}" y="${cy + fontSize / 2 - 3}" fill="#fff" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600">${text}</text>`,
   ].join('');
 }
 
@@ -325,6 +352,7 @@ module.exports = {
   TWEMOJI_FLAG_INNER,
   TWEMOJI_BUS_STOP_INNER,
   buildBusMarker,
+  buildGhostLegend,
   buildTerminalMarker,
   buildStopMarker,
   buildStopDot,
