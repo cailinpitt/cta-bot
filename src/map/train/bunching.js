@@ -10,6 +10,7 @@ const {
   WIDTH,
   HEIGHT,
   TWEMOJI_TRAIN_INNER,
+  buildTurnaroundMarker,
   TWEMOJI_HOUSE_INNER,
   TWEMOJI_FLAG_INNER,
   buildTerminalMarker,
@@ -320,9 +321,21 @@ function buildTrainOverlaySvg(
 
   // Custom train markers. Ghost = "lost-signal" (CTA stopped reporting the
   // train mid-clip): desaturated gray fill + dashed ring + faded opacity so
-  // viewers read it as tracking lost rather than a normal train.
+  // viewers read it as tracking lost rather than a normal train. Turnaround =
+  // train arrived at a real terminus (not a Loop apex) and dropped off the
+  // API for the trip-flip — render as a loop-arrow glyph in line color so
+  // viewers read "arrived" instead of "lost track."
   const iconSize = TRAIN_MARKER_RADIUS * 1.6;
-  const trainMarkers = trainPixels.map(({ x, y, ghost, opacity }) => {
+  const trainMarkers = trainPixels.map(({ x, y, ghost, turnaround, opacity }) => {
+    if (turnaround) {
+      return buildTurnaroundMarker({
+        x,
+        y,
+        radius: TRAIN_MARKER_RADIUS,
+        color: lineColor,
+        opacity,
+      });
+    }
     const iconX = x - iconSize / 2;
     const iconY = y - iconSize / 2;
     const fill = ghost ? '888888' : lineColor;
@@ -691,6 +704,7 @@ async function renderTrainBunchingFrame(view, baseMap, trains, opts = {}) {
     y,
     bearingDeg: view.bearingDeg,
     ghost: trains[idx]?.ghost === true,
+    turnaround: trains[idx]?.turnaround === true,
     opacity: trains[idx]?.opacity ?? 1,
   }));
 

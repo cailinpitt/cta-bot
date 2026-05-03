@@ -13,6 +13,7 @@ const {
   TWEMOJI_HOUSE_INNER,
   TWEMOJI_FLAG_INNER,
   buildBusMarker,
+  buildTurnaroundMarker,
   buildGhostLegend,
   buildTerminalMarker,
   buildStopMarker,
@@ -224,8 +225,17 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
   const markerPixels = separateMarkers(rawMarkerPixels, BUS_MARKER_RADIUS * 2 + 4, {
     axis: perpendicularFromBearing(view.bearingDeg),
   });
-  const markerElements = markerPixels.map(({ x, y }, i) =>
-    buildBusMarker({
+  const markerElements = markerPixels.map(({ x, y }, i) => {
+    if (vehicles[i]?.turnaround === true) {
+      return buildTurnaroundMarker({
+        x,
+        y,
+        radius: BUS_MARKER_RADIUS,
+        color: BUS_COLOR,
+        opacity: vehicles[i]?.opacity ?? 1,
+      });
+    }
+    return buildBusMarker({
       x,
       y,
       radius: BUS_MARKER_RADIUS,
@@ -233,8 +243,8 @@ async function renderBunchingFrame(view, baseMap, vehicles, signals = [], stops 
       articulated: isArticulated(vehicles[i]?.vid),
       ghost: vehicles[i]?.ghost === true,
       opacity: vehicles[i]?.opacity ?? 1,
-    }),
-  );
+    });
+  });
   const arrowElements = [buildDirectionArrow(WIDTH - 220, 180, view.bearingDeg)];
   // Ghost legend: top-left corner, only when this clip contains tail-dropped
   // vehicles. The arrow lives top-right; legend top-left so they don't fight.

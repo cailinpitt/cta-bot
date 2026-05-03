@@ -198,6 +198,36 @@ async function buildGhostLegend(x, y) {
   ].join('');
 }
 
+// Turnaround marker: rendered when a vehicle disappears from the API at a
+// real terminus (last-seen position within ~0.25 mi of a polyline endpoint
+// that isn't a Loop-trunk apex). Distinct from the gray "lost-signal" ghost
+// — viewers shouldn't read "we lost track" when the vehicle simply reached
+// its terminal. A loop-arrow glyph in the route color says "arrived, turning
+// around" instead.
+function buildTurnaroundMarker({ x, y, radius, color, opacity = 1 }) {
+  const iconSize = radius * 1.4;
+  const iconX = x - iconSize / 2;
+  const iconY = y - iconSize / 2;
+  // 36×36 viewBox glyph: a U-turn arrow (vertical up the left side, half-
+  // circle across the top, vertical back down the right side, arrowhead at
+  // the bottom). Reads cleanly as "reverse direction" on the colored disc;
+  // an arc-with-arrowhead earlier looked like the letter "C" because the
+  // arrowhead overlapped the arc start.
+  const glyph = [
+    // Left riser: from y=24 up to y=14, where the arch begins.
+    '<path d="M 9 24 L 9 14 A 9 9 0 0 1 27 14 L 27 18" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
+    // Wide arrowhead pointing down at the right end. Sized larger than the
+    // stroke so the direction reads at marker scale.
+    '<polygon points="20 19 27 30 34 19" fill="#fff"/>',
+  ].join('');
+  const body = [
+    `<circle cx="${x}" cy="${y}" r="${radius}" fill="#${color}"/>`,
+    `<svg x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 36 36">${glyph}</svg>`,
+    `<circle cx="${x}" cy="${y}" r="${radius}" fill="none" stroke="#fff" stroke-width="4"/>`,
+  ].join('');
+  return opacity < 1 ? `<g opacity="${opacity.toFixed(3)}">${body}</g>` : body;
+}
+
 function buildTerminalMarker(x, y, radius, glyph) {
   const iconSize = radius * 1.6;
   const iconX = x - iconSize / 2;
@@ -361,6 +391,7 @@ module.exports = {
   TWEMOJI_FLAG_INNER,
   TWEMOJI_BUS_STOP_INNER,
   buildBusMarker,
+  buildTurnaroundMarker,
   buildGhostLegend,
   buildTerminalMarker,
   buildStopMarker,

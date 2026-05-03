@@ -6,7 +6,11 @@ const { promisify } = require('node:util');
 
 const { getVehicles } = require('./api');
 const { computeBunchingView, fetchBunchingBaseMap, renderBunchingFrame } = require('../map');
-const { cumulativeDistances } = require('../shared/geo');
+const { cumulativeDistances, haversineFt } = require('../shared/geo');
+
+const TURNAROUND_NEAR_TERMINAL_FT = 1320; // ~0.25 mi
+const TURNAROUND_HOLD_MS = 3_000;
+const TURNAROUND_FADE_MS = 2_000;
 const { smoothSeries } = require('../shared/stats');
 const { snapToLine, pointAlongLine } = require('../train/speedmap');
 
@@ -125,11 +129,32 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
         speedFtPerSec = (lsv.track - prev.track) / dt;
       }
     }
+    // Terminal-arrival classifier: bus polylines are end-to-end (no Loop
+    // round-trip), so both endpoints are real terminals. A drop within the
+    // turnaround radius of either end is "arrived," not "lost signal."
+    let turnaroundEnd = null;
+    if (hasPolyline) {
+      const ends = [
+        { lat: pattern.points[0].lat, lon: pattern.points[0].lon },
+        {
+          lat: pattern.points[pattern.points.length - 1].lat,
+          lon: pattern.points[pattern.points.length - 1].lon,
+        },
+      ];
+      for (const end of ends) {
+        const d = haversineFt({ lat: lsv.lat, lon: lsv.lon }, end);
+        if (d <= TURNAROUND_NEAR_TERMINAL_FT) {
+          turnaroundEnd = end;
+          break;
+        }
+      }
+    }
     tailDrops.set(vid, {
       lastSeenIdx: lsi,
       lastSeenTs: snapshots[lsi].ts,
       lastV: lsv,
       speedFtPerSec,
+      turnaroundEnd,
     });
   }
 
@@ -147,6 +172,23 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
       // takes over without a one-frame gap; the bus is already excluded
       // from normal rendering starting at this snapshot.
       if (ageMs < 0) continue;
+      if (drop.turnaroundEnd) {
+        if (ageMs > TURNAROUND_HOLD_MS + TURNAROUND_FADE_MS) continue;
+        const opacity =
+          ageMs <= TURNAROUND_HOLD_MS
+            ? 1
+            : Math.max(0, 1 - (ageMs - TURNAROUND_HOLD_MS) / TURNAROUND_FADE_MS);
+        out.push({
+          vid,
+          lat: drop.turnaroundEnd.lat,
+          lon: drop.turnaroundEnd.lon,
+          heading: drop.lastV.heading,
+          pdist: drop.lastV.pdist,
+          turnaround: true,
+          opacity,
+        });
+        continue;
+      }
       const fadeMs = Math.max(1, videoEndTs - drop.lastSeenTs);
       let lat = drop.lastV.lat;
       let lon = drop.lastV.lon;
@@ -231,7 +273,7 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
       const buf = await renderBunchingFrame(view, baseMap, vehicleFrames[i], signals, stops, {
         compactStops: true,
         compactSignals: true,
-        showGhostLegend: tailDrops.size > 0,
+        showGhostLegend: [...tailDrops.values()].some((d) => !d.turnaroundEnd),
       });
       const framePath = Path.join(tmpDir, `frame_${String(i).padStart(3, '0')}.jpg`);
       await Fs.writeFile(framePath, buf);

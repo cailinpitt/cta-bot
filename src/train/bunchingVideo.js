@@ -12,7 +12,24 @@ const {
 } = require('../map');
 const { haversineFt } = require('../shared/geo');
 const { smoothSeries } = require('../shared/stats');
-const { buildLinePolyline, snapToLine, pointAlongLine } = require('./speedmap');
+const { buildLinePolyline, snapToLine, pointAlongLine, inLoopTrunk } = require('./speedmap');
+
+const TURNAROUND_NEAR_TERMINAL_FT = 1320; // ~0.25 mi
+const TURNAROUND_HOLD_MS = 3_000;
+const TURNAROUND_FADE_MS = 2_000;
+
+// Real-terminal endpoints for a polyline: both endpoints, minus any that lie
+// inside the Loop trunk. For round-trip lines (Brown/Orange/Pink/Purple)
+// buildLinePolyline truncates to one direction so the inner end is the Loop
+// apex, not a terminus — disappearances there are normal mid-circuit
+// turnaround behavior, not "arrived at endpoint of run."
+function realTerminalEnds(linePts) {
+  if (!linePts || linePts.length < 2) return [];
+  const toLatLon = (pt) =>
+    Array.isArray(pt) ? { lat: pt[0], lon: pt[1] } : { lat: pt.lat, lon: pt.lon };
+  const ends = [toLatLon(linePts[0]), toLatLon(linePts[linePts.length - 1])];
+  return ends.filter(({ lat, lon }) => !inLoopTrunk(lat, lon));
+}
 
 const execP = promisify(exec);
 
@@ -170,11 +187,27 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
         speedFtPerSec = (lst.track - prev.track) / dt;
       }
     }
+    // Classify the drop: if the last-seen position was within the
+    // turnaround radius of a real terminal endpoint, treat it as "arrived
+    // at terminus" rather than "lost signal mid-line." Loop apex endpoints
+    // are filtered out by realTerminalEnds — disappearances there stay on
+    // the gray-ghost path.
+    let turnaroundEnd = null;
+    if (hasPolyline) {
+      for (const end of realTerminalEnds(linePts)) {
+        const d = haversineFt({ lat: lst.lat, lon: lst.lon }, end);
+        if (d <= TURNAROUND_NEAR_TERMINAL_FT) {
+          turnaroundEnd = end;
+          break;
+        }
+      }
+    }
     tailDrops.set(rn, {
       lastSeenIdx: lsi,
       lastSeenTs: snapshots[lsi].ts,
       lastT: lst,
       speedFtPerSec,
+      turnaroundEnd,
     });
   }
 
@@ -192,6 +225,27 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
       // takes over without a one-frame gap; the train is already excluded
       // from normal rendering starting at this snapshot.
       if (ageMs < 0) continue;
+      if (drop.turnaroundEnd) {
+        // Hold full opacity for ~3s, then fade over ~2s, then drop.
+        if (ageMs > TURNAROUND_HOLD_MS + TURNAROUND_FADE_MS) continue;
+        const opacity =
+          ageMs <= TURNAROUND_HOLD_MS
+            ? 1
+            : Math.max(0, 1 - (ageMs - TURNAROUND_HOLD_MS) / TURNAROUND_FADE_MS);
+        out.push({
+          rn,
+          line: drop.lastT.line,
+          lat: drop.turnaroundEnd.lat,
+          lon: drop.turnaroundEnd.lon,
+          heading: drop.lastT.heading,
+          destination: drop.lastT.destination,
+          nextStation: drop.lastT.nextStation,
+          trDr: drop.lastT.trDr,
+          turnaround: true,
+          opacity,
+        });
+        continue;
+      }
       const fadeMs = Math.max(1, videoEndTs - drop.lastSeenTs);
       let lat = drop.lastT.lat;
       let lon = drop.lastT.lon;
@@ -277,7 +331,7 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
   try {
     for (let i = 0; i < trainFrames.length; i++) {
       const buf = await renderTrainBunchingFrame(view, baseMap, trainFrames[i], {
-        showGhostLegend: tailDrops.size > 0,
+        showGhostLegend: [...tailDrops.values()].some((d) => !d.turnaroundEnd),
       });
       const framePath = Path.join(tmpDir, `frame_${String(i).padStart(3, '0')}.jpg`);
       await Fs.writeFile(framePath, buf);
