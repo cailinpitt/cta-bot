@@ -40,6 +40,7 @@ const { renderDisruption } = require('../../src/map');
 const { buildPostText, buildAltText, buildClearPostText } = require('../../src/shared/disruption');
 const {
   expectedTrainHeadwayMin,
+  expectedTrainHeadwayMinAnyDir,
   expectedTrainActiveTrips,
   expectedTrainActiveTripsAnyDir,
 } = require('../../src/shared/gtfs');
@@ -742,11 +743,14 @@ function stationsAlongBranchHelper(branch, line) {
   return stationsAlongBranch(trainStations, line, branch.points, branch.cumDist);
 }
 
-// Null destination → loop lines resolve line-wide; bi-directional lines return
-// null and the detector falls back to its 15-min floor.
+// Null destination → loop lines resolve line-wide; bi-directional lines fall
+// back to the slower of the two GTFS directions so the pulse cold threshold
+// scales with off-peak headways instead of collapsing to its absolute floor.
 function safeHeadway(line) {
   try {
-    return expectedTrainHeadwayMin(line, null);
+    const direct = expectedTrainHeadwayMin(line, null);
+    if (direct != null) return direct;
+    return expectedTrainHeadwayMinAnyDir(line);
   } catch (_e) {
     return null;
   }

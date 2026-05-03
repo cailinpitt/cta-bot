@@ -270,6 +270,26 @@ function expectedTrainHeadwayMin(line, destination, now = new Date()) {
   return trainLookupInterpolated(line, destination, 'headways', now);
 }
 
+// Line-wide headway when no destination is available — used by the pulse
+// detector on bi-directional lines (Red/Blue/Green) where pickTrainDirInfo
+// can't pick a side. Returns the slower of the two GTFS directions so the
+// resulting cold threshold doesn't undershoot during off-peak hours.
+function expectedTrainHeadwayMinAnyDir(line, now = new Date()) {
+  const index = loadIndex();
+  const gtfsId = TRAIN_LINE_TO_GTFS[line];
+  if (!gtfsId) return null;
+  const byDir = index.lines?.[gtfsId];
+  if (!byDir) return null;
+  let max = null;
+  for (const info of Object.values(byDir)) {
+    if (!info?.headways) continue;
+    const v = interpolatedHourlyLookup(info.headways, now);
+    if (!Number.isFinite(v)) continue;
+    if (max == null || v > max) max = v;
+  }
+  return max;
+}
+
 function expectedTrainTripMinutes(line, destination, now = new Date()) {
   return trainLookupInterpolated(line, destination, 'durations', now);
 }
@@ -314,6 +334,7 @@ module.exports = {
   loadIndex,
   expectedHeadwayMin,
   expectedTrainHeadwayMin,
+  expectedTrainHeadwayMinAnyDir,
   expectedTripMinutes,
   expectedTrainTripMinutes,
   expectedActiveTrips,

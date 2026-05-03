@@ -144,7 +144,7 @@ Each line has one or more *branches* (Green's Ashland and Cottage Grove, Blue's 
 1. Build a polyline and divide it into 0.25-mile bins. Round-trip "loop" branches (Brown, Pink, Orange, Purple) are split by `processSegment` / `buildLineBranches` into outbound + inbound branches that share geometry but carry a `trDrFilter` matching the Train Tracker direction code (`LOOP_LINE_TRDR_OUTBOUND`: brn=1 Kimball, org=5 Midway, pink=5 54th/Cermak, p=1 Linden). Yellow is intentionally omitted — Train Tracker reports a single trDr for both physical directions, so it stays unsplit. Without per-direction binning, a one-way outage on a loop line was masked by trains running the opposite direction in the same bins.
 2. For every observation in the lookback window, perpendicular-project its lat/lon onto the polyline using equirectangular projection at the branch's latitude. Reject projections > 1,500 ft off-line (off-branch trains) or with mismatched `trDrFilter`.
 3. For each bin, record the most recent timestamp any train was there.
-4. A bin is **cold** if `lastSeenTs < now - max(15 min, 2 × headway)`.
+4. A bin is **cold** if `lastSeenTs < now - max(15 min, 2.5 × headway)`. The headway-driven term is what makes the threshold scale with service density — peak weekday (~4 min headway) clamps at the 15-min floor, Sunday midday (~10 min) opens to 25 min, late-evening (~12 min) to 30 min. For bidirectional lines (Red/Blue/Green), the bin script falls back to `expectedTrainHeadwayMinAnyDir` (slowest of the two GTFS directions) so the headway term still applies when no destination is available — without that fallback, bidirectional lines silently dropped to the floor and over-fired during off-peak hours.
 5. The longest contiguous run of cold bins, *excluding terminal zones at both ends*, becomes the candidate.
 
 Pulse `direction` keys derive from a stable hash of geometry, not the branch's index in `trainLines.json`, so reordering shapes in the JSON doesn't break pulse_state continuity across deploys.
@@ -155,7 +155,7 @@ The distance gate is composite. The candidate is admitted if **any** of the foll
 
 - `passLong` — run length ≥ `MIN_RUN_FT` (2 mi). Sparse-fallback for outer branches with few stations.
 - `passMulti` — ≥ 2 named stations fully inside the cold run.
-- `passSolo` — ≥ 1 named station inside, *and* `expectedTrains = floor(coldMin / headwayMin) ≥ SOLO_EXPECTED_TRAINS = 3`, *and* `coldMs ≥ max(15 min, 3 × headway)`.
+- `passSolo` — ≥ 1 named station inside, *and* `expectedTrains = floor(coldMin / headwayMin) ≥ SOLO_EXPECTED_TRAINS = 3`, *and* `coldMs ≥ max(15 min, 3.5 × headway)`.
 
 The flat 2-mi minimum is gone. `passSolo`'s time-side `expectedTrains ≥ 3` factor is what blocks the obvious false-positive — a single train held at a station — without rejecting Belmont-style single-tracking, where one to two stations go cold for long enough that several trains *should* have passed through.
 

@@ -3,7 +3,9 @@
 // writes; persistence/cooldown gating lives in the bin script.
 //
 // Each branch is binned by along-track distance; a bin is "cold" when no
-// train has projected into it within max(2× headway, 15 min). Loop lines
+// train has projected into it within max(2.5× headway, 15 min) — the
+// multiplier lets the threshold open up during sparse off-peak service while
+// the floor keeps peak detection from getting jumpy. Loop lines
 // (Brown/Orange/Pink/Purple) split into outbound/inbound branches sharing
 // geometry but filtered by Train Tracker direction code, so single-direction
 // outages don't get masked by trains running the other way.
@@ -25,6 +27,13 @@ const DEFAULT_LOOKBACK_MS = 20 * 60 * 1000;
 const DEFAULT_BIN_FT = 1320; // 0.25 mi
 const DEFAULT_MIN_RUN_FT_LONG = 10560; // 2 mi — sparse outer-branch fallback
 const DEFAULT_MIN_COLD_MS = 15 * 60 * 1000;
+// Multipliers on scheduled headway. The headway-driven threshold scales the
+// detector with service density: peak weekday (~4 min) clamps at the 15-min
+// floor (3.75× headway), Sunday midday (~10 min) opens to 25 min (2.5× ⇒
+// would-have-prevented the 2026-05-03 Montrose→Belmont 16-min false alarm),
+// late-night sparse service (~15 min) opens to 37.5 min.
+const COLD_HEADWAY_MULT = 2.5;
+const COLD_HEADWAY_MULT_STRICT = 3.5;
 const DEFAULT_MIN_COVERAGE_FRAC = 0.5;
 const DEFAULT_MIN_SPAN_FRAC = 0.5;
 // Number of expected-but-missed trains required for the 1-station passSolo
@@ -40,11 +49,11 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
   const minSpanFrac = opts.minSpanFrac != null ? opts.minSpanFrac : DEFAULT_MIN_SPAN_FRAC;
   const coldThresholdMs = Math.max(
     DEFAULT_MIN_COLD_MS,
-    headwayMin != null ? 2 * headwayMin * 60 * 1000 : DEFAULT_MIN_COLD_MS,
+    headwayMin != null ? COLD_HEADWAY_MULT * headwayMin * 60 * 1000 : DEFAULT_MIN_COLD_MS,
   );
   const coldThresholdMsStrict = Math.max(
     DEFAULT_MIN_COLD_MS,
-    headwayMin != null ? 3 * headwayMin * 60 * 1000 : DEFAULT_MIN_COLD_MS,
+    headwayMin != null ? COLD_HEADWAY_MULT_STRICT * headwayMin * 60 * 1000 : DEFAULT_MIN_COLD_MS,
   );
 
   const branches = buildLineBranches(trainLines, line);

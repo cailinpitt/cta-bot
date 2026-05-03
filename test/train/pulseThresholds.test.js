@@ -58,7 +58,7 @@ test('passLong: 4-mi cold stretch admits regardless of station count', () => {
 test('passMulti: 2 cold stations on a < 2mi run admits', () => {
   // Station spacing 2000ft (~0.4mi). 2 cold stations span ~4000ft (~0.75mi).
   const stations = buildStations(2000);
-  const { now, recent } = buildBaselineWithCold(stations, 30000, 34000, 20 * 60 * 1000);
+  const { now, recent } = buildBaselineWithCold(stations, 30000, 34000, 22 * 60 * 1000);
   const { candidates } = detectDeadSegments({
     line: 'red',
     trainLines,
@@ -116,11 +116,11 @@ test('rejects held-train: 1 station cold for 9 min @ 6-min headway', () => {
   }
 });
 
-test('passMulti: 2-station cold for 18 min @ 8-min headway admits', () => {
-  // Cold threshold floor is 15 min OR 2× headway (16 min); use 18 min so the
-  // bins read cold without leaning on passSolo's 3×-headway timer.
+test('passMulti: 2-station cold for 22 min @ 8-min headway admits', () => {
+  // Cold threshold floor is 15 min OR 2.5× headway (20 min); use 22 min so the
+  // bins read cold without leaning on passSolo's 3.5×-headway timer.
   const stations = buildStations(2000);
-  const { now, recent } = buildBaselineWithCold(stations, 30000, 34000, 18 * 60 * 1000);
+  const { now, recent } = buildBaselineWithCold(stations, 30000, 34000, 22 * 60 * 1000);
   const { candidates } = detectDeadSegments({
     line: 'red',
     trainLines,
