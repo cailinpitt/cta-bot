@@ -102,7 +102,10 @@ const { captureBunchingVideo } = require('../src/bus/bunchingVideo');
 
 (async () => {
   const result = await captureBunchingVideo(bunch, pattern, {
-    tickMs: 50,
+    // Real-clock spacing between snapshots: 2 s per tick gives the post-
+    // drop window enough wall time for the 1.5 s glide + 3 s hold + 2 s
+    // fade to actually complete in the preview clip.
+    tickMs: 2000,
     ticks: NUM_TICKS,
     interpolate: 4,
     framerate: 8,

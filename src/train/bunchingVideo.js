@@ -15,6 +15,7 @@ const { smoothSeries } = require('../shared/stats');
 const { buildLinePolyline, snapToLine, pointAlongLine, inLoopTrunk } = require('./speedmap');
 
 const TURNAROUND_NEAR_TERMINAL_FT = 1320; // ~0.25 mi
+const TURNAROUND_GLIDE_MS = 1_500;
 const TURNAROUND_HOLD_MS = 3_000;
 const TURNAROUND_FADE_MS = 2_000;
 
@@ -226,12 +227,32 @@ async function captureTrainBunchingVideo(bunch, lineColors, trainLines, stations
       // from normal rendering starting at this snapshot.
       if (ageMs < 0) continue;
       if (drop.turnaroundEnd) {
-        // Hold full opacity for ~3s, then fade over ~2s, then drop.
-        if (ageMs > TURNAROUND_HOLD_MS + TURNAROUND_FADE_MS) continue;
+        // Three-phase lifecycle so the marker reaches the terminal
+        // gracefully instead of teleporting:
+        //   [0, glide]                — normal marker, lerp from last-seen
+        //                                position to the terminal
+        //   [glide, glide+hold]       — turnaround glyph at full opacity
+        //   [glide+hold, +fade]       — turnaround glyph fading out
+        if (ageMs < TURNAROUND_GLIDE_MS) {
+          const t = ageMs / TURNAROUND_GLIDE_MS;
+          out.push({
+            rn,
+            line: drop.lastT.line,
+            lat: drop.lastT.lat + (drop.turnaroundEnd.lat - drop.lastT.lat) * t,
+            lon: drop.lastT.lon + (drop.turnaroundEnd.lon - drop.lastT.lon) * t,
+            heading: drop.lastT.heading,
+            destination: drop.lastT.destination,
+            nextStation: drop.lastT.nextStation,
+            trDr: drop.lastT.trDr,
+          });
+          continue;
+        }
+        const postGlideMs = ageMs - TURNAROUND_GLIDE_MS;
+        if (postGlideMs > TURNAROUND_HOLD_MS + TURNAROUND_FADE_MS) continue;
         const opacity =
-          ageMs <= TURNAROUND_HOLD_MS
+          postGlideMs <= TURNAROUND_HOLD_MS
             ? 1
-            : Math.max(0, 1 - (ageMs - TURNAROUND_HOLD_MS) / TURNAROUND_FADE_MS);
+            : Math.max(0, 1 - (postGlideMs - TURNAROUND_HOLD_MS) / TURNAROUND_FADE_MS);
         out.push({
           rn,
           line: drop.lastT.line,

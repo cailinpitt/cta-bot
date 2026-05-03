@@ -9,6 +9,7 @@ const { computeBunchingView, fetchBunchingBaseMap, renderBunchingFrame } = requi
 const { cumulativeDistances, haversineFt } = require('../shared/geo');
 
 const TURNAROUND_NEAR_TERMINAL_FT = 1320; // ~0.25 mi
+const TURNAROUND_GLIDE_MS = 1_500;
 const TURNAROUND_HOLD_MS = 3_000;
 const TURNAROUND_FADE_MS = 2_000;
 const { smoothSeries } = require('../shared/stats');
@@ -173,11 +174,26 @@ async function captureBunchingVideo(bunch, pattern, opts = {}) {
       // from normal rendering starting at this snapshot.
       if (ageMs < 0) continue;
       if (drop.turnaroundEnd) {
-        if (ageMs > TURNAROUND_HOLD_MS + TURNAROUND_FADE_MS) continue;
+        // Glide-then-glyph: lerp from last-seen position to the terminal so
+        // the marker arrives gracefully, then transform into the turnaround
+        // glyph for the hold + fade.
+        if (ageMs < TURNAROUND_GLIDE_MS) {
+          const t = ageMs / TURNAROUND_GLIDE_MS;
+          out.push({
+            vid,
+            lat: drop.lastV.lat + (drop.turnaroundEnd.lat - drop.lastV.lat) * t,
+            lon: drop.lastV.lon + (drop.turnaroundEnd.lon - drop.lastV.lon) * t,
+            heading: drop.lastV.heading,
+            pdist: drop.lastV.pdist,
+          });
+          continue;
+        }
+        const postGlideMs = ageMs - TURNAROUND_GLIDE_MS;
+        if (postGlideMs > TURNAROUND_HOLD_MS + TURNAROUND_FADE_MS) continue;
         const opacity =
-          ageMs <= TURNAROUND_HOLD_MS
+          postGlideMs <= TURNAROUND_HOLD_MS
             ? 1
-            : Math.max(0, 1 - (ageMs - TURNAROUND_HOLD_MS) / TURNAROUND_FADE_MS);
+            : Math.max(0, 1 - (postGlideMs - TURNAROUND_HOLD_MS) / TURNAROUND_FADE_MS);
         out.push({
           vid,
           lat: drop.turnaroundEnd.lat,
