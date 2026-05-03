@@ -29,7 +29,7 @@ const {
   stationsAlongBranch,
 } = require('../../src/train/pulse');
 const { buildLineBranches } = require('../../src/train/speedmap');
-const { getAllTrainPositions, LINE_COLORS, ALL_LINES } = require('../../src/train/api');
+const { getAllTrainPositions, LINE_COLORS, ALL_LINES, lineLabel } = require('../../src/train/api');
 const {
   loginAlerts,
   postWithImage,
@@ -150,14 +150,14 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
 
   if (activePostUri) {
     console.log(
-      `[${line}/${direction}] active pulse ${activePostUri} still in effect — refreshing state, no re-post`,
+      `[${lineLabel(line)}/${direction}] active pulse ${activePostUri} still in effect — refreshing state, no re-post`,
     );
     return;
   }
 
   if (consecutive < MIN_CONSECUTIVE_TICKS) {
     console.log(
-      `[${line}/${direction}] candidate ${candidate.fromStation.name}→${candidate.toStation.name} tick ${consecutive}/${MIN_CONSECUTIVE_TICKS}`,
+      `[${lineLabel(line)}/${direction}] candidate ${candidate.fromStation.name}→${candidate.toStation.name} tick ${consecutive}/${MIN_CONSECUTIVE_TICKS}`,
     );
     return;
   }
@@ -213,7 +213,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       ? writeDryRunAsset(image, `pulse-${line}-${direction}-${now}.jpg`)
       : '(render failed)';
     console.log(
-      `--- DRY RUN pulse ${line}/${direction} ---\n${text}\n\nAlt: ${alt}\nImage: ${stub}`,
+      `--- DRY RUN pulse ${lineLabel(line)}/${direction} ---\n${text}\n\nAlt: ${alt}\nImage: ${stub}`,
     );
     recordDisruption({
       kind: 'train',
@@ -229,7 +229,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   }
 
   if (!acquireCooldown(cooldownKey, now, POST_COOLDOWN_MS)) {
-    console.log(`[${line}/${direction}] on cooldown ${cooldownKey}, skipping`);
+    console.log(`[${lineLabel(line)}/${direction}] on cooldown ${cooldownKey}, skipping`);
     recordDisruption({
       kind: 'train',
       line,
@@ -253,7 +253,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       stations: trainStations,
     });
   } catch (e) {
-    console.error(`renderDisruption failed for ${line}: ${e.stack || e.message}`);
+    console.error(`renderDisruption failed for ${lineLabel(line)}: ${e.stack || e.message}`);
     return;
   }
 
@@ -267,7 +267,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
   const alt = buildAltText(disruption);
 
   const result = await postWithImage(agent, text, image, alt, replyRef);
-  console.log(`Posted pulse ${line}/${direction}: ${result.url}`);
+  console.log(`Posted pulse ${lineLabel(line)}/${direction}: ${result.url}`);
   recordDisruption({
     kind: 'train',
     line,
@@ -302,7 +302,7 @@ async function handleClear(line, direction, agentGetter, now) {
   if (!prior) return;
   const clearTicks = (prior.clear_ticks || 0) + 1;
   if (clearTicks >= CLEAR_TICKS_TO_RESET) {
-    console.log(`[${line}/${direction}] cleared after ${clearTicks} clean ticks`);
+    console.log(`[${lineLabel(line)}/${direction}] cleared after ${clearTicks} clean ticks`);
     await postClearReply(line, direction, prior, agentGetter);
     if (prior.posted_cooldown_key) clearCooldown(prior.posted_cooldown_key);
     clearPulseState(line, direction);
@@ -327,7 +327,7 @@ async function postClearReply(line, direction, prior, agentGetter) {
 
   if (hasObservedClearForPulse({ kind: 'train', pulseUri: prior.active_post_uri })) {
     console.log(
-      `[${line}/${direction}] clear reply already posted for ${prior.active_post_uri} — skipping`,
+      `[${lineLabel(line)}/${direction}] clear reply already posted for ${prior.active_post_uri} — skipping`,
     );
     return;
   }
@@ -341,7 +341,7 @@ async function postClearReply(line, direction, prior, agentGetter) {
   const text = buildClearPostText(disruption, { ctaAlertOpen });
 
   if (DRY_RUN) {
-    console.log(`--- DRY RUN clear reply for ${line}/${direction} ---\n${text}`);
+    console.log(`--- DRY RUN clear reply for ${lineLabel(line)}/${direction} ---\n${text}`);
     return;
   }
 
@@ -355,11 +355,11 @@ async function postClearReply(line, direction, prior, agentGetter) {
     (await findOpenAlertReplyRef(agent, line, candidateForLookup)) ||
     (await resolveReplyRef(agent, prior.active_post_uri));
   if (!replyRef) {
-    console.warn(`[${line}/${direction}] could not resolve reply ref for clear post`);
+    console.warn(`[${lineLabel(line)}/${direction}] could not resolve reply ref for clear post`);
     return;
   }
   const result = await postText(agent, text, replyRef);
-  console.log(`Posted pulse clear ${line}/${direction}: ${result.url}`);
+  console.log(`Posted pulse clear ${lineLabel(line)}/${direction}: ${result.url}`);
   recordDisruption({
     kind: 'train',
     line,
@@ -491,7 +491,7 @@ async function main() {
     if (expectedAnyDir < MIN_EXPECTED_ACTIVE) {
       tally.windDown++;
       console.log(
-        `train-pulse: ${line} — winding down (GTFS expects ${expectedAnyDir} trips this hour, threshold ≥${MIN_EXPECTED_ACTIVE}); leaving any open pulse_state intact, no clear-tick advance`,
+        `train-pulse: ${lineLabel(line)} — winding down (GTFS expects ${expectedAnyDir} trips this hour, threshold ≥${MIN_EXPECTED_ACTIVE}); leaving any open pulse_state intact, no clear-tick advance`,
       );
       continue;
     }
@@ -532,7 +532,7 @@ async function main() {
         },
       });
     } catch (e) {
-      console.error(`pulse detect failed for ${line}: ${e.stack || e.message}`);
+      console.error(`pulse detect failed for ${lineLabel(line)}: ${e.stack || e.message}`);
       continue;
     }
 
@@ -552,13 +552,13 @@ async function main() {
         }
         if (rows.length > 0) {
           console.log(
-            `train-pulse: ${line} — detector skipped (sparse-coverage) but advancing clear-ticks for ${rows.length} open pulse(s)`,
+            `train-pulse: ${lineLabel(line)} — detector skipped (sparse-coverage) but advancing clear-ticks for ${rows.length} open pulse(s)`,
           );
           continue;
         }
       }
       console.log(
-        `train-pulse: ${line} — detector skipped (${detection.skipped}); leaving pulse_state intact`,
+        `train-pulse: ${lineLabel(line)} — detector skipped (${detection.skipped}); leaving pulse_state intact`,
       );
       continue;
     }
@@ -577,7 +577,9 @@ async function main() {
       try {
         await handleCandidate(line, c.direction, c, agentGetter, now);
       } catch (e) {
-        console.error(`handleCandidate failed for ${line}/${c.direction}: ${e.stack || e.message}`);
+        console.error(
+          `handleCandidate failed for ${lineLabel(line)}/${c.direction}: ${e.stack || e.message}`,
+        );
       }
     }
 
@@ -617,12 +619,12 @@ async function maybeSyntheticFullLineCandidate(line, allRecent, agentGetter, now
   // recently"; null means nothing in the last 6h.
   if (!corridorBbox) {
     console.log(
-      `pulse: zero observations on line=${line} but ${expected} trips expected — within cold-start grace window (no obs in past 6h), skipping synthetic candidate`,
+      `pulse: zero observations on line=${lineLabel(line)} but ${expected} trips expected — within cold-start grace window (no obs in past 6h), skipping synthetic candidate`,
     );
     return;
   }
   console.log(
-    `pulse: zero observations on line=${line} but ${expected} trips expected — synthesizing full-line candidate`,
+    `pulse: zero observations on line=${lineLabel(line)} but ${expected} trips expected — synthesizing full-line candidate`,
   );
   const branches = buildLineBranches(trainLines, line);
   // Lines like Yellow ship mirror-segment polylines (Howard→Dempster +
@@ -654,7 +656,7 @@ async function maybeSyntheticFullLineCandidate(line, allRecent, agentGetter, now
     const signature = [fromStation.name, toStation.name].sort().join('||');
     if (seenSignatures.has(signature)) {
       console.log(
-        `[${line}/${direction}] mirror-segment of an already-synthesized candidate — skipping`,
+        `[${lineLabel(line)}/${direction}] mirror-segment of an already-synthesized candidate — skipping`,
       );
       continue;
     }
@@ -683,7 +685,9 @@ async function maybeSyntheticFullLineCandidate(line, allRecent, agentGetter, now
     try {
       await handleCandidate(line, direction, synthetic, agentGetter, now);
     } catch (e) {
-      console.error(`synthetic candidate failed for ${line}/${direction}: ${e.stack || e.message}`);
+      console.error(
+        `synthetic candidate failed for ${lineLabel(line)}/${direction}: ${e.stack || e.message}`,
+      );
     }
   }
 }

@@ -28,6 +28,11 @@ const LINE_NAMES = {
   y: 'Yellow',
 };
 
+// Friendly line label for log lines (`brn` → `Brown`). Falls back to the raw
+// code when something hands us a key we don't recognize, so logs never
+// silently lose information.
+const lineLabel = (line) => LINE_NAMES[line] || line;
+
 // Unicode has no pink square; 🩷 (pink heart) is the closest color-block stand-in.
 const LINE_EMOJI = {
   red: '🟥',
@@ -121,6 +126,7 @@ module.exports = {
   getAllTrainPositions,
   LINE_COLORS,
   LINE_NAMES,
+  lineLabel,
   LINE_EMOJI,
   ALL_LINES,
   shortStationName,

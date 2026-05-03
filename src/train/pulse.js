@@ -17,6 +17,7 @@
 // (don't touch existing pulse_state) from "all clear" (advance clear ticks).
 
 const { buildLineBranches, snapToLineWithPerp, inLoopTrunk } = require('./speedmap');
+const { lineLabel } = require('./api');
 const { terminalZoneFt } = require('../shared/geo');
 
 const MAX_PERP_FT = 1500; // reject projections from off-branch trains
@@ -134,7 +135,7 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     const zoneBins = Math.ceil(zoneFt / (totalFt / numBins));
     if (numBins - 2 * zoneBins < 4) {
       console.warn(
-        `[pulse] line=${line} branch=${branchIdx} eligible scan range only ${numBins - 2 * zoneBins} bins — short branch may misfire`,
+        `[pulse] line=${lineLabel(line)} branch=${branchIdx} eligible scan range only ${numBins - 2 * zoneBins} bins — short branch may misfire`,
       );
     }
 

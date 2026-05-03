@@ -125,7 +125,7 @@ async function main() {
 
   let branches = buildLineBranches(trainLines, line);
   if (branches.length === 0 || branches[0].points.length < 2) {
-    console.error(`No polyline data for ${line} line`);
+    console.error(`No polyline data for ${LINE_NAMES[line]} line`);
     process.exit(1);
   }
 
