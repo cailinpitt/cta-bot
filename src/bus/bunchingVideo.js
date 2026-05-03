@@ -9,7 +9,7 @@ const { computeBunchingView, fetchBunchingBaseMap, renderBunchingFrame } = requi
 const { cumulativeDistances, haversineFt } = require('../shared/geo');
 
 const TURNAROUND_NEAR_TERMINAL_FT = 1320; // ~0.25 mi
-const TURNAROUND_GLIDE_MS = 1_500;
+const TURNAROUND_GLIDE_MS = 2_500;
 const TURNAROUND_HOLD_MS = 3_000;
 const TURNAROUND_FADE_MS = 2_000;
 const { smoothSeries } = require('../shared/stats');
