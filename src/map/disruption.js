@@ -13,6 +13,76 @@ const {
   bboxOf,
 } = require('./common');
 const { LINE_NAMES } = require('../train/api');
+const { inLoopTrunk } = require('../train/speedmap');
+
+// CTA Loop elevated stations in clockwise order. The GTFS shapes encode the
+// Loop as a sparse rectangle (one vertex per corner), so the Mapbox overlay
+// cuts straight across each side instead of following the actual track —
+// glaringly off on disruption renders that frame the Loop. Inserting these
+// station coords as intermediate vertices on any polyline leg that crosses
+// the Loop trunk bends each side through its real station positions and
+// makes the overlay sit on the basemap's L track.
+const LOOP_STATIONS_CW = [
+  { lat: 41.8857, lon: -87.6309 }, // Clark/Lake (north side, west)
+  { lat: 41.8832, lon: -87.6262 }, // Washington/Wabash (east side, north)
+  { lat: 41.8795, lon: -87.626 }, // Adams/Wabash (east side, mid)
+  { lat: 41.8769, lon: -87.6282 }, // Library (south side, east)
+  { lat: 41.8768, lon: -87.6317 }, // LaSalle/Van Buren (south side, west)
+  { lat: 41.8787, lon: -87.6337 }, // Quincy (west side, south)
+  { lat: 41.8827, lon: -87.6338 }, // Washington/Wells (west side, north)
+];
+
+// For each consecutive vertex pair where at least one endpoint lies in the
+// Loop trunk bbox, project each Loop station onto the leg and insert any
+// whose perpendicular distance is small (< ~250m) and whose along-leg
+// fraction is interior. Keeps non-Loop geometry untouched.
+function densifyLoopPolyline(seg) {
+  if (seg.length < 2) return seg;
+  // Each Loop station should appear at most once per traversal of the
+  // polyline through the trunk: on a closed round-trip line the trunk is
+  // traversed twice (outbound→inbound transition, then return), and a
+  // station may also project validly onto an adjacent approach leg as well
+  // as its own Loop side. Toggle "inLoopRun" tracks whether we've entered
+  // the trunk; inserted stations reset on each exit so the return-leg pass
+  // can still pick them up.
+  let insertedThisRun = new Set();
+  let prevInTrunk = false;
+  const out = [seg[0]];
+  for (let i = 1; i < seg.length; i++) {
+    const a = seg[i - 1];
+    const b = seg[i];
+    const aIn = inLoopTrunk(a[0], a[1]);
+    const bIn = inLoopTrunk(b[0], b[1]);
+    if (prevInTrunk && !aIn) insertedThisRun = new Set();
+    prevInTrunk = aIn;
+    if (aIn && bIn) {
+      const dy = b[0] - a[0];
+      const dx = b[1] - a[1];
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq > 0) {
+        const inserts = [];
+        for (let si = 0; si < LOOP_STATIONS_CW.length; si++) {
+          if (insertedThisRun.has(si)) continue;
+          const s = LOOP_STATIONS_CW[si];
+          const t = ((s.lon - a[1]) * dx + (s.lat - a[0]) * dy) / lenSq;
+          if (t <= 0.02 || t >= 0.98) continue;
+          const projLat = a[0] + t * dy;
+          const projLon = a[1] + t * dx;
+          const perpM = latLonDistMeters([projLat, projLon], s);
+          if (perpM > 100) continue;
+          inserts.push({ t, si, lat: s.lat, lon: s.lon });
+        }
+        inserts.sort((x, y) => x.t - y.t);
+        for (const ins of inserts) {
+          out.push([ins.lat, ins.lon]);
+          insertedThisRun.add(ins.si);
+        }
+      }
+    }
+    out.push(b);
+  }
+  return out;
+}
 
 // Equirectangular — fine for ranking nearest vertex over central Chicago.
 function latLonDistMeters([lat, lon], loc) {
@@ -108,7 +178,7 @@ function splitSegments(segments, fromLoc, toLoc) {
   const active = [];
   const suspended = [];
   for (const rawSeg of segments) {
-    const seg = truncateRoundTrip(rawSeg, fromLoc, toLoc);
+    const seg = truncateRoundTrip(densifyLoopPolyline(rawSeg), fromLoc, toLoc);
     if (seg.length < 2) continue;
     const fromIdx = nearestVertexIdx(seg, fromLoc);
     const toIdx = nearestVertexIdx(seg, toLoc);
@@ -343,7 +413,7 @@ async function pairedStationLabels(stations) {
       return [
         `<rect x="${l.xPill}" y="${y}" width="${Math.round(l.pillW)}" height="${Math.round(l.h)}" fill="#000" fill-opacity="0.82" rx="8"/>`,
         `<text x="${Math.round(l.px.x)}" y="${Math.round(y + l.h - l.pad)}" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${l.fontSize}" font-weight="600">${xmlEscape(l.text)}</text>`,
-        `<circle cx="${Math.round(l.px.x)}" cy="${Math.round(l.px.y)}" r="7" fill="#fff" stroke="#000" stroke-width="3"/>`,
+        `<circle cx="${Math.round(l.px.x)}" cy="${Math.round(l.px.y)}" r="18" fill="#fff" stroke="#000" stroke-width="5"/>`,
       ].join('');
     })
     .join('\n');
