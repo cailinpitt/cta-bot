@@ -88,7 +88,8 @@ function describeSignal(s, kind) {
 
 function buildRoundupText({ kind, line, name, signals }) {
   const label = kind === 'bus' ? `#${line} ${name || line}` : `${lineLabel(line)} Line`;
-  const lines = [`⚠ ${label} · multiple service signals`];
+  const prefix = kind === 'bus' ? '🚌⚠️' : '🚇⚠️';
+  const lines = [`${prefix} ${label} · multiple service signals`];
   const seen = new Set();
   for (const s of signals) {
     const key = s.source;
