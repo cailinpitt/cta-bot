@@ -22,7 +22,7 @@ const {
   getThreadQuotedSourceUris,
 } = require('./history');
 const { getPostRecord, postQuote } = require('./bluesky');
-const { isStationOnSegment } = require('./trainSegment');
+const { isStationOnSegment, compassToTrDr, normalizePulseDirection } = require('./trainSegment');
 const { resolveStopOnRoute } = require('../bus/patterns');
 
 const LEAD_MS = 30 * 60 * 1000;
@@ -157,19 +157,42 @@ async function buildWorkItems({ kind, agent, now }) {
   return [...groups.values()];
 }
 
-// Train relevance: station name from the analytics post must lie on at least
-// one of the group's train segments (CTA alerts and pulse observations both
-// produce train segments).
+// Train relevance: candidate's station must lie on the segment AND its trDr
+// must match the anchor's direction (when both are known).
+//
+// Directions arrive in three formats — compass words from CTA alerts,
+// 'branch-N-outbound|inbound' from pulse anchors, trDr codes from the
+// candidate row. trainSegment.js's COMPASS_TO_HINT covers branch geometry
+// for round-trip lines; compassToTrDr covers candidate-row trDr matching
+// for bidirectional lines (red/blue/g/y), which share one polyline per
+// branch and so can't be filtered geometrically. normalizePulseDirection
+// reduces the pulse anchor's compound key to a compass-or-null word.
+function canonicalSegDirection(seg) {
+  if (!seg?.direction) return null;
+  // Already a compass word? (CTA alert path)
+  if (/^(north|south|east|west|in|out)$/i.test(seg.direction)) {
+    return seg.direction.toLowerCase();
+  }
+  return normalizePulseDirection(seg.direction);
+}
+
 function trainCandidateRelevant(candidate, group) {
   if (group.trainSegments.length === 0) return false;
   for (const seg of group.trainSegments) {
     if (candidate.route !== seg.line) continue;
-    // Direction filter — skip when either side lacks direction info, drop
-    // when both present and don't agree (compass vs branch trDr — handled in
-    // isStationOnSegment via COMPASS_TO_HINT; here we just pass it through).
+    const compass = canonicalSegDirection(seg);
+    // Candidate-side direction filter: when we can translate seg's compass
+    // direction to the line's trDr code AND the candidate has a trDr, drop
+    // mismatches outright. This is what catches "Red NB alert + SB bunching
+    // at Wilson" — Wilson IS in the segment geographically, but trDr=5 vs
+    // trDr=1 prove it's the opposite direction of travel.
+    if (compass && candidate.direction) {
+      const wantTrDr = compassToTrDr(seg.line, compass);
+      if (wantTrDr && String(candidate.direction) !== wantTrDr) continue;
+    }
     const onSeg = isStationOnSegment({
       line: seg.line,
-      direction: seg.direction || null,
+      direction: compass,
       station: candidate.near_stop,
       fromStation: seg.from,
       toStation: seg.to,

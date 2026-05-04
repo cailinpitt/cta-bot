@@ -31,6 +31,7 @@ This README is written for operators running their own copy. If you just want to
 - **Republished CTA alerts** — significant service alerts on tracked routes, filtered to drop the noisy "major" ones (single elevator out, block-party reroutes, etc.). Each post gets a threaded `✅ cleared` reply once CTA marks it resolved.
 - **Segment-dim maps** — when a rail alert names a station-to-station stretch ("between Belmont and Howard"), the post includes a map dimming that segment of the line.
 - **Pulse** — a bot-side detector that infers a rail service suspension from live train positions when a ≥2-mile stretch of a line goes cold for 15+ min. Often surfaces outages before CTA issues an alert; threaded under the official alert when one appears.
+- **Related-observation quotes** — when an alert or pulse thread is live and the analytics bots post a bunching/gap event that matches the alert's route + direction + segment, the alerts account quote-replies the observation into the thread (cap 3/thread). Disable with `QUOTE_RELATED_POSTS=0`. See `docs/ALERTS.md` for the relevance filter.
 
 ### Both bus and train
 - **Historical callouts** — posts carry frequency and severity context from prior posts in `history.sqlite`, e.g. *"3rd Route 66 bunch reported today"* or *"tightest reported on this line in 30 days"*.

@@ -256,6 +256,83 @@ The bot-side clear (step 6 above) is the one place we deliberately accept a smal
 - `bin/train/disruption.js` — manual disruption poster; logs in via `loginAlerts` so output goes to the alerts account, calls `recordDisruption`, shares the renderer with pulse.
 - `bin/audit-alerts.js` — health audit cron that surfaces stuck pulse_state rows, unresolved alerts past their natural lifetime, and other invariant violations across the alert pipeline.
 
+## Quote-attached related observations (post-2026-05-03)
+
+The alerts account doubles as the connective tissue between two other accounts: when the analytics bots (`@ctabusinsights`, `@ctatraininsights`) post a bunching or gap event that matches a live disruption, the alerts account quote-replies into the disruption's thread.
+
+The cross-account part is the point: a rider opens a CTA-alert thread on `@ctaalertinsights` and sees both the CTA alert and the analytics-bot's ground-truth observation of the symptom (e.g. *"3 buses bunched on Belmont near Halsted"*) as a quote-card in-thread, without the analytics bots needing to know an alert exists.
+
+### What anchors a thread
+
+The sweep runs at the end of `bin/{bus,train}/alerts.js` each tick (every 10 min) and considers three anchor sources:
+
+1. **Unresolved CTA alerts** — `alert_posts` rows with `resolved_ts IS NULL AND post_uri NOT NULL`.
+2. **Active train pulse observations** — `pulse_state` rows with `active_post_uri NOT NULL`.
+3. **Active bus held-cluster observations** — `bus_pulse_state` rows with `active_post_uri NOT NULL AND affected_pid NOT NULL`. Whole-route bus blackouts have no segment, so they intentionally do not anchor (any bunching anywhere on the route would match if they did).
+
+Anchors that share a thread root (e.g. a CTA alert that threaded under an earlier pulse observation) are merged into one work item — the union of routes is queried and the cap-of-3 quotes/thread applies once across both. Thread root is resolved by reading each anchor's record and taking `value.reply.root.uri` or the post itself.
+
+### What's a candidate
+
+`findRelatedAnalyticsPosts({kind, routes, sinceTs, untilTs, excludeSourceUris})` unions `bunching_events` and `gap_events` filtered by:
+
+- `kind` matches the alerts bin's kind (bus or train).
+- `route IN (group's union of anchor routes)`.
+- `posted = 1 AND post_uri IS NOT NULL` — only events the analytics bots actually posted.
+- `ts BETWEEN earliestAnchorTs - 30 min AND now` — the 30-min lead window catches "rider was already seeing the symptom before CTA acknowledged."
+- not already in `thread_quote_posts` for this thread root (idempotency).
+
+### Strict relevance filter
+
+A route match alone is not enough. Each candidate is then checked dimensionally:
+
+**Trains** (`trainCandidateRelevant` in `src/shared/relatedQuotes.js`):
+- **Segment**: the candidate's `near_stop` must lie on the line's polyline between `from`/`to` with a 1-stop buffer (median inter-station gap on the matched branch). Station resolution is fail-closed — unresolved names → reject.
+- **Direction**: directions arrive in three different formats — compass words from CTA alerts, `branch-N-{outbound,inbound}` from pulse anchors, trDr codes (`'1'`/`'5'`) from candidate rows. `compassToTrDr(line, compass)` translates the anchor's compass to the line's trDr (per-line because conventions disagree: red 1=N, blue 1=O'Hare, brn 1=Kimball, etc.). When both anchor and candidate carry direction, mismatches are rejected outright. This is what makes "Red NB alert + SB bunching at Wilson" reject even though Wilson is geographically inside the segment.
+
+**Buses** (`busCandidateRelevant`):
+- **Held-cluster anchor**: candidate's `direction` (which is the pid for buses) must equal the cluster's pid; resolve candidate's `near_stop` on that pid via `resolveStopOnRoute` and require its `pdist` to fall within `[clusterLoFt - 2640, clusterHiFt + 2640]` (½-mi buffer).
+- **CTA bus alert anchor**: try each known pid for the candidate's route (preferring the candidate's own pid). Resolve the alert's from/to and the candidate's near_stop on the same pid; admit when all three resolve and candidate falls in `[min(from,to) - 2640, max(from,to) + 2640]`.
+- Bus alert direction is captured in `affected_direction` but currently unused — pid codes don't map cleanly to compass words without per-route metadata. Documented limitation; segment containment carries the relevance signal.
+
+If the anchor lacks segment info (e.g. `extractBetweenStations` couldn't parse the headline, or a bus pulse blackout with no held-cluster), no quotes attach. **Better to miss than to mis-attach** — this is the design ethos.
+
+### Posting
+
+Per qualifying candidate:
+1. Fetch the source post's `cid` via `getPostRecord`. Source missing (deleted) → record a tombstone in `thread_quote_posts` with `quote_post_uri = NULL` and skip on future sweeps.
+2. Build a `replyRef` rooted at the thread root with `parent` = the latest anchor in the thread (so the quote lands at the tail).
+3. `postQuote(agent, "Related observation:", {uri, cid}, replyRef)` builds an `app.bsky.embed.record` post under the alerts account that quotes the analytics post in-thread.
+4. Record in `thread_quote_posts (thread_root_uri, source_post_uri, quote_post_uri, ts)` for idempotency.
+
+Cap is **3 quotes per thread root lifetime**, sorted ts DESC, so noisy disruptions don't flood the thread. Each posted quote becomes the new thread tail for any subsequent quotes this tick (so they thread under each other in posting order).
+
+### Schema additions
+
+- `alert_posts`: `affected_from_station`, `affected_to_station`, `affected_direction` — populated at insert from `extractBetweenStations` + `extractDirection`. Stored alongside the alert so the relevance filter doesn't re-parse on every tick.
+- `bus_pulse_state`: `affected_pid`, `affected_lo_ft`, `affected_hi_ft` — populated for held-cluster pulses; left null for blackouts (which intentionally don't anchor).
+- `thread_quote_posts (thread_root_uri, source_post_uri, quote_post_uri, ts)` — idempotency; tombstones missing-source posts so we don't re-fetch every tick.
+
+### Kill switches
+
+- `QUOTE_RELATED_POSTS=0` — disables the sweep entirely (returns immediately with a log line).
+- `ALERTS_DRY_RUN=1` / `--dry-run` — sweep enumerates and logs but skips both the bluesky post and the DB write.
+
+### Files
+
+- `src/shared/relatedQuotes.js` — sweep orchestration, train + bus relevance filters.
+- `src/shared/trainSegment.js` — `isStationOnSegment`, `compassToTrDr`, `normalizePulseDirection`, `COMPASS_TO_HINT` (round-trip branch picker), `COMPASS_TO_TRDR` (bidirectional candidate filter).
+- `src/shared/ctaAlerts.js` — `extractDirection(text, line)` returning `north|south|east|west|in|out|null`.
+- `src/bus/patterns.js` — `resolveStopOnRoute({pids, loadPattern, stopName})` for bus stop name → `(pid, pdist)` resolution.
+- `src/shared/bluesky.js` — `postQuote`, `getPostRecord` (returns `{uri, cid, value, replyRoot}`; replaces hand-rolled cid+root logic in `resolveReplyRef`).
+- `src/shared/history.js` — schema migrations, `recordThreadQuote`, `getThreadQuotedSourceUris`, `findRelatedAnalyticsPosts`, `listActiveBusPulseAnchors`, `listActiveTrainPulseAnchors`.
+
+### Known limitations
+
+- Bus alert direction is never enforced (segment containment carries the signal).
+- `compassToTrDr` was empirically derived from a 24h trDr → destination histogram on the production observations table; a future CTA convention change would need this updated.
+- Multi-line CTA alerts (rare) only get a `trainSegment` populated when `trainLines.length === 1`. Multi-line alerts route-match but don't segment-filter.
+
 ## Held-train detection (post-2026-05-03)
 
 Cold-segment pulse measures *absence of pings*, not *absence of service*. When CTA halts service mid-run and trains sit at stations with their doors open, those trains keep emitting GPS — bins read warm and pulse stays silent. The Sox-35th police hold on 2026-05-03 surfaced this as a missed shutdown.

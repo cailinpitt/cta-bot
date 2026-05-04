@@ -324,6 +324,118 @@ test('observation pulse anchor groups under same root as CTA alert reply', async
   }
 });
 
+test('train: NB alert + SB candidate at in-segment station → reject', async () => {
+  const { history, sweepMod, cleanup } = loadWithFreshDb();
+  try {
+    // Red NB alert; bunching tagged trDr=5 (south on Red).
+    history.recordAlertSeen({
+      alertId: 'A-NB',
+      kind: 'train',
+      routes: 'red',
+      headline: 'Red Line: northbound trains running between Belmont and Howard',
+      postUri: TRAIN_ALERT_URI,
+      affectedFromStation: 'Belmont',
+      affectedToStation: 'Howard',
+      affectedDirection: 'north',
+    });
+    history
+      .getDb()
+      .prepare(`
+        INSERT INTO bunching_events
+          (ts, kind, route, direction, vehicle_count, severity_ft, near_stop, posted, post_uri)
+        VALUES (?, 'train', 'red', '5', 2, 1500, 'Wilson', 1, ?)
+      `)
+      .run(Date.now(), BUNCHING_RED_WILSON);
+    const agent = buildMockAgent({
+      records: {
+        [TRAIN_ALERT_URI]: { cid: TRAIN_ALERT_CID, value: {} },
+        [BUNCHING_RED_WILSON]: { cid: BUNCHING_RED_WILSON_CID, value: {} },
+      },
+    });
+    const out = await sweepMod.sweepRelatedQuotes({ kind: 'train', agent });
+    assert.equal(out.posted, 0, 'opposite-direction candidate must be rejected');
+  } finally {
+    cleanup();
+  }
+});
+
+test('train: NB alert + NB candidate (matching trDr) → accept', async () => {
+  const { history, sweepMod, cleanup } = loadWithFreshDb();
+  try {
+    history.recordAlertSeen({
+      alertId: 'A-NB2',
+      kind: 'train',
+      routes: 'red',
+      headline: 'Red Line: northbound trains running between Belmont and Howard',
+      postUri: TRAIN_ALERT_URI,
+      affectedFromStation: 'Belmont',
+      affectedToStation: 'Howard',
+      affectedDirection: 'north',
+    });
+    // trDr=1 = north on Red.
+    history
+      .getDb()
+      .prepare(`
+        INSERT INTO bunching_events
+          (ts, kind, route, direction, vehicle_count, severity_ft, near_stop, posted, post_uri)
+        VALUES (?, 'train', 'red', '1', 2, 1500, 'Wilson', 1, ?)
+      `)
+      .run(Date.now(), BUNCHING_RED_WILSON);
+    const agent = buildMockAgent({
+      records: {
+        [TRAIN_ALERT_URI]: { cid: TRAIN_ALERT_CID, value: {} },
+        [BUNCHING_RED_WILSON]: { cid: BUNCHING_RED_WILSON_CID, value: {} },
+      },
+    });
+    const out = await sweepMod.sweepRelatedQuotes({ kind: 'train', agent });
+    assert.equal(out.posted, 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test('train: pulse anchor branch-N-outbound carries through normalization', async () => {
+  const { history, sweepMod, cleanup } = loadWithFreshDb();
+  try {
+    const PULSE_URI = 'at://did:plc:test/app.bsky.feed.post/pulse-brn';
+    const PULSE_CID = 'cid-pulse-brn';
+    history.upsertPulseState({
+      line: 'brn',
+      direction: 'branch-0-outbound',
+      runLoFt: 0,
+      runHiFt: 5000,
+      fromStation: 'Belmont',
+      toStation: 'Kimball',
+      startedTs: Date.now() - 600000,
+      lastSeenTs: Date.now(),
+      consecutiveTicks: 2,
+      clearTicks: 0,
+      postedCooldownKey: 'k',
+      activePostUri: PULSE_URI,
+      activePostTs: Date.now() - 600000,
+    });
+    // brn outbound = trDr=1. Inbound bunching (trDr=5) should be rejected.
+    history
+      .getDb()
+      .prepare(`
+        INSERT INTO bunching_events
+          (ts, kind, route, direction, vehicle_count, severity_ft, near_stop, posted, post_uri)
+        VALUES (?, 'train', 'brn', '5', 2, 1500, 'Belmont', 1, ?)
+      `)
+      .run(Date.now(), BUNCHING_RED_WILSON);
+    const agent = buildMockAgent({
+      records: {
+        [PULSE_URI]: { cid: PULSE_CID, value: {} },
+        [BUNCHING_RED_WILSON]: { cid: BUNCHING_RED_WILSON_CID, value: {} },
+      },
+    });
+    const out = await sweepMod.sweepRelatedQuotes({ kind: 'train', agent });
+    assert.equal(out.posted, 0, 'opposite-direction candidate rejected even with pulse anchor');
+  } finally {
+    cleanup();
+  }
+});
+
 test('candidate with deleted source post → tombstone, not retried', async () => {
   const { history, sweepMod, cleanup } = loadWithFreshDb();
   try {

@@ -26,6 +26,51 @@ const COMPASS_TO_HINT = {
   p: { north: 'outbound', south: 'inbound', out: 'outbound', in: 'inbound' },
 };
 
+// Train Tracker `trDr` codes per line. Derived empirically from observed
+// destination strings (see scripts/observeTrains.js obs):
+//   - red:  trDr=1 → Howard (north),  trDr=5 → 95th/Dan Ryan (south)
+//   - blue: trDr=1 → O'Hare (NW),     trDr=5 → Forest Park (W)
+//   - g:    trDr=1 → Harlem/Lake (W), trDr=5 → Ashland/63rd or Cottage Grove (S/E)
+//   - y:    trDr=1 → Skokie (N),      trDr=5 → Howard (S)
+//   - brn:  trDr=1 → Kimball (N out), trDr=5 → Loop (S/E in)
+//   - org:  trDr=5 → Midway (S/W out),trDr=1 → Loop (N/E in)
+//   - p:    trDr=1 → Linden (N out),  trDr=5 → Howard (S in)
+//   - pink: trDr=5 → 54th/Cermak (W/S out), trDr=1 → Loop (N/E in)
+// Used to translate an alert's compass-direction phrasing into the trDr that
+// bunching_events / gap_events store on `direction`. Lookup is line-keyed
+// because lines disagree on convention (red 1=N vs y 1=N, vs blue/brn).
+const COMPASS_TO_TRDR = {
+  red: { north: '1', south: '5', in: '5', out: '1' },
+  blue: { north: '1', west: '5', east: '1', south: '5', in: '1', out: '5' },
+  g: { west: '1', east: '5', south: '5', north: '1', in: '5', out: '1' },
+  y: { north: '1', south: '5', in: '5', out: '1' },
+  brn: { north: '1', south: '5', out: '1', in: '5' },
+  org: { south: '5', west: '5', north: '1', east: '1', out: '5', in: '1' },
+  p: { north: '1', south: '5', out: '1', in: '5' },
+  pink: { west: '5', south: '5', east: '1', north: '1', out: '5', in: '1' },
+};
+
+// Pulse_state.direction has its own format: 'branch-N-outbound' / 'branch-N-
+// inbound' for round-trip lines, 'all' for single-branch lines, or
+// 'branch-len{k}-…' for multi-branch bidirectional lines (red/blue/g/y).
+// Reduce to a normalized direction word the rest of the matcher understands.
+function normalizePulseDirection(direction) {
+  if (!direction) return null;
+  if (direction === 'all') return null;
+  if (direction.endsWith('-outbound')) return 'out';
+  if (direction.endsWith('-inbound')) return 'in';
+  // 'branch-len…' / 'branch-N' formats carry no compass — caller falls back
+  // to no-direction-filter behavior.
+  return null;
+}
+
+function compassToTrDr(line, direction) {
+  if (!line || !direction) return null;
+  const map = COMPASS_TO_TRDR[line];
+  if (!map) return null;
+  return map[direction] || null;
+}
+
 const DEFAULT_BUFFER_FT = 2640; // ½ mile fallback
 
 function normalizeStationName(name) {
@@ -122,4 +167,7 @@ module.exports = {
   normalizeStationName,
   resolveStation,
   COMPASS_TO_HINT,
+  COMPASS_TO_TRDR,
+  compassToTrDr,
+  normalizePulseDirection,
 };
