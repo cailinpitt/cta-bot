@@ -14,12 +14,27 @@ require('../src/shared/env');
 const { setup, runBin } = require('../src/shared/runBin');
 const { ALL_LINES, lineLabel } = require('../src/train/api');
 const { allRoutes: busRoutes, names: busRouteNames } = require('../src/bus/routes');
-const { getRecentMetaSignals, getDb, recordRoundupAnchor } = require('../src/shared/history');
+const {
+  getRecentMetaSignals,
+  getDb,
+  recordRoundupAnchor,
+  listUnresolvedRoundupAnchors,
+  updateRoundupClearTicks,
+  markRoundupResolved,
+} = require('../src/shared/history');
 const { acquireCooldown } = require('../src/shared/state');
-const { loginAlerts, postText } = require('../src/shared/bluesky');
+const { loginAlerts, postText, resolveReplyRef } = require('../src/shared/bluesky');
 
 const WINDOW_MS = 30 * 60 * 1000;
 const SCORE_THRESHOLD = 2.0;
+// Hysteresis below the firing threshold: only count a tick as "clear" when
+// the rolling score is comfortably under the bar so a flapping signal near
+// 2.0 doesn't yo-yo into a resolution post.
+const RESOLVE_SCORE_THRESHOLD = 1.0;
+// Tick cadence is */5 (5 min); 3 ticks = ~15 min of sustained quiet before
+// posting a resolution. Mirrors the consecutive-tick gate train pulse uses
+// for its own clear/resolve logic.
+const RESOLVE_MIN_CLEAR_TICKS = 3;
 const ROUNDUP_COOLDOWN_MS = 60 * 60 * 1000;
 const DRY_RUN = process.env.ROUNDUP_DRY_RUN === '1' || process.argv.includes('--dry-run');
 
@@ -152,6 +167,54 @@ async function processKind({ kind, identifiers, getName, agentGetter, now }) {
   }
 }
 
+function buildResolutionText({ kind, line, name }) {
+  const label = kind === 'bus' ? `#${line} ${name || line}` : `${lineLabel(line)} Line`;
+  const prefix = kind === 'bus' ? '🚌✅' : '🚇✅';
+  return `${prefix} ${label} · service signals back to normal`;
+}
+
+async function sweepResolutions({ kind, getName, agentGetter, now }) {
+  for (const row of listUnresolvedRoundupAnchors(kind, now)) {
+    const signals = getRecentMetaSignals({ kind, line: row.line, withinMs: WINDOW_MS }, now);
+    const { total } = scoreSignals(signals);
+    const label = kind === 'bus' ? `bus/${row.line}` : lineLabel(row.line);
+    if (total >= RESOLVE_SCORE_THRESHOLD) {
+      // Score still elevated → reset the consecutive-clear counter.
+      if (row.clear_ticks !== 0) updateRoundupClearTicks(row.id, 0);
+      continue;
+    }
+    const newClearTicks = (row.clear_ticks || 0) + 1;
+    if (newClearTicks < RESOLVE_MIN_CLEAR_TICKS) {
+      updateRoundupClearTicks(row.id, newClearTicks);
+      console.log(
+        `roundup-resolve: ${label} clear tick ${newClearTicks}/${RESOLVE_MIN_CLEAR_TICKS} (score=${total.toFixed(2)})`,
+      );
+      continue;
+    }
+    const text = buildResolutionText({ kind, line: row.line, name: getName(row.line) });
+    if (DRY_RUN) {
+      console.log(`--- DRY RUN roundup-resolve ${label} ---\n${text}`);
+      continue;
+    }
+    try {
+      const a = await agentGetter();
+      const replyRef = await resolveReplyRef(a, row.post_uri);
+      if (!replyRef) {
+        // Source post is gone (deleted/rotated). Mark resolved with no
+        // reply so we stop hitting the API every tick.
+        markRoundupResolved(row.id, null, now);
+        console.log(`roundup-resolve: ${label} source post missing — marked resolved silently`);
+        continue;
+      }
+      const result = await postText(a, text, replyRef);
+      markRoundupResolved(row.id, result.uri, now);
+      console.log(`Posted roundup resolution ${label}: ${result.url}`);
+    } catch (e) {
+      console.error(`roundup-resolve post failed for ${label}: ${e.stack || e.message}`);
+    }
+  }
+}
+
 async function main() {
   setup();
   const now = Date.now();
@@ -176,8 +239,30 @@ async function main() {
     agentGetter,
     now,
   });
+
+  // Resolution sweep runs after the firing pass: any unresolved roundup
+  // whose underlying signals have died down for ≥3 consecutive ticks gets
+  // a "back to normal" reply walked to the latest leaf of the thread.
+  await sweepResolutions({
+    kind: 'train',
+    getName: () => null,
+    agentGetter,
+    now,
+  });
+  await sweepResolutions({
+    kind: 'bus',
+    getName: (route) => busRouteNames[route] || null,
+    agentGetter,
+    now,
+  });
 }
 
-module.exports = { scoreSignals, buildRoundupText, describeSignal };
+module.exports = {
+  scoreSignals,
+  buildRoundupText,
+  describeSignal,
+  buildResolutionText,
+  sweepResolutions,
+};
 
 if (require.main === module) runBin(main);

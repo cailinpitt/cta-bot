@@ -164,7 +164,10 @@ function db() {
       post_uri TEXT NOT NULL UNIQUE,
       post_cid TEXT,
       ts INTEGER NOT NULL,
-      expires_ts INTEGER NOT NULL
+      expires_ts INTEGER NOT NULL,
+      clear_ticks INTEGER NOT NULL DEFAULT 0,
+      resolved_ts INTEGER,
+      resolution_post_uri TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_roundup_anchors_kind_expires
       ON roundup_anchors(kind, expires_ts);
@@ -266,6 +269,19 @@ function db() {
   }
   if (!pulseCols.includes('active_post_ts')) {
     _db.exec('ALTER TABLE pulse_state ADD COLUMN active_post_ts INTEGER');
+  }
+  const roundupCols = _db
+    .prepare('PRAGMA table_info(roundup_anchors)')
+    .all()
+    .map((c) => c.name);
+  if (!roundupCols.includes('clear_ticks')) {
+    _db.exec('ALTER TABLE roundup_anchors ADD COLUMN clear_ticks INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!roundupCols.includes('resolved_ts')) {
+    _db.exec('ALTER TABLE roundup_anchors ADD COLUMN resolved_ts INTEGER');
+  }
+  if (!roundupCols.includes('resolution_post_uri')) {
+    _db.exec('ALTER TABLE roundup_anchors ADD COLUMN resolution_post_uri TEXT');
   }
   // One-time cleanup of stale `branch-N` direction keys from before the
   // stable-direction-key change. Gated on user_version so this runs exactly
@@ -464,6 +480,32 @@ function listActiveRoundupAnchors(kind, now = Date.now()) {
       WHERE kind = ? AND expires_ts > ?
     `)
     .all(kind, now);
+}
+
+// Roundups that have not yet posted a resolution and are still within the
+// freshness window. The resolution sweep iterates these each tick.
+function listUnresolvedRoundupAnchors(kind, now = Date.now()) {
+  return db()
+    .prepare(`
+      SELECT id, line, post_uri, post_cid, ts, clear_ticks
+      FROM roundup_anchors
+      WHERE kind = ? AND resolved_ts IS NULL AND expires_ts > ?
+    `)
+    .all(kind, now);
+}
+
+function updateRoundupClearTicks(id, clearTicks) {
+  db().prepare('UPDATE roundup_anchors SET clear_ticks = ? WHERE id = ?').run(clearTicks, id);
+}
+
+function markRoundupResolved(id, resolutionPostUri, ts = Date.now()) {
+  db()
+    .prepare(`
+      UPDATE roundup_anchors
+      SET resolved_ts = ?, resolution_post_uri = ?
+      WHERE id = ?
+    `)
+    .run(ts, resolutionPostUri, id);
 }
 
 function getRecentPulsePost(
@@ -1242,6 +1284,9 @@ module.exports = {
   listActiveTrainPulseAnchors,
   recordRoundupAnchor,
   listActiveRoundupAnchors,
+  listUnresolvedRoundupAnchors,
+  updateRoundupClearTicks,
+  markRoundupResolved,
   recordGhostEvent,
   ALERT_CLEAR_TICKS,
   recordDisruption,
