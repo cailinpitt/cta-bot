@@ -142,7 +142,7 @@ test('buildClearPostText (no CTA alert) says CTA never issued one', () => {
     suspendedSegment: { from: 'Belmont', to: 'Howard' },
   });
   assert.match(text, /^🚇✅ Red Line trains running through Belmont ↔ Howard again\./);
-  assert.match(text, /CTA hasn't issued an alert for this/);
+  assert.match(text, /No relevant CTA alert was posted/);
 });
 
 test('buildClearPostText (CTA alert open) acknowledges the open alert', () => {
@@ -151,7 +151,7 @@ test('buildClearPostText (CTA alert open) acknowledges the open alert', () => {
     { ctaAlertOpen: true },
   );
   assert.match(text, /CTA hasn't cleared their alert yet/);
-  assert.doesNotMatch(text, /hasn't issued an alert/);
+  assert.doesNotMatch(text, /no relevant CTA alert/i);
 });
 
 test('buildClearPostText stays under 300 graphemes for typical segments', () => {
@@ -179,7 +179,7 @@ test('buildBusPostText (no CTA alert) renders the strict-zero blackout shape', (
   assert.match(text, /^🚌⚠️ #66 Chicago service appears suspended/);
   assert.match(text, /No buses observed on the route in the last 25 min/);
   assert.match(text, /currently scheduled every 8 min/);
-  assert.match(text, /CTA hasn't issued an alert for this yet/);
+  assert.match(text, /no relevant CTA alert at this time/);
 });
 
 test('buildBusPostText (CTA alert open) defers to the threaded CTA alert', () => {
@@ -188,7 +188,7 @@ test('buildBusPostText (CTA alert open) defers to the threaded CTA alert', () =>
     { ctaAlertOpen: true },
   );
   assert.match(text, /See CTA alert in this thread/);
-  assert.doesNotMatch(text, /hasn't issued an alert/);
+  assert.doesNotMatch(text, /no relevant CTA alert/i);
 });
 
 test('buildBusPostText omits headway clause when GTFS lookup returns null', () => {
@@ -215,13 +215,13 @@ test('buildBusPostText stays under 300 graphemes for typical inputs', () => {
 test('buildBusClearPostText (no CTA alert) calls out absence', () => {
   const text = buildBusClearPostText({ route: '66', name: 'Chicago' }, { ctaAlertOpen: false });
   assert.match(text, /^🚌✅ #66 Chicago buses observed again\./);
-  assert.match(text, /CTA hasn't issued an alert for this/);
+  assert.match(text, /No relevant CTA alert was posted/);
 });
 
 test('buildBusClearPostText (CTA alert open) acknowledges the open alert', () => {
   const text = buildBusClearPostText({ route: '66', name: 'Chicago' }, { ctaAlertOpen: true });
   assert.match(text, /CTA hasn't cleared their alert yet/);
-  assert.doesNotMatch(text, /hasn't issued an alert/);
+  assert.doesNotMatch(text, /no relevant CTA alert/i);
 });
 
 test('buildBusHeldPostText surfaces the stuck-buses framing', () => {

@@ -188,7 +188,7 @@ function footerFor(source, { ctaAlertOpen = false } = {}) {
   if (source === 'observed' || source === 'observed-held') {
     return ctaAlertOpen
       ? 'Inferred from live train positions. (See CTA alert in this thread.)'
-      : "Inferred from live train positions; CTA hasn't issued an alert for this yet.";
+      : 'Inferred from live train positions; no relevant CTA alert at this time.';
   }
   return '';
 }
@@ -197,7 +197,7 @@ function buildClearPostText(d, { ctaAlertOpen = false } = {}) {
   const lineName = LINE_NAMES[d.line] || d.line;
   const tail = ctaAlertOpen
     ? "(CTA hasn't cleared their alert yet.)"
-    : "(CTA hasn't issued an alert for this.)";
+    : '(No relevant CTA alert was posted.)';
   return `🚇✅ ${lineName} Line trains running through ${d.suspendedSegment.from} ↔ ${d.suspendedSegment.to} again. ${tail}`;
 }
 
@@ -211,7 +211,7 @@ function buildBusPostText(
   const evidence = `📡 No buses observed on the route in the last ${lookbackMin} min${headwayClause}.`;
   const footer = ctaAlertOpen
     ? 'Inferred from live bus positions. (See CTA alert in this thread.)'
-    : "Inferred from live bus positions; CTA hasn't issued an alert for this yet.";
+    : 'Inferred from live bus positions; no relevant CTA alert at this time.';
   return `${header}\n\n${evidence}\n\n${footer}`;
 }
 
@@ -221,14 +221,14 @@ function buildBusHeldPostText({ route, name, candidate }, { ctaAlertOpen = false
   const evidence = `🛑 ${candidate.busCount} bus${candidate.busCount === 1 ? '' : 'es'} stationary ${minutes}+ min in the same direction. No other buses making it through.`;
   const footer = ctaAlertOpen
     ? 'Inferred from live bus positions. (See CTA alert in this thread.)'
-    : "Inferred from live bus positions; CTA hasn't issued an alert for this yet.";
+    : 'Inferred from live bus positions; no relevant CTA alert at this time.';
   return `${header}\n\n${evidence}\n\n${footer}`;
 }
 
 function buildBusClearPostText({ route, name }, { ctaAlertOpen = false } = {}) {
   const tail = ctaAlertOpen
     ? "(CTA hasn't cleared their alert yet.)"
-    : "(CTA hasn't issued an alert for this.)";
+    : '(No relevant CTA alert was posted.)';
   return `🚌✅ #${route} ${name} buses observed again. ${tail}`;
 }
 
