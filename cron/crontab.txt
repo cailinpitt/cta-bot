@@ -2,36 +2,34 @@
 # CTA-INSIGHTS CRONTAB — source of truth.
 # ============================================================================
 #
-# ⚠️  DANGER — DO NOT RUN `crontab cron/crontab.txt` ON cailin-server. ⚠️
+# ⚠️  DANGER — `crontab <file>` REPLACES EVERY CRON JOB FOR THE USER. ⚠️
 #
-# `crontab <file>` REPLACES every cron job for the user. cailin-server's live
-# crontab includes jobs from many OTHER repos (ClassicTraffic, RandomMap,
-# Briefings, cta-wrapped, etc.) that ARE NOT in this file. Running the
-# destructive form will silently wipe ~85+ unrelated entries, breaking those
-# projects until they are manually restored from `/tmp/crontab.bak` or
-# `~/crontab-restore/`.
+# Only use the destructive `crontab cron/crontab.txt` form on a server where
+# you are certain no other cron jobs exist. Anywhere else, the install will
+# silently wipe every unrelated entry on the user's crontab. Use the
+# marker-based merge below instead.
 #
-# The ONLY safe install procedure on cailin-server is the marker-based merge:
+# Safe install procedure (works whether or not other jobs exist):
 #
 #   1. Snapshot the live crontab:
 #        crontab -l > /tmp/live.crontab
-#   2. Strip the existing CTA-INSIGHTS block (markers below):
+#   2. Strip any existing CTA-INSIGHTS block (markers below):
 #        awk '/^# CTA-INSIGHTS-START/{skip=1} /^# CTA-INSIGHTS-END/{skip=0; next} !skip' \
 #          /tmp/live.crontab > /tmp/live.stripped
-#   3. Append THIS file's content:
+#   3. Append this file's content:
 #        cat /tmp/live.stripped cron/crontab.txt > /tmp/merged.crontab
 #   4. Install the merged version:
 #        crontab /tmp/merged.crontab
-#   5. Verify other projects survived:
-#        crontab -l | grep -cE "ClassicTraffic|RandomMap|briefings|cta-wrapped"
+#   5. Verify line counts pre/post match for unrelated jobs.
 #
-# Other repos on this server use the same convention with their own markers
-# (CTA-WRAPPED-START/END, RANDOMMAP-START/END, etc.).
+# Update the REPO_ROOT variable below to point to wherever the repo is
+# checked out on the target server.
 #
 # All jobs run via bin/cron-run.sh <log-name> <script> [args...] which handles
 # cd, timestamping, and log redirection.
 
-R=/home/cailin/Development/cta-insights/bin/cron-run.sh
+REPO_ROOT=/path/to/cta-insights
+R=$REPO_ROOT/bin/cron-run.sh
 
 # CTA-INSIGHTS-START
 
