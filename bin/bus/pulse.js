@@ -288,6 +288,12 @@ async function handleClear(route, agentGetter, now) {
     postedCooldownKey: prior.posted_cooldown_key,
     activePostUri: prior.active_post_uri,
     activePostTs: prior.active_post_ts,
+    // Preserve the active pulse's segment metadata across clear-tick
+    // advances. The upsert no longer COALESCEs, so callers must pass
+    // through prior values explicitly when they want preservation.
+    affectedPid: prior.affected_pid,
+    affectedLoFt: prior.affected_lo_ft,
+    affectedHiFt: prior.affected_hi_ft,
   });
 }
 

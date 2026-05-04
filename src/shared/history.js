@@ -615,9 +615,9 @@ function upsertBusPulseState({
       posted_cooldown_key = excluded.posted_cooldown_key,
       active_post_uri = excluded.active_post_uri,
       active_post_ts = excluded.active_post_ts,
-      affected_pid = COALESCE(excluded.affected_pid, affected_pid),
-      affected_lo_ft = COALESCE(excluded.affected_lo_ft, affected_lo_ft),
-      affected_hi_ft = COALESCE(excluded.affected_hi_ft, affected_hi_ft)
+      affected_pid = excluded.affected_pid,
+      affected_lo_ft = excluded.affected_lo_ft,
+      affected_hi_ft = excluded.affected_hi_ft
   `)
     .run(
       String(route),

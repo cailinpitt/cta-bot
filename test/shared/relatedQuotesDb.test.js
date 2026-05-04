@@ -195,7 +195,49 @@ test('recordAlertSeen round-trips affected_* fields and preserves on re-tick', (
   }
 });
 
-test('upsertBusPulseState round-trips affected_pid/lo/hi and preserves on re-tick', () => {
+test('upsertBusPulseState: explicit null clears affected_* (no COALESCE preserve)', () => {
+  // Held → blackout transition: the held cluster's pid must NOT linger on
+  // the row when the next tick is a blackout (which has no segment). A
+  // stale affected_pid would let listActiveBusPulseAnchors mis-anchor a
+  // blackout's quote-sweep against the old held-cluster pid range.
+  const { history, cleanup } = loadHistoryWithDb();
+  try {
+    const now = Date.now();
+    history.upsertBusPulseState({
+      route: '62',
+      startedTs: now,
+      lastSeenTs: now,
+      consecutiveTicks: 1,
+      clearTicks: 0,
+      postedCooldownKey: 'k',
+      affectedPid: '7120',
+      affectedLoFt: 1000,
+      affectedHiFt: 2000,
+    });
+    let row = history.getBusPulseState('62');
+    assert.equal(row.affected_pid, '7120');
+    // Blackout tick — explicit nulls.
+    history.upsertBusPulseState({
+      route: '62',
+      startedTs: now,
+      lastSeenTs: now + 1000,
+      consecutiveTicks: 2,
+      clearTicks: 0,
+      postedCooldownKey: 'k',
+      affectedPid: null,
+      affectedLoFt: null,
+      affectedHiFt: null,
+    });
+    row = history.getBusPulseState('62');
+    assert.equal(row.affected_pid, null, 'pid must clear when caller passes null');
+    assert.equal(row.affected_lo_ft, null);
+    assert.equal(row.affected_hi_ft, null);
+  } finally {
+    cleanup();
+  }
+});
+
+test('upsertBusPulseState round-trips affected_pid/lo/hi (preserve only when caller passes through)', () => {
   const { history, cleanup } = loadHistoryWithDb();
   try {
     const now = Date.now();
@@ -215,7 +257,7 @@ test('upsertBusPulseState round-trips affected_pid/lo/hi and preserves on re-tic
     assert.equal(row.affected_lo_ft, 1234);
     assert.equal(row.affected_hi_ft, 5678);
 
-    // Second tick without affected_* -> preserve.
+    // Caller-driven preserve: pass prior values through explicitly.
     history.upsertBusPulseState({
       route: '66',
       startedTs: now,
@@ -223,6 +265,9 @@ test('upsertBusPulseState round-trips affected_pid/lo/hi and preserves on re-tic
       consecutiveTicks: 2,
       clearTicks: 0,
       postedCooldownKey: 'bus_pulse_66',
+      affectedPid: 'pid-66-east',
+      affectedLoFt: 1234,
+      affectedHiFt: 5678,
     });
     row = history.getBusPulseState('66');
     assert.equal(row.affected_pid, 'pid-66-east');
@@ -238,7 +283,9 @@ test('upsertBusPulseState round-trips affected_pid/lo/hi and preserves on re-tic
       consecutiveTicks: 3,
       clearTicks: 0,
       postedCooldownKey: 'bus_pulse_66',
+      affectedPid: 'pid-66-east',
       affectedLoFt: 2000,
+      affectedHiFt: 5678,
     });
     row = history.getBusPulseState('66');
     assert.equal(row.affected_pid, 'pid-66-east');

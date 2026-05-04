@@ -108,6 +108,7 @@ async function buildWorkItems({ kind, agent, now }) {
         busHeldSegment:
           a.affected_pid != null
             ? {
+                route: String(a.route),
                 pid: String(a.affected_pid),
                 loFt: a.affected_lo_ft,
                 hiFt: a.affected_hi_ft,
@@ -207,6 +208,7 @@ async function busCandidateRelevant(candidate, group, getKnownPidsForRoute, load
   if (!candidate.near_stop) return false;
   // Held-cluster observation: pid + pdist range known precisely.
   for (const seg of group.busHeldSegments) {
+    if (seg.route && candidate.route !== seg.route) continue;
     if (candidate.direction && String(candidate.direction) !== seg.pid) continue;
     const resolved = await resolveStopOnRoute({
       pids: [seg.pid],

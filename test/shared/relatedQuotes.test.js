@@ -436,6 +436,106 @@ test('train: pulse anchor branch-N-outbound carries through normalization', asyn
   }
 });
 
+test('bus held→blackout transition: blackout no longer anchors as held cluster', async () => {
+  const { history, sweepMod, cleanup } = loadWithFreshDb();
+  try {
+    const PULSE_URI = 'at://did:plc:test/app.bsky.feed.post/bus-pulse-1';
+    const PULSE_CID = 'cid-bus-pulse';
+    // Tick 1: held cluster persisted with pid + segment.
+    history.upsertBusPulseState({
+      route: '62',
+      startedTs: Date.now() - 600000,
+      lastSeenTs: Date.now() - 600000,
+      consecutiveTicks: 1,
+      clearTicks: 0,
+      postedCooldownKey: 'k',
+      affectedPid: '7120',
+      affectedLoFt: 30000,
+      affectedHiFt: 31000,
+    });
+    let anchors = history.listActiveBusPulseAnchors();
+    assert.equal(anchors.length, 0, 'no active_post_uri yet');
+    // Tick 2: blackout — affected_* go to null. Pulse posts (active_post_uri set).
+    history.upsertBusPulseState({
+      route: '62',
+      startedTs: Date.now() - 600000,
+      lastSeenTs: Date.now(),
+      consecutiveTicks: 2,
+      clearTicks: 0,
+      postedCooldownKey: 'k',
+      activePostUri: PULSE_URI,
+      activePostTs: Date.now(),
+      affectedPid: null,
+      affectedLoFt: null,
+      affectedHiFt: null,
+    });
+    anchors = history.listActiveBusPulseAnchors();
+    assert.equal(
+      anchors.length,
+      0,
+      'blackout (no segment) must NOT show up as a held-cluster anchor',
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('bus held cluster: candidate on different route NOT matched even if pid string equal', async () => {
+  // Defensive — pids are globally unique today, but the held loop should
+  // also enforce route equality so a future pid-collision can't false-match.
+  const { history, sweepMod, cleanup } = loadWithFreshDb();
+  try {
+    const PULSE_URI = 'at://did:plc:test/app.bsky.feed.post/bus-pulse-r62';
+    history.upsertBusPulseState({
+      route: '62',
+      startedTs: Date.now() - 600000,
+      lastSeenTs: Date.now(),
+      consecutiveTicks: 2,
+      clearTicks: 0,
+      postedCooldownKey: 'k',
+      activePostUri: PULSE_URI,
+      activePostTs: Date.now(),
+      affectedPid: 'shared-pid',
+      affectedLoFt: 0,
+      affectedHiFt: 100000,
+    });
+    // Bunching event on a DIFFERENT route but somehow same pid — must not match.
+    history
+      .getDb()
+      .prepare(`
+        INSERT INTO bunching_events
+          (ts, kind, route, direction, vehicle_count, severity_ft, near_stop, posted, post_uri)
+        VALUES (?, 'bus', '49', 'shared-pid', 3, 1500, 'Belmont', 1, ?)
+      `)
+      .run(Date.now(), 'at://did:plc:bus/app.bsky.feed.post/bunch-49');
+    // Route '49' isn't in the anchor's routes, so findRelatedAnalyticsPosts
+    // won't return it in the first place — relevance filter never sees it.
+    // Verify the relevance fn directly with a forged candidate to confirm
+    // route is enforced.
+    const cand = {
+      source: 'bunching',
+      route: '49',
+      direction: 'shared-pid',
+      near_stop: 'Belmont',
+      post_uri: 'at://x',
+      ts: Date.now(),
+    };
+    const group = {
+      busHeldSegments: [{ route: '62', pid: 'shared-pid', loFt: 0, hiFt: 100000 }],
+      busAlertSegments: [],
+    };
+    const ok = await sweepMod.busCandidateRelevant(
+      cand,
+      group,
+      () => [],
+      async () => null,
+    );
+    assert.equal(ok, false, 'route mismatch must reject even when pid equals');
+  } finally {
+    cleanup();
+  }
+});
+
 test('candidate with deleted source post → tombstone, not retried', async () => {
   const { history, sweepMod, cleanup } = loadWithFreshDb();
   try {
