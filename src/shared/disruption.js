@@ -81,6 +81,8 @@ function buildPostText(d, { ctaAlertOpen = false } = {}) {
   const fullEvidence = isObserved && evidence ? evidenceLine(evidence, { kind: d.kind }) : null;
   const shortEvidence =
     isObserved && evidence ? evidenceLine(evidence, { compact: true, kind: d.kind }) : null;
+  const minimalEvidence =
+    isObserved && evidence ? evidenceLine(evidence, { minimal: true, kind: d.kind }) : null;
 
   const compose = (evidenceText) => {
     const lines = [titleFor(d)];
@@ -99,18 +101,26 @@ function buildPostText(d, { ctaAlertOpen = false } = {}) {
   if (graphemeLen(text) <= POST_GRAPHEME_LIMIT) return text;
   text = compose(shortEvidence);
   if (graphemeLen(text) <= POST_GRAPHEME_LIMIT) return text;
+  text = compose(minimalEvidence);
+  if (graphemeLen(text) <= POST_GRAPHEME_LIMIT) return text;
   // Last resort: drop evidence entirely. Title + segment + footer is the
   // bare minimum that still communicates the alert.
   return compose(null);
 }
 
-function evidenceLine(e, { compact = false, kind = 'cold' } = {}) {
+function evidenceLine(e, { compact = false, minimal = false, kind = 'cold' } = {}) {
   if (kind === 'held' && e.held) {
     const minutes = Math.round((e.held.stationaryMs || 0) / 60000);
+    if (minimal) {
+      return `🛑 ${e.held.trainCount} train${e.held.trainCount === 1 ? '' : 's'} stationary ${minutes}+ min.`;
+    }
     const stationsList =
       e.coldStationNames && e.coldStationNames.length > 0
         ? ` near ${e.coldStationNames.slice(0, 3).join(', ')}`
         : '';
+    if (compact) {
+      return `🛑 ${e.held.trainCount} train${e.held.trainCount === 1 ? '' : 's'} stationary ${minutes}+ min${stationsList}.`;
+    }
     return `🛑 ${e.held.trainCount} train${e.held.trainCount === 1 ? '' : 's'} stationary ${minutes}+ min${stationsList}. No moving trains nearby.`;
   }
   // Scheduled-headway clause is what tells readers "18 min cold is unusual" —
@@ -120,6 +130,7 @@ function evidenceLine(e, { compact = false, kind = 'cold' } = {}) {
   const headwayClause =
     e.headwayMin != null ? ` — scheduled every ${Math.round(e.headwayMin)} min` : '';
   if (e.synthetic) {
+    if (minimal) return `📡 No trains observed anywhere on the line.`;
     const stations = e.coldStations >= 2 ? ` (${e.coldStations} stations affected)` : '';
     return `📡 No trains observed anywhere on the line in the last ${e.lookbackMin || 20} min${stations}${headwayClause}.`;
   }
@@ -129,14 +140,15 @@ function evidenceLine(e, { compact = false, kind = 'cold' } = {}) {
     e.minutesSinceLastTrain != null
       ? `the last ${e.minutesSinceLastTrain} min`
       : `the last ${e.lookbackMin || 20} min`;
-  // In compact mode drop the two parentheticals — they're additive context,
-  // not load-bearing for the alert. Saves ~50–60 chars to keep the post
-  // under Bluesky's 300-grapheme cap when station + terminus names are long.
-  // The "Trains may be holding" hint stays in both tiers — it's what makes
-  // the post accurate when trains are visible on the map but not advancing.
-  // Compact mode sheds the missing/elsewhere parentheticals only.
+  // Three tiers. The "may be holding" hint stays in compact + minimal — it's
+  // what makes the post accurate when trains are visible on the map but not
+  // advancing. Minimal drops the stretch length / headway clause too, so the
+  // post fits even with long station/terminus names.
+  if (minimal) {
+    return `📡 No trains have moved through this stretch in ${since}. Trains may be holding.`;
+  }
   if (compact) {
-    return `📡 No trains have moved through this ${stretch}${stations} in ${since}${headwayClause}. Trains may be holding in stations.`;
+    return `📡 No trains have moved through this ${stretch} in ${since}${headwayClause}. Trains may be holding.`;
   }
   const missing =
     e.expectedTrains != null && e.expectedTrains >= 1
