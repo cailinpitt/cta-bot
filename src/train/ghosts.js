@@ -4,6 +4,8 @@
 const {
   MISSING_PCT_THRESHOLD,
   MISSING_ABS_THRESHOLD,
+  MISSING_ABS_THRESHOLD_TRAILING,
+  TRAILING_DEFICIT_MIN,
   MIN_SNAPSHOTS,
   MIN_OBSERVED,
   MAX_EXPECTED_ACTIVE,
@@ -87,8 +89,18 @@ async function detectTrainGhosts({
         snapshots: perSnapshot.size,
       };
       if (missing < MISSING_ABS_THRESHOLD) {
-        drop('below_abs_threshold', detail);
-        continue;
+        const tailMed = tailMedian(perSnapshot);
+        const trailingDeficit = active - tailMed;
+        if (
+          missing >= MISSING_ABS_THRESHOLD_TRAILING &&
+          trailingDeficit >= TRAILING_DEFICIT_MIN &&
+          tailMed < observedActive
+        ) {
+          // Trailing-deficit override admits.
+        } else {
+          drop('below_abs_threshold', detail);
+          continue;
+        }
       }
       if (missing / active < MISSING_PCT_THRESHOLD) {
         drop('below_pct_threshold', detail);
@@ -196,8 +208,18 @@ async function detectTrainGhosts({
         snapshots: perSnapshot.size,
       };
       if (missing < MISSING_ABS_THRESHOLD) {
-        drop('below_abs_threshold', detail);
-        continue;
+        const tailMed = tailMedian(perSnapshot);
+        const trailingDeficit = active - tailMed;
+        if (
+          missing >= MISSING_ABS_THRESHOLD_TRAILING &&
+          trailingDeficit >= TRAILING_DEFICIT_MIN &&
+          tailMed < observedActive
+        ) {
+          // Trailing-deficit override admits.
+        } else {
+          drop('below_abs_threshold', detail);
+          continue;
+        }
       }
       if (missing / active < MISSING_PCT_THRESHOLD) {
         drop('below_pct_threshold', detail);

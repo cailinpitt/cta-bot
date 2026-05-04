@@ -102,3 +102,12 @@ The CTA publishes a schedule. Live vehicle positions are public. The interesting
 - `src/shared/gtfs.js` — index lookup helpers.
 - `src/bus/ghosts.js`, `src/train/ghosts.js` — core detection and gates.
 - `bin/bus/ghosts.js`, `bin/train/ghosts.js` — hourly entry points (cron).
+
+## Trailing-tail override
+
+Whole-hour `MISSING_ABS_THRESHOLD = 3` is the right floor for steady deficits but over-rejects mid-incident drops with less evidence accumulated. The override admits at `missing ≥ 2` when:
+
+- `tailMedian < observedActive` (deficit concentrated in the last 25% of the window).
+- `trailingDeficit ≥ 2`.
+
+Steady whole-window under-counts of 2 still drop. The train ghost cron also writes near-miss `meta_signals` rows (severity ≥ 0.5) for sub-threshold drops, plus full-strength rows for posted events — `bin/train/incident-roundup.js` reads these for cross-detector correlation.

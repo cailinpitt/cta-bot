@@ -255,3 +255,86 @@ The bot-side clear (step 6 above) is the one place we deliberately accept a smal
 - `bin/train/pulse.js` — pulse detector cron entry point (debounce, cooldown, threading, posting).
 - `bin/train/disruption.js` — manual disruption poster; logs in via `loginAlerts` so output goes to the alerts account, calls `recordDisruption`, shares the renderer with pulse.
 - `bin/audit-alerts.js` — health audit cron that surfaces stuck pulse_state rows, unresolved alerts past their natural lifetime, and other invariant violations across the alert pipeline.
+
+## Held-train detection (post-2026-05-03)
+
+Cold-segment pulse measures *absence of pings*, not *absence of service*. When CTA halts service mid-run and trains sit at stations with their doors open, those trains keep emitting GPS — bins read warm and pulse stays silent. The Sox-35th police hold on 2026-05-03 surfaced this as a missed shutdown.
+
+`src/train/heldClusters.js` complements pulse with a different signal: trains that ARE pinging but aren't moving. Each train's recent observations are classified by `src/train/motion.js` into `moving` / `stationary` / `unknown`. A held-cluster candidate fires when:
+
+- ≥ 2 stationary trains share a branch within `HELD_CLUSTER_FT` (1 mi).
+- No moving train is within `HELD_CLUSTER_FT` of the cluster midpoint in the same direction.
+- Each stationary train has been so for ≥ `max(10 min, 1.5 × scheduled headway)`.
+- GTFS says service should be active.
+
+Held candidates flow through the same `handleCandidate` machinery as cold-segment candidates: 2-tick consecutive overlap, `pulse_state` keyed by `(line, direction)`, 90-min cooldown, threading under any open CTA alert. The post copy is different: `🚇🚨 [Line] Line: service halted around X` with evidence `🛑 N trains stationary M+ min near …` instead of the "no trains seen" cold framing.
+
+Disable held detection via `HELD_DETECTION=0`.
+
+## Sparse-line gate hardening
+
+Two compounding vetoes guard against the false-positive class where a single missed turnaround on a sparse line (Sunday Green Lake branch is the canonical case) reads as an outage:
+
+- **Terminal-adjacency veto** in `src/train/pulse.js` — when the cold run sits within 0.5 mi of the active corridor's terminal-most station AND `coldMs` is within `1.2 × coldThresholdMs` AND the candidate isn't admitted by `passLong`, drop it. Rationale: the corridor edge is where natural between-turnaround gaps cluster, and a 1.0× ratio cold reading there is more likely a single missed dispatch than a service halt.
+- **Dispatch-continuity veto** — `expectedTrainDispatchesInWindow(line, trDr, sinceTs, untilTs)` (in `src/shared/gtfs.js`) sums GTFS active-by-hour fractions across the lookback window. When ≥ 1 dispatch was scheduled AND `coldMs` is within `1.5 × coldThresholdMs` AND not `passLong`, the candidate is dropped as a between-dispatches gap.
+
+Both vetoes specifically exempt long sustained cold runs (`passLong`) so a real multi-hour outage at the line's edge still admits.
+
+## Loop trunk scoping
+
+`inLoopTrunk` (in `src/train/speedmap.js`) accepts either-direction observations on the elevated Loop trunk so a Brown/Orange/Pink/Purple train tagged with the wrong `trDr` mid-circuit doesn't leave inbound bins falsely cold. The override now applies only to the round-trip lines explicitly listed in `LOOP_TRUNK_LINES = {brn, org, pink, p}`. On bidirectional lines (Red/Blue/Green) with stable `trDr` codes, the override would mask single-direction Loop holds — Green Lake/Wabash service stopping eastbound while westbound runs through the same trunk bins should still flag.
+
+## Gap-detector cap exemption + rush-period reset
+
+`bin/train/gaps.js` enforces a per-line cap of 2 posted gap events per **rush period** (AM 05–10, midday 10–15, PM 15–20, evening 20–05) instead of per Chicago day. Each rush gets its own budget so two morning Red gap posts don't suppress an actual evening incident.
+
+When the cap is hit, the gate is bypassed if either of these correlated signals is firing:
+
+- A pulse on the same line within the last 30 min (`recentPulseOnLine`).
+- A ghost-detector near-miss on the same line within the last 90 min (`recentGhostOnLine` reads from `meta_signals`).
+
+Rationale: the cap exists to suppress repeated bunching events on a chronically problematic line. It should *not* suppress a fresh, distinct incident when other detectors are also seeing it.
+
+## Multi-signal correlation roundup
+
+`bin/train/incident-roundup.js` runs every 5 min on the `:04` offset and emits a single text-only post when multiple sub-threshold signals correlate within a 30-min window. Each detector writes near-miss rows to a new `meta_signals` table:
+
+- Pulse writes `pulse-cold` / `pulse-held` rows for candidates that are 1/2 ticks (would-be-but-not-yet).
+- Gap detector writes `gap` rows when cap- or cooldown-suppressed.
+- Ghost detector writes `ghost` rows for sub-threshold deficits ≥ 50% of `MISSING_ABS_THRESHOLD`, plus full-strength rows for the events it does post.
+
+The roundup scoring takes the max severity per source then sums distinct sources. When the score crosses 2.0 (e.g. one full-strength signal + one half-strength, or two half-strength), it posts:
+
+```
+⚠ Red Line · multiple service signals
+· 2.66x gap (cap)
+· 2.5 of 8.5 trains missing
+· pulse near-miss Clark/Division → Harrison
+
+None individually crossed its alert threshold; together they suggest service is degraded.
+```
+
+Per-line cooldown is 60 min. The post is text-only because by definition no single detector had clean evidence to render a map for.
+
+## Ghost trailing-tail threshold
+
+The hourly ghost detector's `MISSING_ABS_THRESHOLD = 3` is the right floor for whole-hour deficits but over-rejects mid-incident drops where the deficit is concentrated in the trailing slice of the window. A trailing-deficit override admits at `missing ≥ 2` when:
+
+- `tailMedian < observedActive` (deficit concentrated in tail, not steady).
+- `trailingDeficit ≥ 2`.
+
+Rationale: a 16:08 ghost run that sees `red/5: 2.5 missing` after a 16:00 incident should fire even though the prior hour was healthy. A 24/7 under-count of 2 still drops.
+
+## Observation cadence
+
+`scripts/observeTrains.js` polls Train Tracker every 2 min via cron, recording observations independent of the detector crons. This densifies the `observations` table so held-train detection has enough motion samples per train (typical 3–5 obs in 5 min vs 1–2 previously) to classify reliably. Train Tracker shares the 100k/month CTA budget with Bus Tracker but one batched call returns all 8 lines, leaving plenty of headroom (~22k calls/month at this cadence).
+
+## Replay harness
+
+`scripts/replay-pulse.js` re-runs pulse detection against historical `observations` data at synthetic `now` values. Used to test detector changes against past incidents (e.g. the 2026-05-03 16:00–18:00 window) without burning a real shadow week. Modes:
+
+- `--line=red --start=ISO --end=ISO` for a single line over a window.
+- `--all-lines --days-back=7` to scan recent history across all lines.
+- `--step=5m` (or `2m`, `1h`) for cadence control.
+
+Output flags every tick that would post or skip, with the candidate detail and overlap math. No DB writes.

@@ -18,11 +18,12 @@ async function main() {
   const issues = [];
 
   console.log(
-    'audit-alerts: checking 6 invariants — stuck CTA alerts (post_uri null >30 min), ' +
+    'audit-alerts: checking 7 invariants — stuck CTA alerts (post_uri null >30 min), ' +
       'stuck train pulses (consecutive_ticks>5, no post), stuck bus pulses (same), ' +
       'cooldown table size + expired-but-lingering rows, ' +
       'orphan train_pulse cooldowns (no matching pulse_state row), ' +
-      'orphan bus_pulse cooldowns (no matching bus_pulse_state row)',
+      'orphan bus_pulse cooldowns (no matching bus_pulse_state row), ' +
+      'stale meta_signals (rows older than 48h rolloff)',
   );
 
   const stuckAlerts = db
@@ -139,8 +140,17 @@ async function main() {
     for (const r of orphanBusCooldowns.slice(0, 5)) console.warn(`  ${r.key}`);
   }
 
+  const staleSignals = db
+    .prepare('SELECT COUNT(*) AS n FROM meta_signals WHERE ts < ?')
+    .get(now - 48 * 60 * 60 * 1000);
+  if (staleSignals.n > 0) {
+    issues.push(
+      `stale-meta-signals: ${staleSignals.n} meta_signals row(s) older than 48h — rolloff may be failing`,
+    );
+  }
+
   if (issues.length === 0) {
-    console.log('audit-alerts: OK — all 6 invariants pass');
+    console.log('audit-alerts: OK — all 7 invariants pass');
     return;
   }
   console.error(`audit-alerts: ${issues.length} issue(s):`);

@@ -82,3 +82,14 @@ The terminal-zone exclusion and the absolute-minute floor are the two filters th
 - `src/train/gapPost.js` — train post rendering.
 - `src/shared/geo.js` — terminal zone helpers (`terminalZoneFt`).
 - `bin/bus/gaps.js`, `bin/train/gaps.js` — cron entry points.
+
+## Train gap cap
+
+Train gaps cap at 2 posted events per **rush period** per line — AM (05–10), midday (10–15), PM (15–20), evening (20–05) — instead of per Chicago day. Each rush gets its own budget so two morning Red posts don't suppress an actual evening incident.
+
+When the rush-period cap is hit, the post is bypassed if either correlated signal fires:
+
+- A pulse on the same line within the last 30 min.
+- A ghost-detector near-miss (recorded to `meta_signals`) within the last 90 min.
+
+Otherwise the suppressed gap still gets a `meta_signals` row at severity proportional to its ratio, so `bin/train/incident-roundup.js` can incorporate it into the cross-detector roundup score.

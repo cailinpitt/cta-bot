@@ -21,6 +21,9 @@ R=/home/cailin/Development/cta-bot/bin/cron-run.sh
 0       */2 *  *  *  $R train-speedmap   bin/train/speedmap.js
 0       */3 *  *  *  $R train-snapshot   bin/train/snapshot.js
 8       *  *  *  *   $R train-ghosts     bin/train/ghosts.js
+# train-roundup runs every 5 min on :04 offset, separate from pulse :02 / alerts
+# :02 / gaps :07 so its detector-correlation read isn't racing the writers.
+4-59/5  *  *  *  *   $R train-roundup    bin/train/incident-roundup.js
 
 # --- Buses ---
 1-59/15 *  *  *  *   $R bus-bunching     bin/bus/bunching.js
@@ -37,6 +40,13 @@ R=/home/cailin/Development/cta-bot/bin/cron-run.sh
 # bunching/gaps/pulse all read the cache (maxStaleMs=11min) so observe-buses
 # is effectively the only API call site for the all-routes workload.
 */10    *  *  *  *   $R observe-buses    scripts/observeBuses.js
+# observe-trains polls Train Tracker every 2 min. CTA Train Tracker shares the
+# same 100k/month API budget as Bus Tracker, but one batched call returns all
+# 8 lines and the scheduled detector crons (pulse/gaps/bunching) consume far
+# less than the bus side, leaving room. 30 calls/h × 24 × 30 ≈ 22k — well under
+# budget. Densifies the observations table so held-train detection has enough
+# motion samples per train to classify reliably.
+*/2     *  *  *  *   $R observe-trains   scripts/observeTrains.js
 
 # --- Recaps ---
 20      10 *  *  0   $R bus-recap        bin/bus/recap.js   --window=week

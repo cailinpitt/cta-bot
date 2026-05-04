@@ -18,7 +18,12 @@
 // Returns { skipped, candidates } so the bin can distinguish "no signal"
 // (don't touch existing pulse_state) from "all clear" (advance clear ticks).
 
-const { buildLineBranches, snapToLineWithPerp, inLoopTrunk } = require('./speedmap');
+const {
+  buildLineBranches,
+  snapToLineWithPerp,
+  inLoopTrunk,
+  LOOP_TRUNK_LINES,
+} = require('./speedmap');
 const { lineLabel } = require('./api');
 const { terminalZoneFt } = require('../shared/geo');
 
@@ -93,7 +98,8 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     const numBins = Math.max(2, Math.ceil(totalFt / binFt));
     const binLengthFt = totalFt / numBins;
     const loopTrunkBin = new Array(numBins).fill(false);
-    if (trDrFilter) {
+    const useLoopTrunkOverride = trDrFilter && LOOP_TRUNK_LINES.has(line);
+    if (useLoopTrunkOverride) {
       for (let i = 0; i < points.length; i++) {
         const pt = points[i];
         const lat = pt.lat != null ? pt.lat : pt[0];
@@ -125,7 +131,9 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       const { cumDist: along, perpDist } = snapToLineWithPerp(p.lat, p.lon, points, cumDist);
       if (perpDist > MAX_PERP_FT) continue;
       const idx = Math.min(numBins - 1, Math.max(0, Math.floor(along / (totalFt / numBins))));
-      if (trDrFilter && p.trDr !== trDrFilter && !loopTrunkBin[idx]) continue;
+      if (trDrFilter && p.trDr !== trDrFilter && !(useLoopTrunkOverride && loopTrunkBin[idx])) {
+        continue;
+      }
       if (p.ts > lastSeenPerBin[idx]) lastSeenPerBin[idx] = p.ts;
       binIdxOfPos.push(idx);
       if (p.rn) {
@@ -256,6 +264,32 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       }
     }
 
+    // Terminal-adjacency veto: cold runs sitting at the corridor's terminal-
+    // most station with `coldMs` barely clearing the threshold are usually a
+    // single missed turnaround on a sparse line, not a real outage. Require a
+    // 1.2× margin over threshold for terminal-adjacent runs unless the run is
+    // long (passLong-ish) or a dispatch-continuity check will catch it.
+    let terminalAdjacent = false;
+    if (stationsOnBranch.length >= 2) {
+      const corridorLoFt = corridorLo * binLengthFt;
+      const corridorHiFt = corridorHi * binLengthFt;
+      const corridorTerminalDistFt = 2640; // 0.5 mi
+      const inCorridor = stationsOnBranch.filter(
+        (s) => s.trackDist >= corridorLoFt && s.trackDist <= corridorHiFt,
+      );
+      if (inCorridor.length >= 2) {
+        const corridorWest = inCorridor[0];
+        const corridorEast = inCorridor[inCorridor.length - 1];
+        const fromIsTerminalAdjacent =
+          Math.abs(fromStation.trackDist - corridorWest.trackDist) <= corridorTerminalDistFt ||
+          Math.abs(fromStation.trackDist - corridorEast.trackDist) <= corridorTerminalDistFt;
+        const toIsTerminalAdjacent =
+          Math.abs(toStation.trackDist - corridorWest.trackDist) <= corridorTerminalDistFt ||
+          Math.abs(toStation.trackDist - corridorEast.trackDist) <= corridorTerminalDistFt;
+        terminalAdjacent = fromIsTerminalAdjacent || toIsTerminalAdjacent;
+      }
+    }
+
     // Ramp-up veto: the day's first direction-matching train may simply not
     // have reached this stretch yet. Brown 06:10 FPs are the canonical case —
     // outbound service started at 05:34, but vehicle 401 was still climbing
@@ -367,6 +401,25 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       expectedTrains >= SOLO_EXPECTED_TRAINS &&
       coldMs >= coldThresholdMsStrict;
     if (!(passLong || passMulti || passSolo)) continue;
+
+    // Terminal-adjacency margin: terminal-adjacent runs need 1.2× threshold
+    // unless they're already long (passLong covers genuine sustained outages
+    // at the line's edges).
+    if (terminalAdjacent && !passLong && coldMs < 1.2 * coldThresholdMs) {
+      continue;
+    }
+
+    // Dispatch-continuity veto: if GTFS says a scheduled trip start should
+    // have happened in the lookback window AND coldMs is within 1.5× threshold
+    // AND it's not a long sustained outage, treat as a between-dispatch gap.
+    if (
+      opts.expectedDispatchesInWindow != null &&
+      opts.expectedDispatchesInWindow >= 1 &&
+      !passLong &&
+      coldMs < 1.5 * coldThresholdMs
+    ) {
+      continue;
+    }
 
     candidates.push({
       line,

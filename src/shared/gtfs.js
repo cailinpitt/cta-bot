@@ -317,6 +317,35 @@ function expectedTrainActiveTripsAnyDir(line, now = new Date()) {
   return total;
 }
 
+// Approximate scheduled trip starts toward `destinationDir` between `sinceTs`
+// and `untilTs`. Uses activeByHour (count of trips active at minute=30 of each
+// hour) as a proxy for "how many distinct trips this hour" — divides by 1 when
+// active count >=1 to model that the hour saw at least one trip start. For the
+// pulse dispatch-continuity check this is conservative: if GTFS says service
+// is running at all in the window, we assume at least one dispatch.
+function expectedTrainDispatchesInWindow(line, _trDr, sinceTs, untilTs) {
+  const index = loadIndex();
+  const gtfsId = TRAIN_LINE_TO_GTFS[line];
+  if (!gtfsId) return null;
+  const byDir = index.lines?.[gtfsId];
+  if (!byDir) return null;
+  const start = sinceTs;
+  const end = untilTs;
+  if (!(end > start)) return 0;
+  let total = 0;
+  for (let t = start; t < end; t += 60 * 60 * 1000) {
+    let hourActive = 0;
+    for (const info of Object.values(byDir)) {
+      if (!info?.activeByHour) continue;
+      const v = hourlyLookup(info.activeByHour, new Date(t));
+      if (Number.isFinite(v)) hourActive += v;
+    }
+    const fraction = Math.min(1, (Math.min(end, t + 60 * 60 * 1000) - t) / (60 * 60 * 1000));
+    if (hourActive >= 1) total += fraction;
+  }
+  return total;
+}
+
 // Loop lines (Brown/Orange/Pink/Purple/Yellow) ship a single GTFS direction_id
 // covering the full Midway→Loop→Midway round trip. Bi-directional lines
 // (Red/Blue/Green) have two. Ghost detection uses this to decide whether to
@@ -341,6 +370,7 @@ module.exports = {
   expectedBusRouteActiveTrips,
   expectedTrainActiveTrips,
   expectedTrainActiveTripsAnyDir,
+  expectedTrainDispatchesInWindow,
   isTrainLoopLine,
   resolveDirection,
   dayTypeFor,

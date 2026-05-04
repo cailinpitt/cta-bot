@@ -11,6 +11,12 @@ const { isOnCooldown } = require('../../src/shared/state');
 const { commitAndPost } = require('../../src/shared/postDetection');
 const { expectedTrainHeadwayMin } = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
+const {
+  recentPulseOnLine,
+  recentGhostOnLine,
+  chicagoStartOfRushPeriod,
+  recordMetaSignal,
+} = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const { buildPostText, buildAltText } = require('../../src/train/gapPost');
 const trainLines = require('../../src/train/data/trainLines.json');
@@ -69,6 +75,15 @@ async function main() {
           nearStop: candidate.nearStation?.name || candidate.leading.nextStation,
           posted: false,
         });
+        recordMetaSignal({
+          kind: 'train',
+          line: candidate.line,
+          direction: candidate.trDr,
+          source: 'gap',
+          severity: Math.min(1, candidate.ratio / 4),
+          detail: { ratio: candidate.ratio, suppressed: 'cooldown' },
+          posted: false,
+        });
         continue;
       }
       const capAllows = history.gapCapAllows({
@@ -76,10 +91,29 @@ async function main() {
         route: candidate.line,
         candidate: { ratio: candidate.ratio },
         cap: TRAIN_GAP_DAILY_CAP,
+        windowStartTs: chicagoStartOfRushPeriod(Date.now()),
       });
+      let capExemption = null;
       if (!capAllows) {
+        const recentPulse = recentPulseOnLine({
+          kind: 'train',
+          line: candidate.line,
+          withinMs: 30 * 60 * 1000,
+        });
+        const recentGhost = recentGhostOnLine({
+          kind: 'train',
+          line: candidate.line,
+          withinMs: 90 * 60 * 1000,
+        });
+        if (recentPulse) {
+          capExemption = `recent pulse@${Math.round((Date.now() - recentPulse.ts) / 60000)}m`;
+        } else if (recentGhost) {
+          capExemption = `recent ghost@${Math.round((Date.now() - recentGhost.ts) / 60000)}m`;
+        }
+      }
+      if (!capAllows && !capExemption) {
         console.log(
-          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: line at daily cap (${TRAIN_GAP_DAILY_CAP}) and not more severe than today's posts`,
+          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: line at rush-period cap (${TRAIN_GAP_DAILY_CAP}) and not more severe than this period's posts`,
         );
         history.recordGap({
           kind: 'train',
@@ -92,7 +126,21 @@ async function main() {
           nearStop: candidate.nearStation?.name || candidate.leading.nextStation,
           posted: false,
         });
+        recordMetaSignal({
+          kind: 'train',
+          line: candidate.line,
+          direction: candidate.trDr,
+          source: 'gap',
+          severity: Math.min(1, candidate.ratio / 4),
+          detail: { ratio: candidate.ratio, suppressed: 'cap' },
+          posted: false,
+        });
         continue;
+      }
+      if (capExemption) {
+        console.log(
+          `  cap-exempt ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${capExemption}`,
+        );
       }
     }
     gap = candidate;

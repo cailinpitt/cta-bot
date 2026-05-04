@@ -4,6 +4,11 @@
 
 const MISSING_PCT_THRESHOLD = 0.25;
 const MISSING_ABS_THRESHOLD = 3;
+// When the deficit is concentrated in the trailing window slice we can lower
+// the absolute threshold — mid-hour incidents don't get a full hour to
+// accumulate evidence.
+const MISSING_ABS_THRESHOLD_TRAILING = 2;
+const TRAILING_DEFICIT_MIN = 2;
 const MIN_SNAPSHOTS = 4; // observe-buses runs */10 → ~6 polls/hour; 4 tolerates 2 drops
 const MIN_OBSERVED = 2; // observed=0/1 is either a schedule bug or a gap (already covered)
 const MAX_EXPECTED_ACTIVE = 30; // sanity ceiling — most likely a bad GTFS bucket
@@ -122,8 +127,21 @@ async function detectBusGhosts({
         snapshots: perSnapshot.size,
       };
       if (missing < MISSING_ABS_THRESHOLD) {
-        drop('below_abs_threshold', detail);
-        continue;
+        const tailMed = tailMedian(perSnapshot);
+        const trailingDeficit = active - tailMed;
+        // Override requires the deficit to be CONCENTRATED in the tail —
+        // full-window observed must exceed tail observed, indicating a
+        // mid-incident drop rather than steady under-counting.
+        if (
+          missing >= MISSING_ABS_THRESHOLD_TRAILING &&
+          trailingDeficit >= TRAILING_DEFICIT_MIN &&
+          tailMed < observedActive
+        ) {
+          // Trailing-deficit override admits.
+        } else {
+          drop('below_abs_threshold', detail);
+          continue;
+        }
       }
       if (missing / active < MISSING_PCT_THRESHOLD) {
         drop('below_pct_threshold', detail);
@@ -170,6 +188,8 @@ module.exports = {
   detectBusGhosts,
   MISSING_PCT_THRESHOLD,
   MISSING_ABS_THRESHOLD,
+  MISSING_ABS_THRESHOLD_TRAILING,
+  TRAILING_DEFICIT_MIN,
   MIN_SNAPSHOTS,
   MIN_OBSERVED,
   MAX_EXPECTED_ACTIVE,

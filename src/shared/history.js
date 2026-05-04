@@ -128,6 +128,20 @@ function db() {
       active_post_ts INTEGER
     );
 
+    CREATE TABLE IF NOT EXISTS meta_signals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      line TEXT NOT NULL,
+      direction TEXT,
+      source TEXT NOT NULL,
+      severity REAL NOT NULL,
+      detail TEXT,
+      posted INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_meta_signals_kind_line_ts
+      ON meta_signals(kind, line, ts);
+
     CREATE TABLE IF NOT EXISTS observations (
       ts INTEGER NOT NULL,
       kind TEXT NOT NULL,
@@ -226,6 +240,11 @@ function rolloffOld(now = Date.now()) {
       'DELETE FROM cooldowns WHERE (expires_at IS NOT NULL AND expires_at < ?) OR (expires_at IS NULL AND ts < ?)',
     )
     .run(now, cutoff);
+  // meta_signals are noisy near-miss records; 48h matches observations rolloff
+  // since they're only useful for live correlation, not historical analysis.
+  db()
+    .prepare('DELETE FROM meta_signals WHERE ts < ?')
+    .run(now - 2 * DAY_MS);
 }
 
 function getAlertPost(alertId) {
@@ -801,13 +820,14 @@ function bunchingCooldownAllows(
   });
 }
 
-function gapCapAllows({ kind, route, candidate, cap }, now = Date.now()) {
+function gapCapAllows({ kind, route, candidate, cap, windowStartTs }, now = Date.now()) {
+  const start = windowStartTs != null ? windowStartTs : chicagoStartOfDay(now);
   const events = db()
     .prepare(`
     SELECT ratio FROM gap_events
     WHERE kind = ? AND route = ? AND posted = 1 AND ts >= ?
   `)
-    .all(kind, route, chicagoStartOfDay(now));
+    .all(kind, route, start);
   if (events.length < cap) return true;
   return events.every((ev) => candidate.ratio > ev.ratio);
 }
@@ -836,6 +856,111 @@ function leastRecentlyPostedSpeedmapRoute(kind, candidates) {
     }
   }
   return best;
+}
+
+// Rush-period anchor: AM (05-10), midday (10-15), PM (15-20), evening (20-05).
+// Returns the start-of-period ms for the period containing `ts`.
+const RUSH_BOUNDARIES_HOURS = [5, 10, 15, 20];
+function chicagoStartOfRushPeriod(ts) {
+  const dayStart = chicagoStartOfDay(ts);
+  const ctParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hour: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(ts));
+  const ctHour = parseInt(ctParts.find((p) => p.type === 'hour').value, 10) % 24;
+  let anchor = -Infinity;
+  for (const h of RUSH_BOUNDARIES_HOURS) {
+    if (ctHour >= h && h > anchor) anchor = h;
+  }
+  if (anchor < 0) {
+    return dayStart - DAY_MS + 20 * 60 * 60 * 1000;
+  }
+  return dayStart + anchor * 60 * 60 * 1000;
+}
+
+function recordMetaSignal(
+  { kind, line, direction, source, severity, detail, posted },
+  now = Date.now(),
+) {
+  db()
+    .prepare(`
+    INSERT INTO meta_signals (ts, kind, line, direction, source, severity, detail, posted)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+    .run(
+      now,
+      kind,
+      line,
+      direction || null,
+      source,
+      severity,
+      detail ? JSON.stringify(detail) : null,
+      posted ? 1 : 0,
+    );
+}
+
+function getRecentMetaSignals({ kind, line, withinMs }, now = Date.now()) {
+  const sinceTs = now - withinMs;
+  const params = [kind, sinceTs];
+  let sql = 'SELECT * FROM meta_signals WHERE kind = ? AND ts >= ?';
+  if (line) {
+    sql += ' AND line = ?';
+    params.push(line);
+  }
+  sql += ' ORDER BY ts DESC';
+  return db()
+    .prepare(sql)
+    .all(...params);
+}
+
+function recentPulseOnLine({ kind, line, withinMs }, now = Date.now()) {
+  const row = db()
+    .prepare(`
+    SELECT id, ts FROM disruption_events
+    WHERE kind = ? AND line = ? AND posted = 1 AND ts >= ?
+    ORDER BY ts DESC LIMIT 1
+  `)
+    .get(kind, line, now - withinMs);
+  return row || null;
+}
+
+function recentGhostOnLine({ kind, line, withinMs }, now = Date.now()) {
+  const row = db()
+    .prepare(`
+    SELECT id, ts, severity FROM meta_signals
+    WHERE kind = ? AND line = ? AND source = 'ghost' AND ts >= ?
+    ORDER BY ts DESC LIMIT 1
+  `)
+    .get(kind, line, now - withinMs);
+  return row || null;
+}
+
+function recentDetectorActivity({ kind, line, withinMs }, now = Date.now()) {
+  const sinceTs = now - withinMs;
+  const gaps = db()
+    .prepare(`
+      SELECT ts, ratio, posted FROM gap_events
+      WHERE kind = ? AND route = ? AND ts >= ?
+      ORDER BY ts DESC LIMIT 5
+    `)
+    .all(kind, line, sinceTs);
+  const pulses = db()
+    .prepare(`
+      SELECT ts, source, posted, from_station, to_station FROM disruption_events
+      WHERE kind = ? AND line = ? AND ts >= ?
+      ORDER BY ts DESC LIMIT 5
+    `)
+    .all(kind, line, sinceTs);
+  const alerts = db()
+    .prepare(`
+      SELECT alert_id, first_seen_ts, resolved_ts, headline FROM alert_posts
+      WHERE kind = ? AND first_seen_ts >= ?
+        AND (',' || COALESCE(routes, '') || ',') LIKE ?
+      ORDER BY first_seen_ts DESC LIMIT 5
+    `)
+    .all(kind, sinceTs, `%,${line},%`);
+  return { gaps, pulses, alerts };
 }
 
 module.exports = {
@@ -871,4 +996,11 @@ module.exports = {
   clearBusPulseState,
   getDb,
   ALERT_FLICKER_RESET_MS,
+  chicagoStartOfDay,
+  chicagoStartOfRushPeriod,
+  recordMetaSignal,
+  getRecentMetaSignals,
+  recentPulseOnLine,
+  recentGhostOnLine,
+  recentDetectorActivity,
 };

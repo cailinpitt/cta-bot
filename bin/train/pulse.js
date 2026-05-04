@@ -28,6 +28,8 @@ const {
   directionKeyFor,
   stationsAlongBranch,
 } = require('../../src/train/pulse');
+const { detectHeldClusters } = require('../../src/train/heldClusters');
+const { classifyTrainMotion, summarizeMotion } = require('../../src/train/motion');
 const { buildLineBranches } = require('../../src/train/speedmap');
 const { getAllTrainPositions, LINE_COLORS, ALL_LINES, lineLabel } = require('../../src/train/api');
 const {
@@ -43,6 +45,7 @@ const {
   expectedTrainHeadwayMinAnyDir,
   expectedTrainActiveTrips,
   expectedTrainActiveTripsAnyDir,
+  expectedTrainDispatchesInWindow,
 } = require('../../src/shared/gtfs');
 const { getRecentTrainPositions, getLineCorridorBbox } = require('../../src/shared/observations');
 const { acquireCooldown } = require('../../src/shared/state');
@@ -54,6 +57,8 @@ const {
   hasObservedClearForPulse,
   hasUnresolvedCtaAlert,
   getDb,
+  recordMetaSignal,
+  recentDetectorActivity,
 } = require('../../src/shared/history');
 const { clearCooldown } = require('../../src/shared/state');
 const { LINE_TO_RAIL_ROUTE } = require('../../src/shared/ctaAlerts');
@@ -163,6 +168,19 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     console.log(
       `[${lineLabel(line)}/${direction}] candidate ${candidate.fromStation.name}→${candidate.toStation.name} tick ${consecutive}/${MIN_CONSECUTIVE_TICKS}`,
     );
+    recordMetaSignal({
+      kind: 'train',
+      line,
+      direction,
+      source: candidate.kind === 'held' ? 'pulse-held' : 'pulse-cold',
+      severity: 0.5,
+      detail: {
+        fromStation: candidate.fromStation.name,
+        toStation: candidate.toStation.name,
+        consecutiveTicks: consecutive,
+      },
+      posted: false,
+    });
     return;
   }
 
@@ -176,7 +194,8 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     directionDestinationName: candidate.directionDestinationName || null,
     alternative: null,
     reason: null,
-    source: 'observed',
+    source: candidate.kind === 'held' ? 'observed-held' : 'observed',
+    kind: candidate.kind || 'cold',
     detectedAt: now,
     evidence: {
       runLengthMi: Math.round((candidate.runLengthFt / 5280) * 10) / 10,
@@ -192,6 +211,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       expectedTrains: candidate.expectedTrains,
       headwayMin: candidate.headwayMin != null ? candidate.headwayMin : null,
       synthetic: candidate.synthetic === true,
+      held: candidate.heldEvidence || null,
     },
   };
 
@@ -226,7 +246,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       direction,
       fromStation: candidate.fromStation.name,
       toStation: candidate.toStation.name,
-      source: 'observed',
+      source: candidate.kind === 'held' ? 'observed-held' : 'observed',
       posted: false,
       postUri: null,
     });
@@ -241,7 +261,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       direction,
       fromStation: candidate.fromStation.name,
       toStation: candidate.toStation.name,
-      source: 'observed',
+      source: candidate.kind === 'held' ? 'observed-held' : 'observed',
       posted: false,
       postUri: null,
     });
@@ -279,7 +299,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     direction,
     fromStation: candidate.fromStation.name,
     toStation: candidate.toStation.name,
-    source: 'observed',
+    source: candidate.kind === 'held' ? 'observed-held' : 'observed',
     posted: true,
     postUri: result.uri,
   });
@@ -558,6 +578,32 @@ async function main() {
       (r) => r.line === line,
     );
 
+    const dispatchesInWindow = (() => {
+      try {
+        return expectedTrainDispatchesInWindow(line, null, now - lineLookbackMs, now);
+      } catch (_e) {
+        return null;
+      }
+    })();
+
+    const motionInputs = lineRecent.map((r) => ({
+      ts: r.ts,
+      lat: r.lat,
+      lon: r.lon,
+      rn: r.rn,
+      trDr: r.trDr,
+    }));
+    const motionMap = classifyTrainMotion({
+      line,
+      trainLines,
+      recent: motionInputs,
+      now,
+    });
+    const motionSummary = summarizeMotion(motionMap);
+    console.log(
+      `motion: line=${lineLabel(line)} moving=${motionSummary.moving} stationary=${motionSummary.stationary} unknown=${motionSummary.unknown}`,
+    );
+
     let detection;
     try {
       detection = detectDeadSegments({
@@ -569,13 +615,8 @@ async function main() {
         opts: {
           lookbackMs: lineLookbackMs,
           corridorBbox,
-          recentPositions: lineRecent.map((r) => ({
-            ts: r.ts,
-            lat: r.lat,
-            lon: r.lon,
-            rn: r.rn,
-            trDr: r.trDr,
-          })),
+          expectedDispatchesInWindow: dispatchesInWindow,
+          recentPositions: motionInputs,
           longLookbackPositions: longRecent.map((r) => ({
             ts: r.ts,
             lat: r.lat,
@@ -587,6 +628,47 @@ async function main() {
     } catch (e) {
       console.error(`pulse detect failed for ${lineLabel(line)}: ${e.stack || e.message}`);
       continue;
+    }
+
+    let heldDetection = { candidates: [] };
+    if (process.env.HELD_DETECTION !== '0') {
+      try {
+        heldDetection = detectHeldClusters({
+          line,
+          trainLines,
+          stations: trainStations,
+          headwayMin,
+          now,
+          recent: motionInputs,
+        });
+      } catch (e) {
+        console.error(`held detect failed for ${lineLabel(line)}: ${e.stack || e.message}`);
+      }
+    }
+
+    const correlation = recentDetectorActivity({
+      kind: 'train',
+      line,
+      withinMs: 30 * 60 * 1000,
+    });
+    if (correlation.gaps.length || correlation.pulses.length || correlation.alerts.length) {
+      const parts = [];
+      for (const g of correlation.gaps) {
+        parts.push(
+          `gap@${Math.round((now - g.ts) / 60000)}m(${g.ratio}x ${g.posted ? 'posted' : 'suppressed'})`,
+        );
+      }
+      for (const p of correlation.pulses) {
+        parts.push(
+          `pulse@${Math.round((now - p.ts) / 60000)}m(${p.source}${p.posted ? ' posted' : ''})`,
+        );
+      }
+      for (const a of correlation.alerts) {
+        parts.push(
+          `alert@${Math.round((now - a.first_seen_ts) / 60000)}m(${a.resolved_ts ? 'resolved' : 'open'})`,
+        );
+      }
+      console.log(`correlation: ${lineLabel(line)} — ${parts.join(' | ')}`);
     }
 
     if (detection.skipped) {
@@ -616,14 +698,23 @@ async function main() {
       continue;
     }
 
-    if (detection.candidates.length === 0) {
+    const allCandidates = [...detection.candidates, ...heldDetection.candidates];
+    if (allCandidates.length === 0) {
       const rows = getDb().prepare('SELECT * FROM pulse_state WHERE line = ?').all(line);
       for (const row of rows) await handleClear(line, row.direction, agentGetter, now);
       continue;
     }
 
+    // Sort: held > cold for same line; within each kind keep existing ordering.
+    allCandidates.sort((a, b) => {
+      const aHeld = a.kind === 'held' ? 1 : 0;
+      const bHeld = b.kind === 'held' ? 1 : 0;
+      if (aHeld !== bHeld) return bHeld - aHeld;
+      return 0;
+    });
+
     const seenDirs = new Set();
-    for (const c of detection.candidates) {
+    for (const c of allCandidates) {
       if (seenDirs.has(c.direction)) continue;
       seenDirs.add(c.direction);
       tally.candidates++;

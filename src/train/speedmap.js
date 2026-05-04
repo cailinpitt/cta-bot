@@ -186,6 +186,12 @@ const LOOP_LINE_TRDR_OUTBOUND = {
   // Splitting it gains us nothing — keep it whole.
 };
 
+// Lines whose route physically traverses the elevated Loop trunk and round-trip
+// at the apex. inLoopTrunk's either-direction acceptance is correct for these
+// only — applying it to bidirectional lines like Green masks single-direction
+// Loop holds.
+const LOOP_TRUNK_LINES = new Set(['brn', 'org', 'pink', 'p']);
+
 function buildLineBranches(trainLines, line) {
   const segments = trainLines[line] || [];
   const out = [];
@@ -397,6 +403,7 @@ module.exports = {
   pickTargetDir,
   buildLinePolyline,
   buildLineBranches,
+  LOOP_TRUNK_LINES,
   snapToLine,
   snapToLineWithPerp,
   pointAlongLine,

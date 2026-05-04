@@ -20,6 +20,8 @@ const { loginTrain, postText } = require('../../src/train/bluesky');
 const { runBin } = require('../../src/shared/runBin');
 const { logDropSummary } = require('../../src/shared/ghostsLog');
 const { findStationByDestination } = require('../../src/train/findStation');
+const { recordMetaSignal } = require('../../src/shared/history');
+const { MISSING_ABS_THRESHOLD } = require('../../src/bus/ghosts');
 
 const WINDOW_MS = 60 * 60 * 1000;
 
@@ -68,10 +70,43 @@ async function main() {
     onDrop: (d) => drops.push(d),
   });
 
+  // Record sub-threshold near-miss signals for the meta-correlation roundup.
+  for (const d of drops) {
+    if (
+      d.reason === 'below_abs_threshold' &&
+      d.line &&
+      d.missing != null &&
+      d.missing >= MISSING_ABS_THRESHOLD * 0.5
+    ) {
+      recordMetaSignal({
+        kind: 'train',
+        line: d.line,
+        direction: d.trDr || null,
+        source: 'ghost',
+        severity: Math.min(1, d.missing / MISSING_ABS_THRESHOLD),
+        detail: { observed: d.observedActive, expected: d.expectedActive, missing: d.missing },
+        posted: false,
+      });
+    }
+  }
+
   if (events.length === 0) {
     console.log('No ghost train events meet the threshold, staying silent');
     logDropSummary(drops, 'train');
     return;
+  }
+
+  // Also record posted ghosts as full-strength meta_signals so roundup sees them.
+  for (const e of events) {
+    recordMetaSignal({
+      kind: 'train',
+      line: e.line,
+      direction: e.trDr || null,
+      source: 'ghost',
+      severity: 1.0,
+      detail: { observed: e.observedActive, expected: e.expectedActive, missing: e.missing },
+      posted: true,
+    });
   }
 
   for (const e of events) {

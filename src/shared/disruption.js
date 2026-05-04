@@ -34,6 +34,10 @@ function titleFor(d) {
   // snapshots, so they hedge — "possible service gap" reads as a flag worth
   // checking rather than an official outage declaration.
   if (d.source === 'cta-alert') return `🚇⚠️ ${lineName} Line service suspended`;
+  if (d.kind === 'held' || d.source === 'observed-held') {
+    const anchor = d.suspendedSegment?.from || 'this stretch';
+    return `🚇🚨 ${lineName} Line: service halted around ${anchor}`;
+  }
   // Round-trip lines (Brown/Orange/Pink/Purple) detect per-direction; without
   // a direction qualifier in the title, "trains not seen" reads as both
   // directions which is misleading when the other direction is running. Use
@@ -69,9 +73,10 @@ function buildPostText(d, { ctaAlertOpen = false } = {}) {
   // when station names + terminus name push the post past Bluesky's 300-
   // grapheme cap. The post is the source of truth; an over-length post fails
   // outright on AT-proto, so we have to fit the limit before sending.
-  const fullEvidence = source === 'observed' && evidence ? evidenceLine(evidence) : null;
+  const isObserved = source === 'observed' || source === 'observed-held';
+  const fullEvidence = isObserved && evidence ? evidenceLine(evidence, { kind: d.kind }) : null;
   const shortEvidence =
-    source === 'observed' && evidence ? evidenceLine(evidence, { compact: true }) : null;
+    isObserved && evidence ? evidenceLine(evidence, { compact: true, kind: d.kind }) : null;
 
   const compose = (evidenceText) => {
     const lines = [titleFor(d)];
@@ -95,7 +100,15 @@ function buildPostText(d, { ctaAlertOpen = false } = {}) {
   return compose(null);
 }
 
-function evidenceLine(e, { compact = false } = {}) {
+function evidenceLine(e, { compact = false, kind = 'cold' } = {}) {
+  if (kind === 'held' && e.held) {
+    const minutes = Math.round((e.held.stationaryMs || 0) / 60000);
+    const stationsList =
+      e.coldStationNames && e.coldStationNames.length > 0
+        ? ` near ${e.coldStationNames.slice(0, 3).join(', ')}`
+        : '';
+    return `🛑 ${e.held.trainCount} train${e.held.trainCount === 1 ? '' : 's'} stationary ${minutes}+ min${stationsList}. No moving trains nearby.`;
+  }
   // Scheduled-headway clause is what tells readers "18 min cold is unusual" —
   // include in both full and compact tiers so the schedule context survives
   // the post-length shedder. Dropped only as part of the third (no-evidence)
@@ -149,7 +162,7 @@ function buildAltText(d) {
 
 function footerFor(source, { ctaAlertOpen = false } = {}) {
   if (source === 'cta-alert') return 'Per CTA. Check transitchicago.com for updates.';
-  if (source === 'observed') {
+  if (source === 'observed' || source === 'observed-held') {
     return ctaAlertOpen
       ? 'Inferred from live train positions. (See CTA alert in this thread.)'
       : "Inferred from live train positions; CTA hasn't issued an alert for this yet.";
