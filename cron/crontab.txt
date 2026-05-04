@@ -1,14 +1,39 @@
-# CTA bot crontab — source of truth.
-# Install: crontab cron/crontab.txt (replaces all jobs for this user).
-# To preserve non-cta-bot jobs, append this file's content into the live
-# crontab between # CTA-BOT-START / # CTA-BOT-END markers instead.
+# ============================================================================
+# CTA-INSIGHTS CRONTAB — source of truth.
+# ============================================================================
 #
-# All jobs run via bin/cron-run.sh <log-name> <script> [args...] which
-# handles cd, timestamping, and log redirection.
+# ⚠️  DANGER — DO NOT RUN `crontab cron/crontab.txt` ON cailin-server. ⚠️
+#
+# `crontab <file>` REPLACES every cron job for the user. cailin-server's live
+# crontab includes jobs from many OTHER repos (ClassicTraffic, RandomMap,
+# Briefings, cta-wrapped, etc.) that ARE NOT in this file. Running the
+# destructive form will silently wipe ~85+ unrelated entries, breaking those
+# projects until they are manually restored from `/tmp/crontab.bak` or
+# `~/crontab-restore/`.
+#
+# The ONLY safe install procedure on cailin-server is the marker-based merge:
+#
+#   1. Snapshot the live crontab:
+#        crontab -l > /tmp/live.crontab
+#   2. Strip the existing CTA-INSIGHTS block (markers below):
+#        awk '/^# CTA-INSIGHTS-START/{skip=1} /^# CTA-INSIGHTS-END/{skip=0; next} !skip' \
+#          /tmp/live.crontab > /tmp/live.stripped
+#   3. Append THIS file's content:
+#        cat /tmp/live.stripped cron/crontab.txt > /tmp/merged.crontab
+#   4. Install the merged version:
+#        crontab /tmp/merged.crontab
+#   5. Verify other projects survived:
+#        crontab -l | grep -cE "ClassicTraffic|RandomMap|briefings|cta-wrapped"
+#
+# Other repos on this server use the same convention with their own markers
+# (CTA-WRAPPED-START/END, RANDOMMAP-START/END, etc.).
+#
+# All jobs run via bin/cron-run.sh <log-name> <script> [args...] which handles
+# cd, timestamping, and log redirection.
 
-R=/home/cailin/Development/cta-bot/bin/cron-run.sh
+R=/home/cailin/Development/cta-insights/bin/cron-run.sh
 
-# CTA-BOT-START
+# CTA-INSIGHTS-START
 
 # --- Trains ---
 # train-alerts staggered to :02 offset so it never collides with train-pulse's
@@ -40,12 +65,12 @@ R=/home/cailin/Development/cta-bot/bin/cron-run.sh
 # bunching/gaps/pulse all read the cache (maxStaleMs=11min) so observe-buses
 # is effectively the only API call site for the all-routes workload.
 */10    *  *  *  *   $R observe-buses    scripts/observeBuses.js
-# observe-trains polls Train Tracker every 2 min. CTA Train Tracker shares the
-# same 100k/month API budget as Bus Tracker, but one batched call returns all
-# 8 lines and the scheduled detector crons (pulse/gaps/bunching) consume far
-# less than the bus side, leaving room. 30 calls/h × 24 × 30 ≈ 22k — well under
-# budget. Densifies the observations table so held-train detection has enough
-# motion samples per train to classify reliably.
+# observe-trains polls Train Tracker every 2 min. Train Tracker shares the
+# same 100k/month CTA budget as Bus Tracker, but one batched call returns all
+# 8 lines and the scheduled detector crons consume far less than the bus side,
+# leaving room. 30 calls/h × 24 × 30 ≈ 22k — well under budget. Densifies the
+# observations table so held-train detection has enough motion samples per
+# train to classify reliably.
 */2     *  *  *  *   $R observe-trains   scripts/observeTrains.js
 
 # --- Recaps ---
@@ -61,4 +86,4 @@ R=/home/cailin/Development/cta-bot/bin/cron-run.sh
 15      3  *  *  *   $R fetch-gtfs       scripts/fetch-gtfs.js
 0       4  1  *  *   $R fetch-signals    scripts/fetch-signals.js
 
-# CTA-BOT-END
+# CTA-INSIGHTS-END

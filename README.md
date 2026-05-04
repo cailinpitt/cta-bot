@@ -89,7 +89,7 @@ The bus bot tracks a subset of CTA routes — see `src/bus/routes.js`. The train
 
 ## Running it
 
-Everything is designed to be driven by cron. There's no long-running process — each script does one detection or rollup and exits. The full schedule lives in [`cron/crontab.txt`](cron/crontab.txt) and can be installed with `crontab cron/crontab.txt` (or merged into an existing crontab between the `# CTA-BOT-START` / `# CTA-BOT-END` markers to preserve unrelated jobs).
+Everything is designed to be driven by cron. There's no long-running process — each script does one detection or rollup and exits. The full schedule lives in [`cron/crontab.txt`](cron/crontab.txt). On a fresh server with no other cron jobs you can install it with `crontab cron/crontab.txt`. **On a server that already has unrelated cron jobs** (e.g. cailin-server with ClassicTraffic, RandomMap, Briefings, etc.), DO NOT use that destructive form — it replaces every job for the user. Instead, merge between the `# CTA-INSIGHTS-START` / `# CTA-INSIGHTS-END` markers; the file's header has a step-by-step procedure.
 
 Each line uses [`bin/cron-run.sh`](bin/cron-run.sh) — a small wrapper that handles `cd` to the repo root, timestamps each invocation, and redirects stdout/stderr to `cron/<log-name>-cron.log`. So a job entry is just:
 
@@ -107,7 +107,7 @@ Each cron job appends to `cron/<name>-cron.log`, so the log files grow without b
 sudo scripts/install-logrotate.sh
 ```
 
-The installer detects the owner of the local `cron/` directory and substitutes `CRON_LOG_DIR` / `SU_USER` / `SU_GROUP` placeholders before writing to `/etc/logrotate.d/cta-bot`, then validates the result with `logrotate -d`. The system's daily logrotate timer picks it up overnight; the `su` directive is required because the cron log directory isn't root-owned.
+The installer detects the owner of the local `cron/` directory and substitutes `CRON_LOG_DIR` / `SU_USER` / `SU_GROUP` placeholders before writing to `/etc/logrotate.d/cta-insights`, then validates the result with `logrotate -d`. The system's daily logrotate timer picks it up overnight; the `su` directive is required because the cron log directory isn't root-owned.
 
 ## Scripts reference
 
