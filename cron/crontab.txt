@@ -21,23 +21,34 @@
 #   3. Extract just the marker block (NOT the docs above) from this file:
 #        awk '/^# CTA-INSIGHTS-START/,/^# CTA-INSIGHTS-END/' cron/crontab.txt \
 #          > /tmp/cta-block.txt
-#   4. Concat + install:
+#   4. Substitute the repo path placeholder (cron does NOT expand variables
+#      in R= assignments — must be inlined):
+#        sed -i "s|/path/to/cta-insights|$(pwd)|g" /tmp/cta-block.txt
+#   5. Concat + install:
 #        cat /tmp/live.stripped /tmp/cta-block.txt | crontab -
-#   5. Verify line counts pre/post match for unrelated jobs.
+#   6. Verify line counts pre/post match for unrelated jobs, and that the
+#      installed R= line is a real absolute path (not "/path/to/..."):
+#        crontab -l | grep "^R="
 #
 # IMPORTANT: only the content between # CTA-INSIGHTS-START and
 # # CTA-INSIGHTS-END below gets installed by the procedure above. The
-# install header (REPO_ROOT, R=, comments) lives INSIDE the markers so a
+# install header (R= path, comments) lives INSIDE the markers so a
 # repeated merge replaces them in place rather than stacking.
 #
-# Update REPO_ROOT below to the repo's checkout path on the target server.
+# CRON DOES NOT EXPAND VARIABLES IN ASSIGNMENT LINES. The R= value below
+# uses a literal path placeholder (`/path/to/cta-insights`) that step 4 of
+# the install procedure MUST substitute via sed before piping to crontab,
+# e.g. `sed 's|/path/to/cta-insights|/home/cailin/Development/cta-insights|g'`.
+# Earlier we used `R=$REPO_ROOT/bin/cron-run.sh` with REPO_ROOT defined on
+# the line above, which compiles fine but cron stores R as the literal
+# string `$REPO_ROOT/bin/cron-run.sh` and every job silently fails.
 
 # CTA-INSIGHTS-START
 
 # All jobs run via bin/cron-run.sh <log-name> <script> [args...] which
-# handles cd, timestamping, and log redirection.
-REPO_ROOT=/path/to/cta-insights
-R=$REPO_ROOT/bin/cron-run.sh
+# handles cd, timestamping, and log redirection. Substitute the path
+# placeholder for the actual repo checkout before installing.
+R=/path/to/cta-insights/bin/cron-run.sh
 
 # --- Trains ---
 # train-alerts staggered to :02 offset so it never collides with train-pulse's
