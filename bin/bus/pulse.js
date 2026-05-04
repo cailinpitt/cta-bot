@@ -18,7 +18,13 @@ const { detectHeldBusClusters } = require('../../src/bus/heldClusters');
 const { allRoutes: pulseRoutes, names: routeNames } = require('../../src/bus/routes');
 const { loadPattern } = require('../../src/bus/patterns');
 const { getVehiclesCachedOrFresh } = require('../../src/bus/api');
-const { loginAlerts, postText, resolveReplyRef } = require('../../src/shared/bluesky');
+const {
+  loginAlerts,
+  postText,
+  postWithImage,
+  resolveReplyRef,
+} = require('../../src/shared/bluesky');
+const { renderBusDisruptionRich } = require('../../src/map');
 const {
   buildBusPostText,
   buildBusClearPostText,
@@ -64,6 +70,63 @@ function chicagoHourNow(now = new Date()) {
     hour: '2-digit',
   }).format(now);
   return parseInt(h, 10) % 24;
+}
+
+async function buildBusPulseImage({ route, candidate, isHeld }) {
+  try {
+    if (isHeld && candidate.pid != null) {
+      // Held cluster: load the affected pid only and pin the cluster centroid.
+      const pattern = await loadPattern(candidate.pid);
+      if (!pattern) return null;
+      const halfWidth = Math.max(660, (candidate.clusterHiFt - candidate.clusterLoFt) / 2 + 660);
+      // In-image title uses ⚠ instead of 🚨 because librsvg's font fallback on
+      // the server doesn't carry color-emoji glyphs and 🚨 renders as an empty
+      // box. The post body keeps the 🚨 (Bluesky renders it natively).
+      const title = `⚠ #${route} ${routeNames[route] || ''}: ${candidate.busCount} bus${
+        candidate.busCount === 1 ? '' : 'es'
+      } stuck`.trim();
+      return await renderBusDisruptionRich({
+        route,
+        pattern,
+        focusZone: { centerPdist: candidate.clusterMidFt, halfWidthFt: halfWidth },
+        title,
+        mode: 'held',
+      });
+    }
+    // Blackout: pick the longest known pattern as a representative trace.
+    const pids = getKnownPidsForRoute(route, Date.now());
+    if (pids.length === 0) return null;
+    let canonical = null;
+    for (const pid of pids) {
+      try {
+        const p = await loadPattern(pid);
+        if (p && (!canonical || (p.points?.length || 0) > (canonical.points?.length || 0))) {
+          canonical = p;
+        }
+      } catch (_e) {}
+    }
+    if (!canonical) return null;
+    const title = `⚠ #${route} ${routeNames[route] || ''} service appears suspended`.trim();
+    return await renderBusDisruptionRich({
+      route,
+      pattern: canonical,
+      focusZone: null,
+      title,
+      mode: 'blackout',
+    });
+  } catch (e) {
+    console.warn(`buildBusPulseImage failed for ${route}: ${e.message}`);
+    return null;
+  }
+}
+
+function buildBusPulseAlt({ route, candidate, isHeld }) {
+  const name = routeNames[route] || route;
+  if (isHeld) {
+    const minutes = Math.round((candidate.stationaryMs || 0) / 60000);
+    return `Map of #${route} ${name}, with the route dimmed except a highlighted segment where ${candidate.busCount} bus${candidate.busCount === 1 ? '' : 'es'} have been stationary ${minutes}+ min. A red pin marks the centroid of the stuck cluster.`;
+  }
+  return `Map of #${route} ${name} dimmed end-to-end to indicate the route appears to have no buses in service. Both terminals are labeled.`;
 }
 
 function getKnownPidsForRoute(route, now) {
@@ -167,7 +230,15 @@ async function handleCandidate(candidate, agentGetter, now) {
     ? buildBusHeldPostText({ route, name: routeNames[route] || route, candidate }, { ctaAlertOpen })
     : buildBusPostText(candidate, { ctaAlertOpen });
 
-  const result = await postText(agent, text, replyRef);
+  // Render a route map: held posts pin the cluster + dim everything outside
+  // it; blackouts dim the whole route + label terminals. Falls back to
+  // text-only on any render error.
+  const image = await buildBusPulseImage({ route, candidate, isHeld });
+  const alt = image ? buildBusPulseAlt({ route, candidate, isHeld }) : null;
+
+  const result = image
+    ? await postWithImage(agent, text, image, alt, replyRef)
+    : await postText(agent, text, replyRef);
   console.log(`Posted bus pulse ${route}: ${result.url}`);
   recordDisruption({
     kind: 'bus',

@@ -367,7 +367,10 @@ async function renderDisruption({
   if (disruption.source === 'cta-alert') {
     defaultTitle = `⚠ ${lineName} Line suspended`;
   } else if (disruption.kind === 'held' || disruption.source === 'observed-held') {
-    defaultTitle = `🚨 ${lineName} Line: service halted`;
+    // ⚠ instead of 🚨 because librsvg's text rendering on the server
+    // doesn't carry color-emoji glyphs and 🚨 renders as a box. The post
+    // body keeps 🚨 (Bluesky renders it natively).
+    defaultTitle = `⚠ ${lineName} Line: service halted`;
   } else {
     defaultTitle = `⚠ ${lineName} Line: trains stalled`;
   }
@@ -464,4 +467,4 @@ async function pairedStationLabels(stations) {
     .join('\n');
 }
 
-module.exports = { renderDisruption, splitSegments, resolveStation };
+module.exports = { renderDisruption, splitSegments, resolveStation, pairedStationLabels };
