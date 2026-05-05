@@ -11,10 +11,10 @@ function buildPostText(bunch, callouts = []) {
     .map((t) => `#${t.rn}`)
     .filter((s) => s !== '#undefined')
     .join(', ');
-  const runsLine = runs ? `\nRuns: ${runs}` : '';
-  const base = `🚆 ${lineName} Line — to ${dest}\n${count} trains within ${formatDistance(bunch.spanFt)} near ${station}${runsLine}`;
+  const runsLine = runs ? `\n\nRuns: ${runs}` : '';
+  const base = `🚆 ${lineName} Line — to ${dest}\n\n${count} trains within ${formatDistance(bunch.spanFt)} near ${station}${runsLine}`;
   const tail = formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
+  return tail ? `${base}\n\n${tail}` : base;
 }
 
 function buildAltText(bunch) {

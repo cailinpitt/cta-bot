@@ -14,11 +14,11 @@ function buildPostText(gap, pattern, stop, callouts = []) {
   const next = gap.trailing?.vid ? `#${gap.trailing.vid}` : null;
   const busesLine =
     last || next
-      ? `\nBuses: ${[last && `${last} (last)`, next && `${next} (next)`].filter(Boolean).join(', ')}`
+      ? `\n\nBuses: ${[last && `${last} (last)`, next && `${next} (next)`].filter(Boolean).join(', ')}`
       : '';
-  const base = `🕳️ ${routeTitle(gap.route)} — ${pattern.direction}\n${formatMinutes(gap.gapMin)} gap near ${stop.stopName} — scheduled around every ${formatMinutes(gap.expectedMin)} this hour${busesLine}`;
+  const base = `🕳️ ${routeTitle(gap.route)} — ${pattern.direction}\n\n${formatMinutes(gap.gapMin)} gap near ${stop.stopName} — scheduled around every ${formatMinutes(gap.expectedMin)} this hour${busesLine}`;
   const tail = formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
+  return tail ? `${base}\n\n${tail}` : base;
 }
 
 function buildAltText(gap, pattern, stop) {

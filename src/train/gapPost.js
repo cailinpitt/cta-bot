@@ -13,11 +13,11 @@ function buildPostText(gap, callouts = []) {
   const next = gap.trailing?.rn ? `#${gap.trailing.rn}` : null;
   const runsLine =
     last || next
-      ? `\nRuns: ${[last && `${last} (last)`, next && `${next} (next)`].filter(Boolean).join(', ')}`
+      ? `\n\nRuns: ${[last && `${last} (last)`, next && `${next} (next)`].filter(Boolean).join(', ')}`
       : '';
-  const base = `🕳️ ${lineName} Line — to ${dest}\n${formatMinutes(gap.gapMin)} gap${whereClause} — currently scheduled every ${formatMinutes(gap.expectedMin)}${runsLine}`;
+  const base = `🕳️ ${lineName} Line — to ${dest}\n\n${formatMinutes(gap.gapMin)} gap${whereClause} — currently scheduled every ${formatMinutes(gap.expectedMin)}${runsLine}`;
   const tail = formatCallouts(callouts);
-  return tail ? `${base}\n${tail}` : base;
+  return tail ? `${base}\n\n${tail}` : base;
 }
 
 function buildAltText(gap) {
