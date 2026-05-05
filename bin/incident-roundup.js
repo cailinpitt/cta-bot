@@ -58,13 +58,8 @@ function describeSignal(s, kind) {
   }
   if (s.source === 'gap') {
     const ratio = Number.isFinite(detail.ratio) ? `${detail.ratio.toFixed(1)}` : '?';
-    const why =
-      detail.suppressed === 'cooldown'
-        ? 'covered by a recent post'
-        : detail.suppressed === 'cap'
-          ? "over today's post limit"
-          : detail.suppressed || 'recorded';
-    return `· ${ratio}x longer wait than scheduled (${why})`;
+    const noun = kind === 'bus' ? 'buses' : 'trains';
+    return `· wait between ${noun} is ${ratio}x longer than scheduled`;
   }
   if (s.source === 'ghost') {
     const noun = kind === 'bus' ? 'buses' : 'trains';
@@ -73,20 +68,12 @@ function describeSignal(s, kind) {
     // counts, but the reader-facing prose should look like a count.
     const missing = Math.max(0, Math.round(detail.missing || 0));
     const expected = Math.max(0, Math.round(detail.expected || 0));
-    return `· ${missing} of ${expected} ${noun} missing`;
+    return `· ${missing} of ${expected} ${noun} missing this past hour`;
   }
   if (s.source === 'bunching') {
-    // Suppression here means a real bunching event was detected but not
-    // posted to keep posts from spamming the route. "near-miss" was wrong —
-    // the threshold was crossed.
     const n = detail.vehicles || '?';
-    const why =
-      detail.suppressed === 'cooldown'
-        ? 'covered by a recent post'
-        : detail.suppressed === 'cap'
-          ? "over today's post limit"
-          : detail.suppressed || 'recorded';
-    return `· ${n} buses bunched together (${why})`;
+    const noun = kind === 'bus' ? 'buses' : 'trains';
+    return `· ${n} ${noun} recently bunched together`;
   }
   if (s.source === 'pulse-cold' || s.source === 'pulse-held') {
     const seg =
@@ -104,7 +91,7 @@ function describeSignal(s, kind) {
 function buildRoundupText({ kind, line, name, signals }) {
   const label = kind === 'bus' ? `#${line} ${name || line}` : `${lineLabel(line)} Line`;
   const prefix = kind === 'bus' ? '🚌⚠️' : '🚇⚠️';
-  const lines = [`${prefix} ${label} · multiple service signals`];
+  const lines = [`${prefix} ${label} · multiple signals`];
   const seen = new Set();
   for (const s of signals) {
     const key = s.source;
@@ -113,9 +100,7 @@ function buildRoundupText({ kind, line, name, signals }) {
     lines.push(describeSignal(s, kind));
   }
   lines.push('');
-  lines.push(
-    'Individually, none of these warranted a standalone post; together they suggest service is degraded.',
-  );
+  lines.push('Multiple signals suggest service may be degraded.');
   return lines.join('\n');
 }
 

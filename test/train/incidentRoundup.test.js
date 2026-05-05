@@ -29,7 +29,7 @@ test('train roundup text includes line name and signals', () => {
     ],
   });
   assert.ok(text.includes('Red'));
-  assert.ok(text.includes('multiple service signals'));
+  assert.ok(text.includes('multiple signals'));
   assert.ok(text.includes('2.6x'));
   assert.ok(text.includes('trains missing'));
 });
@@ -55,7 +55,7 @@ test('bus roundup text uses #route framing and "buses missing"', () => {
   });
   assert.ok(text.includes('#147'));
   assert.ok(text.includes('Outer DuSable'));
-  assert.ok(text.includes('buses bunched together'));
+  assert.ok(text.includes('buses recently bunched together'));
   assert.ok(text.includes('appear stuck in place') || text.includes('service gap forming'));
 });
 
@@ -64,7 +64,7 @@ test('describeSignal handles unknown source gracefully', () => {
   assert.ok(text.includes('unknown'));
 });
 
-test('describeSignal: bunching uses plain-language suppression reason', () => {
+test('describeSignal: bunching reads as plain count', () => {
   const cd = describeSignal(
     {
       source: 'bunching',
@@ -73,22 +73,20 @@ test('describeSignal: bunching uses plain-language suppression reason', () => {
     },
     'bus',
   );
-  assert.ok(cd.includes('4 buses bunched together'));
-  assert.ok(cd.includes('covered by a recent post'));
-  assert.ok(!cd.toLowerCase().includes('near-miss'));
+  assert.equal(cd, '· 4 buses recently bunched together');
 
-  const cap = describeSignal(
+  const trainBunch = describeSignal(
     {
       source: 'bunching',
       severity: 0.8,
-      detail: JSON.stringify({ vehicles: 5, suppressed: 'cap' }),
+      detail: JSON.stringify({ vehicles: 3, suppressed: 'cap' }),
     },
-    'bus',
+    'train',
   );
-  assert.ok(cap.includes("over today's post limit"));
+  assert.equal(trainBunch, '· 3 trains recently bunched together');
 });
 
-test('describeSignal: gap ratio rounds to one decimal', () => {
+test('describeSignal: gap ratio rounds to one decimal and names vehicle', () => {
   const text = describeSignal(
     {
       source: 'gap',
@@ -97,8 +95,15 @@ test('describeSignal: gap ratio rounds to one decimal', () => {
     },
     'bus',
   );
-  assert.ok(text.includes('4.1x'));
+  assert.ok(text.includes('wait between buses is 4.1x longer than scheduled'));
   assert.ok(!text.includes('4.073'));
+  assert.ok(!text.includes('('));
+
+  const trainText = describeSignal(
+    { source: 'gap', severity: 0.6, detail: JSON.stringify({ ratio: 3.2 }) },
+    'train',
+  );
+  assert.ok(trainText.includes('wait between trains is 3.2x longer than scheduled'));
 });
 
 test('describeSignal: ghost missing/expected round to whole vehicles', () => {
@@ -106,7 +111,7 @@ test('describeSignal: ghost missing/expected round to whole vehicles', () => {
     { source: 'ghost', severity: 0.7, detail: JSON.stringify({ missing: 7.3, expected: 18.3 }) },
     'bus',
   );
-  assert.ok(text.includes('7 of 18 buses missing'));
+  assert.ok(text.includes('7 of 18 buses missing this past hour'));
   assert.ok(!text.includes('.3'));
 });
 
