@@ -86,18 +86,24 @@ async function main() {
     if (!argv['dry-run']) {
       const pidCd = isOnCooldown(candidate.pid);
       const routeCd = isOnCooldown(routeKey);
-      // Pid cooldown stays strict (same direction = same incident). Route
-      // cooldown allows strictly-more-severe escalations through, mirroring
-      // the daily cap's dominance override.
-      const routeCdOverride =
-        routeCd &&
-        history.bunchingCooldownAllows({
-          kind: 'bus',
-          route: candidate.route,
-          candidate: { vehicleCount: candidate.vehicles.length, severityFt: candidate.spanFt },
-        });
-      if (pidCd || (routeCd && !routeCdOverride)) {
-        console.log(`  skip pid ${candidate.pid}: ${pidCd ? 'pid' : 'route'} on cooldown`);
+      // Both pid and route cooldown allow strictly-more-severe escalations
+      // through, mirroring the daily cap's dominance override. Pid used to
+      // be unconditionally strict — but a 9-bus #66 monster bunch was
+      // suppressed on 2026-05-05 by a cooldown left from an earlier 2-bus
+      // post on the same pid, which is exactly the case the override exists
+      // to handle. Same severity gate (`bunchingCooldownAllows`) for both
+      // since "this is the same incident, just bigger" is judged the same
+      // way regardless of which key triggered.
+      const cooldownAllows = history.bunchingCooldownAllows({
+        kind: 'bus',
+        route: candidate.route,
+        candidate: { vehicleCount: candidate.vehicles.length, severityFt: candidate.spanFt },
+      });
+      const pidCdOverride = pidCd && cooldownAllows;
+      const routeCdOverride = routeCd && cooldownAllows;
+      if ((pidCd && !pidCdOverride) || (routeCd && !routeCdOverride)) {
+        const which = pidCd && !pidCdOverride ? 'pid' : 'route';
+        console.log(`  skip pid ${candidate.pid}: ${which} on cooldown`);
         history.recordBunching({
           kind: 'bus',
           route: candidate.route,
@@ -122,9 +128,10 @@ async function main() {
         });
         continue;
       }
-      if (routeCdOverride) {
+      if (pidCdOverride || routeCdOverride) {
+        const which = pidCdOverride ? 'pid' : 'route';
         console.log(
-          `  override route cooldown for pid ${candidate.pid}: ${candidate.vehicles.length} buses / ${candidate.spanFt} ft beats prior post`,
+          `  override ${which} cooldown for pid ${candidate.pid}: ${candidate.vehicles.length} buses / ${candidate.spanFt} ft beats prior post`,
         );
       }
       const capAllows = history.bunchingCapAllows({

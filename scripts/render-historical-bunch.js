@@ -57,6 +57,7 @@ async function main() {
   const vehicles = Array.from(byVid.values()).map((r) => ({
     vid: r.vehicle_id,
     rt: r.route,
+    route: r.route,
     pid,
     lat: r.lat,
     lon: r.lon,
