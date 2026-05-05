@@ -144,14 +144,15 @@ async function main() {
     (line, destStation) => expectedTrainHeadwayMin(line, destStation),
   );
 
-  let gap = gaps[0];
+  let gap;
   if (argv.line || argv.dir) {
-    const match = gaps.find(
+    gap = gaps.find(
       (g) =>
         (argv.line == null || g.line === argv.line) &&
         (argv.dir == null || String(g.trDr) === String(argv.dir)),
     );
-    if (match) gap = match;
+  } else {
+    gap = gaps[0];
   }
 
   // Fallback: fabricate a "biggest current spacing" gap if no real one is
