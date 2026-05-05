@@ -26,26 +26,40 @@ const { acquireCooldown } = require('../src/shared/state');
 const { loginAlerts, postText, resolveReplyRef } = require('../src/shared/bluesky');
 
 const WINDOW_MS = 30 * 60 * 1000;
-const SCORE_THRESHOLD = 2.0;
+const SCORE_THRESHOLD = 1.75;
 // Hysteresis below the firing threshold: only count a tick as "clear" when
 // the rolling score is comfortably under the bar so a flapping signal near
-// 2.0 doesn't yo-yo into a resolution post.
+// the threshold doesn't yo-yo into a resolution post.
 const RESOLVE_SCORE_THRESHOLD = 1.0;
 // Tick cadence is */5 (5 min); 3 ticks = ~15 min of sustained quiet before
 // posting a resolution. Mirrors the consecutive-tick gate train pulse uses
 // for its own clear/resolve logic.
 const RESOLVE_MIN_CLEAR_TICKS = 3;
 const ROUNDUP_COOLDOWN_MS = 60 * 60 * 1000;
+// Per-source persistence bonus: a sub-threshold signal that keeps re-firing
+// across ticks is more credible than a one-off. Each repeat past the first
+// adds PERSISTENCE_BONUS_PER_REPEAT, capped at PERSISTENCE_BONUS_CAP so a
+// flapping single source can't run away with the score on its own.
+const PERSISTENCE_BONUS_PER_REPEAT = 0.15;
+const PERSISTENCE_BONUS_CAP = 0.5;
 const DRY_RUN = process.env.ROUNDUP_DRY_RUN === '1' || process.argv.includes('--dry-run');
 
 function scoreSignals(signals) {
   const bySource = new Map();
   for (const s of signals) {
-    const cur = bySource.get(s.source) || 0;
-    if (s.severity > cur) bySource.set(s.source, s.severity);
+    const cur = bySource.get(s.source) || { severity: 0, count: 0 };
+    bySource.set(s.source, {
+      severity: Math.max(cur.severity, s.severity),
+      count: cur.count + 1,
+    });
   }
   let total = 0;
-  for (const v of bySource.values()) total += v;
+  for (const v of bySource.values()) {
+    const bonus = Math.min(PERSISTENCE_BONUS_CAP, PERSISTENCE_BONUS_PER_REPEAT * (v.count - 1));
+    v.contribution = v.severity + bonus;
+    v.bonus = bonus;
+    total += v.contribution;
+  }
   return { total, bySource };
 }
 

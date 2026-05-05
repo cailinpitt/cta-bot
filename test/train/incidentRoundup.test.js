@@ -7,16 +7,82 @@ const {
   buildResolutionText,
 } = require('../../bin/incident-roundup');
 
-test('scoreSignals dedupes by source, takes max severity', () => {
+test('scoreSignals dedupes by source, takes max severity, adds persistence bonus', () => {
   const signals = [
     { source: 'gap', severity: 0.5, detail: null },
     { source: 'gap', severity: 0.8, detail: null },
     { source: 'pulse-cold', severity: 0.5, detail: null },
   ];
   const { total, bySource } = scoreSignals(signals);
-  assert.equal(bySource.get('gap'), 0.8);
-  assert.equal(bySource.get('pulse-cold'), 0.5);
-  assert.equal(Math.round(total * 10) / 10, 1.3);
+  // gap: max severity 0.8, count 2 → bonus 0.15 → contribution 0.95
+  assert.equal(bySource.get('gap').severity, 0.8);
+  assert.equal(bySource.get('gap').count, 2);
+  assert.equal(Math.round(bySource.get('gap').contribution * 100) / 100, 0.95);
+  // pulse-cold: severity 0.5, count 1 → no bonus → contribution 0.5
+  assert.equal(bySource.get('pulse-cold').severity, 0.5);
+  assert.equal(bySource.get('pulse-cold').count, 1);
+  assert.equal(bySource.get('pulse-cold').contribution, 0.5);
+  // total = 0.95 + 0.5 = 1.45
+  assert.equal(Math.round(total * 100) / 100, 1.45);
+});
+
+test('scoreSignals: persistence bonus caps at 0.5 per source', () => {
+  // 10 ghost signals at sev 0.6 — count=10, bonus would be 0.15*9=1.35,
+  // but capped at 0.5 → contribution = 0.6 + 0.5 = 1.1.
+  const signals = Array.from({ length: 10 }, () => ({
+    source: 'ghost',
+    severity: 0.6,
+    detail: null,
+  }));
+  const { total, bySource } = scoreSignals(signals);
+  assert.equal(bySource.get('ghost').count, 10);
+  assert.equal(bySource.get('ghost').bonus, 0.5);
+  assert.equal(Math.round(bySource.get('ghost').contribution * 100) / 100, 1.1);
+  assert.equal(Math.round(total * 100) / 100, 1.1);
+});
+
+test('scoreSignals: single-source sustained at sev=1 does not reach threshold alone', () => {
+  // Bus/82-style: 8 bunching signals all at full severity. 1.0 + 0.5 cap =
+  // 1.5, still below the 1.75 firing threshold. Roundup is correlation-only.
+  const signals = Array.from({ length: 8 }, () => ({
+    source: 'bunching',
+    severity: 1.0,
+    detail: null,
+  }));
+  const { total } = scoreSignals(signals);
+  assert.equal(total, 1.5);
+  assert.ok(total < 1.75, 'single-source sustained must stay sub-threshold');
+});
+
+test('scoreSignals: Blue-style two-source sub-threshold combo with repetition fires', () => {
+  // Models 2026-05-05 16:08-16:37 Blue: 1 ghost @ 0.66, 2 gap @ 0.78 each.
+  // Old formula: 0.66 + 0.78 = 1.44, well under 2.0. New formula: ghost
+  // contribution = 0.66, gap contribution = 0.78 + 0.15 = 0.93, total 1.59.
+  // Still below 1.75 here — but with one more repeat on either side it
+  // would tip over. Documents the new boundary.
+  const signals = [
+    { source: 'ghost', severity: 0.66, detail: null },
+    { source: 'gap', severity: 0.78, detail: null },
+    { source: 'gap', severity: 0.78, detail: null },
+  ];
+  const { total } = scoreSignals(signals);
+  assert.equal(Math.round(total * 100) / 100, 1.59);
+});
+
+test('scoreSignals: repeated cross-source signals tip over the 1.75 threshold', () => {
+  // Same Blue shape but with one more ghost repeat: ghost count=2 (+0.15),
+  // gap count=2 (+0.15) → 0.81 + 0.93 = 1.74, still just under. Add one
+  // more ghost repeat (count=3, +0.30) → 0.96 + 0.93 = 1.89, fires.
+  const signals = [
+    { source: 'ghost', severity: 0.66, detail: null },
+    { source: 'ghost', severity: 0.66, detail: null },
+    { source: 'ghost', severity: 0.66, detail: null },
+    { source: 'gap', severity: 0.78, detail: null },
+    { source: 'gap', severity: 0.78, detail: null },
+  ];
+  const { total } = scoreSignals(signals);
+  assert.ok(total >= 1.75, `expected >= 1.75 firing threshold, got ${total}`);
+  assert.equal(Math.round(total * 100) / 100, 1.89);
 });
 
 test('train roundup text includes line name and signals', () => {

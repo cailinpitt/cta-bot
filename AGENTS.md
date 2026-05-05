@@ -146,7 +146,7 @@ single-file constants — search the relevant `src/{bus,train}/<feature>.js`.
 | Ghost min snapshots | `src/bus/ghosts.js` | `MIN_SNAPSHOTS = 4` — coupled to observe-buses cadence |
 | Train pulse bin | `bin/train/pulse.js` | `MIN_HOUR = 5`, `POST_COOLDOWN_MS = 90 min` |
 | Train gap cap | `bin/train/gaps.js` | `TRAIN_GAP_DAILY_CAP = 2` per rush period; cap-exempt on recent pulse/ghost |
-| Roundup scoring | `bin/incident-roundup.js` | `WINDOW_MS = 30 min`, `SCORE_THRESHOLD = 2.0` |
+| Roundup scoring | `bin/incident-roundup.js` | `WINDOW_MS = 30 min`, `SCORE_THRESHOLD = 1.75`, per-source persistence bonus capped at +0.5 |
 | Loop trunk override scope | `src/train/speedmap.js` | `LOOP_TRUNK_LINES = {brn, org, pink, p}` |
 | History rolloff | `src/shared/history.js` | `ROLLOFF_DAYS = 90` |
 | Observation rolloff | `src/shared/observations.js` | `ROLLOFF_MS = 48h` |

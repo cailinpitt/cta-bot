@@ -380,7 +380,7 @@ Rationale: the cap exists to suppress repeated bunching events on a chronically 
 - Gap detector writes `gap` rows when cap- or cooldown-suppressed.
 - Ghost detector writes `ghost` rows for sub-threshold deficits ≥ 50% of `MISSING_ABS_THRESHOLD`, plus full-strength rows for the events it does post.
 
-The roundup scoring takes the max severity per source then sums distinct sources. When the score crosses 2.0 (e.g. one full-strength signal + one half-strength, or two half-strength), it posts:
+The roundup scoring takes the max severity per source, adds a per-source persistence bonus (`0.15 × (count − 1)` capped at `+0.5`), then sums distinct sources. When the score crosses 1.75 (e.g. one full-strength signal + one half-strength, two half-strength signals each repeating across a few ticks, or one full-strength signal repeating with a single weak corroborator), it posts:
 
 ```
 ⚠ Red Line · multiple service signals
