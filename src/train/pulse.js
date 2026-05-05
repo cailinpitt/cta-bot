@@ -254,11 +254,22 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
     if (trDrFilter && stationsOnBranch.length >= 2) {
       const branchHead = stationsOnBranch[0].station.name;
       const branchTail = stationsOnBranch[stationsOnBranch.length - 1].station.name;
+      // Mid-polyline turnaround stations: Purple's polyline encodes the full
+      // Linden→Loop express run, but most service is the Linden↔Howard
+      // shuttle that turns around at Howard. So Howard sits in the middle of
+      // the polyline but functions as a real terminus, with the same trDr-
+      // flip dead-zone problem as a true branch tail. Treat it as one for
+      // veto purposes — otherwise we get the South Boulevard→Howard FP
+      // (~0.7 mi north of Howard, just outside terminalZoneFt).
+      const MID_POLYLINE_TURNAROUND_STATIONS = { p: new Set(['Howard']) };
+      const midTurnarounds = MID_POLYLINE_TURNAROUND_STATIONS[line] || new Set();
       if (
         fromStation.station.name === branchHead ||
         toStation.station.name === branchHead ||
         fromStation.station.name === branchTail ||
-        toStation.station.name === branchTail
+        toStation.station.name === branchTail ||
+        midTurnarounds.has(fromStation.station.name) ||
+        midTurnarounds.has(toStation.station.name)
       ) {
         continue;
       }
