@@ -95,6 +95,7 @@ async function main() {
   const windowMin = Number(argv['window-min'] || 20);
   const prefixOverride = argv.prefix;
   const dryRun = !!argv['dry-run'];
+  const noVideo = !!argv['no-video'];
   if (!pid || !tsStr) {
     console.error(
       'Usage: node scripts/post-historical-bunch.js --pid=<pid> --ts="YYYY-MM-DD HH:MM:SS" [--window-min=N] [--prefix="..."] [--dry-run]',
@@ -203,6 +204,11 @@ async function main() {
   const agent = await loginBus();
   const primary = await postWithImage(agent, text, image, alt);
   console.log(`Posted primary: ${primary.url}`);
+
+  if (noVideo) {
+    console.log('--no-video: skipping timelapse reply');
+    return;
+  }
 
   console.log('Capturing video...');
   const result = await captureBunchingVideo(bunch, pattern, videoOpts);
