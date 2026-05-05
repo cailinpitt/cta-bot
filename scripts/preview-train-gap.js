@@ -27,7 +27,13 @@ const { encode } = require('../src/shared/polyline');
 const { buildLinePolyline, pointAlongLine } = require('../src/train/speedmap');
 
 const CLASSIC_COLOR = 'ff00ff'; // current production magenta
-const MINIMAL_COLOR = 'ffb020'; // proposed warm amber
+const MINIMAL_DEFAULT_COLOR = 'ffb020'; // proposed warm amber
+// Yellow Line rails are pure yellow (f9e300); amber would muddy. Coral reads
+// "alert" and contrasts cleanly against the bright yellow route line.
+const MINIMAL_COLOR_BY_LINE = { y: 'ff4d6d' };
+function gapColorFor(line) {
+  return MINIMAL_COLOR_BY_LINE[line] || MINIMAL_DEFAULT_COLOR;
+}
 const STROKE = 10;
 
 function buildGapOverlay(gap, color) {
@@ -115,7 +121,7 @@ function buildMinimalView(gap) {
   view.visibleStations = view.visibleStations.filter((v) => flankNames.has(v.station.name));
   view.pinStations = view.pinStations.filter((p) => flankNames.has(p.station.name));
 
-  const overlay = buildGapOverlay(gap, MINIMAL_COLOR);
+  const overlay = buildGapOverlay(gap, gapColorFor(gap.line));
   if (overlay) spliceGapOverlay(view, overlay);
   return view;
 }
