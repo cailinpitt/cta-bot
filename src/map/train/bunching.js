@@ -97,11 +97,15 @@ const LINE_ORIGIN_RESOLVERS = {
       : null,
   p: (_line, destStationName, opts = {}) => {
     if (destStationName === 'Linden') {
-      if (purpleExpressNorthboundActive(opts.now)) return 'Merchandise Mart (Brown/Purple)';
+      // NB express runs Loop↔Linden per CTA's timetable, originating at
+      // Quincy. Mart is *north* of the Loop circuit, so using it as the
+      // origin marker makes a Loop-side bunch render as if the trip started
+      // somewhere the trains haven't reached yet.
+      if (purpleExpressNorthboundActive(opts.now)) return 'Quincy';
       // Position fallback for NB express outside the time window (e.g. morning
       // deadhead pullouts): the shuttle only runs Linden↔Howard, so a train
       // snapped south of Howard on the line polyline can't be shuttle service.
-      if (opts.leadSouthOfHoward) return 'Merchandise Mart (Brown/Purple)';
+      if (opts.leadSouthOfHoward) return 'Quincy';
       return 'Howard';
     }
     if (destStationName === 'Howard') return 'Linden';
