@@ -137,10 +137,6 @@ async function main() {
     findStationByDestination,
     (line, destStation) => expectedTrainHeadwayMin(line, destStation),
   );
-  if (gaps.length === 0) {
-    console.error('No gaps detected right now. Try again later.');
-    process.exit(1);
-  }
 
   let gap = gaps[0];
   if (argv.line || argv.dir) {
@@ -150,6 +146,55 @@ async function main() {
         (argv.dir == null || String(g.trDr) === String(argv.dir)),
     );
     if (match) gap = match;
+  }
+
+  // Fallback: fabricate a "biggest current spacing" gap if no real one is
+  // detected, so the preview script can still produce maps off-peak.
+  if (!gap) {
+    const { snapToLine } = require('../src/train/speedmap');
+    const targetLine = argv.line || 'red';
+    const lineTrains = trains.filter((t) => t.line === targetLine && t.trDr);
+    const groups = new Map();
+    for (const t of lineTrains) {
+      const k = t.trDr;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(t);
+    }
+    const { points: linePts, cumDist: lineCumDist } = buildLinePolyline(trainLines, targetLine);
+    let best = null;
+    for (const [trDr, group] of groups) {
+      if (group.length < 2) continue;
+      const withDist = group
+        .map((t) => ({ train: t, trackDist: snapToLine(t.lat, t.lon, linePts, lineCumDist) }))
+        .sort((a, b) => a.trackDist - b.trackDist);
+      for (let i = 1; i < withDist.length; i++) {
+        const a = withDist[i - 1];
+        const b = withDist[i];
+        const gapFt = b.trackDist - a.trackDist;
+        if (!best || gapFt > best.gapFt) {
+          best = { trDr, a, b, gapFt };
+        }
+      }
+    }
+    if (!best) {
+      console.error(`Could not find any same-direction train pair on ${targetLine}.`);
+      process.exit(1);
+    }
+    const expectedMin = 6;
+    gap = {
+      line: targetLine,
+      trDr: best.trDr,
+      leading: best.b.train,
+      trailing: best.a.train,
+      leadingTrackDist: best.b.trackDist,
+      trailingTrackDist: best.a.trackDist,
+      nearStation: null,
+      gapFt: best.gapFt,
+      gapMin: best.gapFt / 2200,
+      expectedMin,
+      ratio: best.gapFt / 2200 / expectedMin,
+    };
+    console.log('No real gap exceeded the threshold; fabricating largest current spacing.');
   }
   console.log(
     `Using ${gap.line} ${gap.trDr} → ${gap.leading.destination}; gap=${gap.gapMin.toFixed(1)}min near ${gap.nearStation?.name || '?'}`,
