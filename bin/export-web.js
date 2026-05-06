@@ -46,6 +46,41 @@ function main() {
     )
     .all();
 
+  // Bot-detected disruptions (pulse observations). Each 'observed' row is
+  // paired with the earliest matching 'observed-clear' on the same
+  // line/direction/from/to after it, if one exists.
+  const observations = db
+    .prepare(
+      `SELECT
+        d.id, d.kind, d.line, d.direction, d.from_station, d.to_station,
+        d.ts, d.post_uri,
+        (
+          SELECT MIN(c.ts)
+          FROM disruption_events c
+          WHERE c.kind = d.kind AND c.source = 'observed-clear' AND c.posted = 1
+            AND c.ts >= d.ts
+            AND IFNULL(c.line, '')          = IFNULL(d.line, '')
+            AND IFNULL(c.direction, '')     = IFNULL(d.direction, '')
+            AND IFNULL(c.from_station, '')  = IFNULL(d.from_station, '')
+            AND IFNULL(c.to_station, '')    = IFNULL(d.to_station, '')
+        ) AS resolved_ts,
+        (
+          SELECT c.post_uri
+          FROM disruption_events c
+          WHERE c.kind = d.kind AND c.source = 'observed-clear' AND c.posted = 1
+            AND c.ts >= d.ts
+            AND IFNULL(c.line, '')          = IFNULL(d.line, '')
+            AND IFNULL(c.direction, '')     = IFNULL(d.direction, '')
+            AND IFNULL(c.from_station, '')  = IFNULL(d.from_station, '')
+            AND IFNULL(c.to_station, '')    = IFNULL(d.to_station, '')
+          ORDER BY c.ts ASC LIMIT 1
+        ) AS resolved_post_uri
+       FROM disruption_events d
+       WHERE d.source = 'observed' AND d.posted = 1 AND d.post_uri IS NOT NULL
+       ORDER BY d.ts DESC`,
+    )
+    .all();
+
   db.close();
 
   const out = {
@@ -66,6 +101,20 @@ function main() {
       affected_to_station: row.affected_to_station ?? null,
       affected_direction: row.affected_direction ?? null,
     })),
+    observations: observations.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      line: row.line,
+      direction: row.direction ?? null,
+      from_station: row.from_station ?? null,
+      to_station: row.to_station ?? null,
+      ts: row.ts,
+      resolved_ts: row.resolved_ts ?? null,
+      duration_ms: row.resolved_ts != null ? row.resolved_ts - row.ts : null,
+      active: row.resolved_ts == null,
+      post_url: atUriToUrl(row.post_uri),
+      resolved_post_url: atUriToUrl(row.resolved_post_uri),
+    })),
   };
 
   const json = JSON.stringify(out, null, 2);
@@ -73,7 +122,9 @@ function main() {
 
   if (outputPath) {
     Fs.writeFileSync(outputPath, json + '\n', 'utf8');
-    console.error(`export-web: wrote ${out.alerts.length} alerts to ${outputPath}`);
+    console.error(
+      `export-web: wrote ${out.alerts.length} alerts, ${out.observations.length} observations to ${outputPath}`,
+    );
   } else {
     process.stdout.write(json + '\n');
   }
