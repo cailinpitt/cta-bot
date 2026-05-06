@@ -205,17 +205,29 @@ function getActiveBusRoutesSince(sinceTs) {
   return new Set(rows.map((r) => String(r.route)));
 }
 
-function getLineCorridorBbox(line, sinceTs) {
+// `opts.excludeDestinations`: iterable of destination strings to drop before
+// computing the bbox. NULL destinations are kept (unknown shouldn't shrink the
+// corridor). Used by train pulse to clip Purple's corridor to the shuttle
+// segment when Express isn't running — leftover AM-rush Loop-bound positions
+// would otherwise extend the bbox south through the Loop trunk for hours.
+function getLineCorridorBbox(line, sinceTs, opts = {}) {
+  const exclude = opts.excludeDestinations ? [...opts.excludeDestinations] : [];
+  let sql = `
+    SELECT MIN(lat) AS minLat, MAX(lat) AS maxLat,
+           MIN(lon) AS minLon, MAX(lon) AS maxLon,
+           COUNT(*) AS n
+    FROM observations
+    WHERE kind = 'train' AND route = ? AND ts >= ?
+      AND lat IS NOT NULL AND lon IS NOT NULL
+  `;
+  const params = [line, sinceTs];
+  if (exclude.length > 0) {
+    sql += ` AND (destination IS NULL OR destination NOT IN (${exclude.map(() => '?').join(',')}))`;
+    params.push(...exclude);
+  }
   const row = getDb()
-    .prepare(`
-      SELECT MIN(lat) AS minLat, MAX(lat) AS maxLat,
-             MIN(lon) AS minLon, MAX(lon) AS maxLon,
-             COUNT(*) AS n
-      FROM observations
-      WHERE kind = 'train' AND route = ? AND ts >= ?
-        AND lat IS NOT NULL AND lon IS NOT NULL
-    `)
-    .get(line, sinceTs);
+    .prepare(sql)
+    .get(...params);
   if (!row || !row.n) return null;
   return { minLat: row.minLat, maxLat: row.maxLat, minLon: row.minLon, maxLon: row.maxLon };
 }

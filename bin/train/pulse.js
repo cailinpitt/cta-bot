@@ -87,6 +87,27 @@ function chicagoHourNow(now = new Date()) {
   return parseInt(h, 10) % 24;
 }
 
+function chicagoWeekdayNow(now = new Date()) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'short',
+  }).format(now);
+}
+
+// Purple Express runs only weekday rush hours (~5:08–9:25 AM, ~2:05–6:55 PM
+// per CTA's published schedule). Outside that window, leftover Loop-bound
+// observations (deadhead trips, end-of-rush stragglers) bleed into the
+// corridor bbox and cause Sedgwick→Quincy-style FPs even with a 90-min
+// corridor lookback. This gate is intentionally generous (5–10 AM, 2–8 PM)
+// so a real outage during the schedule edges isn't suppressed; the goal is
+// just to filter clearly-off-hours stragglers.
+function purpleExpressLikelyActive(now = new Date()) {
+  const wd = chicagoWeekdayNow(now);
+  if (wd === 'Sat' || wd === 'Sun') return false;
+  const h = chicagoHourNow(now);
+  return (h >= 5 && h < 10) || (h >= 14 && h < 20);
+}
+
 function slugStation(s) {
   return String(s || '')
     .toLowerCase()
@@ -523,17 +544,20 @@ async function main() {
 
     const recent = allRecent.filter((r) => r.line === line);
     // Corridor bbox over the last 6 hours — restricts detection to the actual
-    // revenue track so the Purple Express portion (not running on weekends)
-    // doesn't read as "cold" against the full Linden→Loop polyline. Purple
-    // additionally needs a tighter window because Express service is rush-
-    // only on weekdays: with a 6h corridor the Loop trunk stayed "in corridor"
-    // through the whole midday gap (FP on 2026-05-04 11:10 AM Sedgwick→Quincy).
-    // Other lines run their full polyline during service hours, so the 6h
-    // tolerance is what keeps long real outages detectable; tightening it
-    // globally would silently drop > 90-min single-segment outages out of
-    // corridor right when the alert should be loudest.
-    const CORRIDOR_LOOKBACK_MS = line === 'p' ? 90 * 60 * 1000 : 6 * 60 * 60 * 1000;
-    const corridorBbox = getLineCorridorBbox(line, now - CORRIDOR_LOOKBACK_MS);
+    // revenue track so e.g. weekend Purple service (Linden ↔ Howard only)
+    // doesn't read as "cold" against the full Linden→Loop polyline. For
+    // Purple specifically, also drop Loop-bound observations when Express
+    // isn't running: leftover AM-rush stragglers used to extend the corridor
+    // through the Loop trunk for hours into the midday shuttle window
+    // (FP on 2026-05-04 11:10 AM Sedgwick→Quincy, recurred 2026-05-06 same
+    // segment). The destination filter handles that case; the 6h lookback
+    // remains so long real outages stay detectable.
+    const CORRIDOR_LOOKBACK_MS = 6 * 60 * 60 * 1000;
+    const corridorOpts =
+      line === 'p' && !purpleExpressLikelyActive(new Date(now))
+        ? { excludeDestinations: ['Loop'] }
+        : undefined;
+    const corridorBbox = getLineCorridorBbox(line, now - CORRIDOR_LOOKBACK_MS, corridorOpts);
     // A tighter "still warm?" probe: was the line observed recently (60 min)?
     // The 6 h corridor pretends a line is active if last night's owl service
     // bled into the window, which let early-morning Purple FPs through. The
@@ -908,6 +932,12 @@ function safeHeadway(line) {
   }
 }
 
-module.exports = { chicagoHourNow, stableSegmentTag, overlapFraction };
+module.exports = {
+  chicagoHourNow,
+  chicagoWeekdayNow,
+  purpleExpressLikelyActive,
+  stableSegmentTag,
+  overlapFraction,
+};
 
 if (require.main === module) runBin(main);
