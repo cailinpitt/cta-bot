@@ -304,15 +304,8 @@ function getDb() {
 
 function rolloffOld(now = Date.now()) {
   const cutoff = now - ROLLOFF_DAYS * DAY_MS;
-  db().prepare('DELETE FROM bunching_events WHERE ts < ?').run(cutoff);
-  db().prepare('DELETE FROM speedmap_runs WHERE ts < ?').run(cutoff);
-  db().prepare('DELETE FROM gap_events WHERE ts < ?').run(cutoff);
-  db().prepare('DELETE FROM disruption_events WHERE ts < ?').run(cutoff);
-  // Alerts only roll off after they've been resolved for 90d — preserves the
-  // post URI so resolution replies can still thread to the original.
-  db()
-    .prepare('DELETE FROM alert_posts WHERE resolved_ts IS NOT NULL AND resolved_ts < ?')
-    .run(cutoff);
+  // Event tables (bunching, gaps, speedmaps, disruptions, alerts) are kept
+  // forever for historical archiving on the public web dashboard.
   // Cooldowns: drop expired rows + ancient legacy null-ttl rows.
   db()
     .prepare(
