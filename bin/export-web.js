@@ -117,16 +117,29 @@ function main() {
     })),
   };
 
-  const json = JSON.stringify(out, null, 2);
   const outputPath = process.argv[2];
 
   if (outputPath) {
-    Fs.writeFileSync(outputPath, json + '\n', 'utf8');
+    // Only write if the data actually changed — generated_at updates every run
+    // so we compare only alerts + observations to avoid spurious git commits.
+    const dataOnly = JSON.stringify({ alerts: out.alerts, observations: out.observations });
+    let existingDataOnly = null;
+    if (Fs.existsSync(outputPath)) {
+      try {
+        const existing = JSON.parse(Fs.readFileSync(outputPath, 'utf8'));
+        existingDataOnly = JSON.stringify({ alerts: existing.alerts, observations: existing.observations });
+      } catch (_) {}
+    }
+    if (dataOnly === existingDataOnly) {
+      console.error('export-web: no data changes, skipping write');
+      return;
+    }
+    Fs.writeFileSync(outputPath, JSON.stringify(out, null, 2) + '\n', 'utf8');
     console.error(
       `export-web: wrote ${out.alerts.length} alerts, ${out.observations.length} observations to ${outputPath}`,
     );
   } else {
-    process.stdout.write(json + '\n');
+    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   }
 }
 
