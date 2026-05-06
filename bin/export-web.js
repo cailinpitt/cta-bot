@@ -81,10 +81,21 @@ function main() {
     )
     .all();
 
+  const dataStart = db
+    .prepare(
+      `SELECT MIN(ts) as min_ts FROM (
+         SELECT MIN(first_seen_ts) as ts FROM alert_posts
+         UNION ALL
+         SELECT MIN(ts) as ts FROM disruption_events WHERE source = 'observed' AND posted = 1
+       )`,
+    )
+    .get();
+
   db.close();
 
   const out = {
     generated_at: Date.now(),
+    data_start_ts: dataStart.min_ts ?? null,
     alerts: alerts.map((row) => ({
       alert_id: row.alert_id,
       kind: row.kind,
