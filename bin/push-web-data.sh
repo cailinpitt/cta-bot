@@ -1,6 +1,5 @@
 #!/bin/sh
 # Push updated alert data to the GitHub Pages repo.
-# Run by cron every 15 minutes on cailin-server.
 # Only commits when the data actually changed.
 #
 # Required env or edit defaults below:
