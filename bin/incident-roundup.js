@@ -73,7 +73,7 @@ function describeSignal(s, kind) {
   if (s.source === 'gap') {
     const ratio = Number.isFinite(detail.ratio) ? `${detail.ratio.toFixed(1)}` : '?';
     const noun = kind === 'bus' ? 'buses' : 'trains';
-    return `· wait between ${noun} is ${ratio}x longer than scheduled`;
+    return `· one gap between ${noun} is ${ratio}x the scheduled wait`;
   }
   if (s.source === 'ghost') {
     const noun = kind === 'bus' ? 'buses' : 'trains';

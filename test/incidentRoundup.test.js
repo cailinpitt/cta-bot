@@ -5,7 +5,7 @@ const {
   buildRoundupText,
   describeSignal,
   buildResolutionText,
-} = require('../../bin/incident-roundup');
+} = require('../bin/incident-roundup');
 
 test('scoreSignals dedupes by source, takes max severity, adds persistence bonus', () => {
   const signals = [
@@ -161,7 +161,7 @@ test('describeSignal: gap ratio rounds to one decimal and names vehicle', () => 
     },
     'bus',
   );
-  assert.ok(text.includes('wait between buses is 4.1x longer than scheduled'));
+  assert.ok(text.includes('one gap between buses is 4.1x the scheduled wait'));
   assert.ok(!text.includes('4.073'));
   assert.ok(!text.includes('('));
 
@@ -169,7 +169,7 @@ test('describeSignal: gap ratio rounds to one decimal and names vehicle', () => 
     { source: 'gap', severity: 0.6, detail: JSON.stringify({ ratio: 3.2 }) },
     'train',
   );
-  assert.ok(trainText.includes('wait between trains is 3.2x longer than scheduled'));
+  assert.ok(trainText.includes('one gap between trains is 3.2x the scheduled wait'));
 });
 
 test('describeSignal: ghost missing/expected round to whole vehicles', () => {
@@ -202,10 +202,10 @@ test('sweepResolutions: posts after MIN_CLEAR_TICKS consecutive sub-threshold ti
   const Os = require('node:os');
   const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'ctabot-resolve-'));
   process.env.HISTORY_DB_PATH = Path.join(dir, 'history.sqlite');
-  delete require.cache[require.resolve('../../src/shared/history')];
-  delete require.cache[require.resolve('../../bin/incident-roundup')];
-  const history = require('../../src/shared/history');
-  const { sweepResolutions: sweep } = require('../../bin/incident-roundup');
+  delete require.cache[require.resolve('../src/shared/history')];
+  delete require.cache[require.resolve('../bin/incident-roundup')];
+  const history = require('../src/shared/history');
+  const { sweepResolutions: sweep } = require('../bin/incident-roundup');
   history.getDb();
   try {
     const ROUNDUP_URI = 'at://did:plc:alerts/app.bsky.feed.post/roundup-1';
@@ -252,8 +252,8 @@ test('sweepResolutions: posts after MIN_CLEAR_TICKS consecutive sub-threshold ti
     try {
       history.getDb().close();
     } catch (_e) {}
-    delete require.cache[require.resolve('../../src/shared/history')];
-    delete require.cache[require.resolve('../../bin/incident-roundup')];
+    delete require.cache[require.resolve('../src/shared/history')];
+    delete require.cache[require.resolve('../bin/incident-roundup')];
     delete process.env.HISTORY_DB_PATH;
     Fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -265,10 +265,10 @@ test('sweepResolutions: elevated score resets clear_ticks counter', async () => 
   const Os = require('node:os');
   const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'ctabot-resolve2-'));
   process.env.HISTORY_DB_PATH = Path.join(dir, 'history.sqlite');
-  delete require.cache[require.resolve('../../src/shared/history')];
-  delete require.cache[require.resolve('../../bin/incident-roundup')];
-  const history = require('../../src/shared/history');
-  const { sweepResolutions: sweep } = require('../../bin/incident-roundup');
+  delete require.cache[require.resolve('../src/shared/history')];
+  delete require.cache[require.resolve('../bin/incident-roundup')];
+  const history = require('../src/shared/history');
+  const { sweepResolutions: sweep } = require('../bin/incident-roundup');
   history.getDb();
   try {
     history.recordRoundupAnchor({
@@ -314,8 +314,8 @@ test('sweepResolutions: elevated score resets clear_ticks counter', async () => 
     try {
       history.getDb().close();
     } catch (_e) {}
-    delete require.cache[require.resolve('../../src/shared/history')];
-    delete require.cache[require.resolve('../../bin/incident-roundup')];
+    delete require.cache[require.resolve('../src/shared/history')];
+    delete require.cache[require.resolve('../bin/incident-roundup')];
     delete process.env.HISTORY_DB_PATH;
     Fs.rmSync(dir, { recursive: true, force: true });
   }
