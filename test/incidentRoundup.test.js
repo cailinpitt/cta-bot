@@ -85,6 +85,56 @@ test('scoreSignals: repeated cross-source signals tip over the 1.75 threshold', 
   assert.equal(Math.round(total * 100) / 100, 1.89);
 });
 
+test('scoreSignals: ghost override admits when ≥50% missing AND ≥3 absolute', () => {
+  // Route 8 May 4: observed 2.5 of 5.1 expected, missing 2.6 → 51%.
+  // Doesn't qualify because absolute < 3.
+  const tooFewAbs = scoreSignals([
+    {
+      source: 'ghost',
+      severity: 1.0,
+      detail: JSON.stringify({ observed: 2.5, expected: 5.1, missing: 2.6 }),
+    },
+  ]);
+  assert.equal(tooFewAbs.ghostOverride, false);
+
+  // Route 66 May 7: 2.5 of 8.0 expected, missing 5.5 → 69%. Qualifies.
+  const qualifies = scoreSignals([
+    {
+      source: 'ghost',
+      severity: 1.0,
+      detail: JSON.stringify({ observed: 2.5, expected: 8.0, missing: 5.5 }),
+    },
+  ]);
+  assert.equal(qualifies.ghostOverride, true);
+
+  // 40% missing with high absolute count: still doesn't qualify.
+  const belowPct = scoreSignals([
+    {
+      source: 'ghost',
+      severity: 1.0,
+      detail: JSON.stringify({ observed: 6, expected: 10, missing: 4 }),
+    },
+  ]);
+  assert.equal(belowPct.ghostOverride, false);
+});
+
+test('scoreSignals: ghost override only triggers on ghost source', () => {
+  // A bunching signal with a "missing/expected" detail shouldn't qualify.
+  const result = scoreSignals([
+    {
+      source: 'bunching',
+      severity: 1.0,
+      detail: JSON.stringify({ missing: 5, expected: 8 }),
+    },
+  ]);
+  assert.equal(result.ghostOverride, false);
+});
+
+test('scoreSignals: malformed ghost detail fails closed', () => {
+  const result = scoreSignals([{ source: 'ghost', severity: 1.0, detail: 'not-json' }]);
+  assert.equal(result.ghostOverride, false);
+});
+
 test('train roundup text includes line name and signals', () => {
   const text = buildRoundupText({
     kind: 'train',

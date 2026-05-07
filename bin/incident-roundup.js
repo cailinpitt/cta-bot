@@ -42,7 +42,28 @@ const ROUNDUP_COOLDOWN_MS = 60 * 60 * 1000;
 // flapping single source can't run away with the score on its own.
 const PERSISTENCE_BONUS_PER_REPEAT = 0.15;
 const PERSISTENCE_BONUS_CAP = 0.5;
+// Standalone admit path: a posted ghost loud enough that the multi-source
+// requirement would penalize sparse-failure-mode routes (e.g. low-frequency
+// buses where bunching/gap geometrically can't co-fire). Threshold is 2× the
+// post bar (25% missing) — a majority of scheduled service is gone.
+const GHOST_OVERRIDE_PCT = 0.5;
+const GHOST_OVERRIDE_MIN_MISSING = 3;
 const DRY_RUN = process.env.ROUNDUP_DRY_RUN === '1' || process.argv.includes('--dry-run');
+
+function ghostOverrideQualifies(signal) {
+  if (signal.source !== 'ghost') return false;
+  let detail = {};
+  try {
+    detail = signal.detail ? JSON.parse(signal.detail) : {};
+  } catch (_e) {
+    return false;
+  }
+  const missing = Number(detail.missing);
+  const expected = Number(detail.expected);
+  if (!Number.isFinite(missing) || !Number.isFinite(expected) || expected <= 0) return false;
+  if (missing < GHOST_OVERRIDE_MIN_MISSING) return false;
+  return missing / expected >= GHOST_OVERRIDE_PCT;
+}
 
 function scoreSignals(signals) {
   const bySource = new Map();
@@ -60,7 +81,8 @@ function scoreSignals(signals) {
     v.bonus = bonus;
     total += v.contribution;
   }
-  return { total, bySource };
+  const ghostOverride = signals.some(ghostOverrideQualifies);
+  return { total, bySource, ghostOverride };
 }
 
 function describeSignal(s, kind) {
@@ -122,13 +144,18 @@ async function processKind({ kind, identifiers, getName, agentGetter, now }) {
   for (const id of identifiers) {
     const signals = getRecentMetaSignals({ kind, line: id, withinMs: WINDOW_MS }, now);
     if (signals.length === 0) continue;
-    const { total, bySource } = scoreSignals(signals);
+    const { total, bySource, ghostOverride } = scoreSignals(signals);
     const label = kind === 'bus' ? `bus/${id}` : lineLabel(id);
-    if (total < SCORE_THRESHOLD) {
+    if (total < SCORE_THRESHOLD && !ghostOverride) {
       console.log(
         `roundup: ${label} score=${total.toFixed(2)} sources=${[...bySource.keys()].join(',')} below threshold`,
       );
       continue;
+    }
+    if (ghostOverride && total < SCORE_THRESHOLD) {
+      console.log(
+        `roundup: ${label} ghost-override admits (score=${total.toFixed(2)}, sources=${[...bySource.keys()].join(',')})`,
+      );
     }
     const cooldownKey = `${kind}_roundup_${id}`;
     const text = buildRoundupText({ kind, line: id, name: getName(id), signals });
