@@ -46,14 +46,16 @@ function main() {
     )
     .all();
 
-  // Bot-detected disruptions (pulse observations). Each 'observed' row is
-  // paired with the earliest matching 'observed-clear' on the same
-  // line/direction/from/to after it, if one exists.
+  // Bot-detected disruptions (pulse observations). Each 'observed' /
+  // 'observed-held' row is paired with the earliest matching
+  // 'observed-clear' on the same line/direction/from/to after it, if one
+  // exists. The held/cold distinction lives in d.source — we expose it as
+  // a precise detection_source so the web UI can filter by subtype.
   const pulseObservations = db
     .prepare(
       `SELECT
         d.id, d.kind, d.line, d.direction, d.from_station, d.to_station,
-        d.ts, d.post_uri,
+        d.ts, d.post_uri, d.source AS pulse_source,
         (
           SELECT MIN(c.ts)
           FROM disruption_events c
@@ -76,7 +78,7 @@ function main() {
           ORDER BY c.ts ASC LIMIT 1
         ) AS resolved_post_uri
        FROM disruption_events d
-       WHERE d.source = 'observed' AND d.posted = 1 AND d.post_uri IS NOT NULL
+       WHERE d.source IN ('observed', 'observed-held') AND d.posted = 1 AND d.post_uri IS NOT NULL
        ORDER BY d.ts DESC`,
     )
     .all();
@@ -91,7 +93,12 @@ function main() {
     .all();
 
   const observations = [
-    ...pulseObservations.map((row) => ({ ...row, _source: 'pulse' })),
+    ...pulseObservations.map((row) => ({
+      ...row,
+      // Map disruption_events.source to the web's precise detection_source.
+      // 'observed-held' = held trains/buses; 'observed' = cold stretch.
+      _source: row.pulse_source === 'observed-held' ? 'pulse-held' : 'pulse-cold',
+    })),
     ...roundupObservations.map((row) => ({
       ...row,
       direction: null,
@@ -107,7 +114,7 @@ function main() {
       `SELECT MIN(ts) as min_ts FROM (
          SELECT MIN(first_seen_ts) as ts FROM alert_posts
          UNION ALL
-         SELECT MIN(ts) as ts FROM disruption_events WHERE source = 'observed' AND posted = 1
+         SELECT MIN(ts) as ts FROM disruption_events WHERE source IN ('observed', 'observed-held') AND posted = 1
          UNION ALL
          SELECT MIN(ts) as ts FROM roundup_anchors
        )`,
@@ -142,7 +149,7 @@ function main() {
       direction: row.direction ?? null,
       from_station: row.from_station ?? null,
       to_station: row.to_station ?? null,
-      detection_source: row._source, // 'pulse' | 'roundup'
+      detection_source: row._source, // 'pulse-cold' | 'pulse-held' | 'roundup'
       signals: row.signals ? row.signals.split(',') : null, // e.g. ['gap', 'bunching']
       ts: row.ts,
       resolved_ts: row.resolved_ts ?? null,
