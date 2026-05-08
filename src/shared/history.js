@@ -100,7 +100,8 @@ function db() {
       to_station TEXT,
       source TEXT NOT NULL,
       posted INTEGER NOT NULL DEFAULT 0,
-      post_uri TEXT
+      post_uri TEXT,
+      evidence TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_disruption_kind_line_ts
       ON disruption_events(kind, line, ts);
@@ -249,6 +250,13 @@ function db() {
   }
   if (!alertCols.includes('affected_direction')) {
     _db.exec('ALTER TABLE alert_posts ADD COLUMN affected_direction TEXT');
+  }
+  const disruptionCols = _db
+    .prepare('PRAGMA table_info(disruption_events)')
+    .all()
+    .map((c) => c.name);
+  if (!disruptionCols.includes('evidence')) {
+    _db.exec('ALTER TABLE disruption_events ADD COLUMN evidence TEXT');
   }
   const busPulseCols = _db
     .prepare('PRAGMA table_info(bus_pulse_state)')
@@ -608,14 +616,25 @@ function getRecentPulsePostsAll({ kind, line, withinMs }, now = Date.now()) {
 }
 
 function recordDisruption(
-  { kind, line, direction, fromStation, toStation, source, posted, postUri },
+  { kind, line, direction, fromStation, toStation, source, posted, postUri, evidence = null },
   now = Date.now(),
 ) {
+  // Serialize the evidence object as JSON. Empty objects become null so the
+  // 'observed-clear' rows (which carry no payload) keep their column NULL
+  // and the export-side reader doesn't have to skip empty objects.
+  let evidenceJson = null;
+  if (evidence && typeof evidence === 'object' && Object.keys(evidence).length > 0) {
+    try {
+      evidenceJson = JSON.stringify(evidence);
+    } catch (_e) {
+      evidenceJson = null;
+    }
+  }
   db()
     .prepare(`
     INSERT INTO disruption_events
-      (ts, kind, line, direction, from_station, to_station, source, posted, post_uri)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (ts, kind, line, direction, from_station, to_station, source, posted, post_uri, evidence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
     .run(
       now,
@@ -627,6 +646,7 @@ function recordDisruption(
       source,
       posted ? 1 : 0,
       postUri || null,
+      evidenceJson,
     );
 }
 

@@ -55,7 +55,7 @@ function main() {
     .prepare(
       `SELECT
         d.id, d.kind, d.line, d.direction, d.from_station, d.to_station,
-        d.ts, d.post_uri, d.source AS pulse_source,
+        d.ts, d.post_uri, d.source AS pulse_source, d.evidence AS evidence_json,
         (
           SELECT MIN(c.ts)
           FROM disruption_events c
@@ -92,12 +92,22 @@ function main() {
     )
     .all();
 
+  function parseEvidence(json) {
+    if (!json) return null;
+    try {
+      return JSON.parse(json);
+    } catch (_e) {
+      return null;
+    }
+  }
+
   const observations = [
     ...pulseObservations.map((row) => ({
       ...row,
       // Map disruption_events.source to the web's precise detection_source.
       // 'observed-held' = held trains/buses; 'observed' = cold stretch.
       _source: row.pulse_source === 'observed-held' ? 'pulse-held' : 'pulse-cold',
+      _evidence: parseEvidence(row.evidence_json),
     })),
     ...roundupObservations.map((row) => ({
       ...row,
@@ -151,6 +161,7 @@ function main() {
       to_station: row.to_station ?? null,
       detection_source: row._source, // 'pulse-cold' | 'pulse-held' | 'roundup'
       signals: row.signals ? row.signals.split(',') : null, // e.g. ['gap', 'bunching']
+      evidence: row._evidence ?? null,
       ts: row.ts,
       resolved_ts: row.resolved_ts ?? null,
       duration_ms: row.resolved_ts != null ? row.resolved_ts - row.ts : null,

@@ -190,6 +190,26 @@ async function handleCandidate(candidate, agentGetter, now) {
 
   const ctaAlertOpenInitial = !!hasUnresolvedCtaAlert({ kind: 'bus', ctaRouteCode: route });
 
+  // Snapshot of "why the bot fired" for downstream rendering. Held candidates
+  // carry per-cluster details (busCount, stationaryMs); blackouts carry the
+  // route-level signals (lookback window, expected active count, headway).
+  // Stored as JSON on disruption_events so the web export can surface bot-
+  // confidence chips ("3 buses held · 22 min", "no buses in 30 min").
+  const evidence = isHeld
+    ? {
+        kind: 'held',
+        busCount: candidate.busCount,
+        stationaryMs: candidate.stationaryMs,
+        movingElsewhereOnPid: candidate.movingElsewhereOnPid,
+        headwayMin: candidate.headwayMin ?? null,
+      }
+    : {
+        kind: 'cold',
+        lookbackMin: candidate.lookbackMin ?? null,
+        expectedActive: candidate.expectedActive ?? null,
+        minHeadwayMin: candidate.minHeadwayMin ?? null,
+      };
+
   if (DRY_RUN) {
     const text = isHeld
       ? buildBusHeldPostText(
@@ -207,6 +227,7 @@ async function handleCandidate(candidate, agentGetter, now) {
       source: isHeld ? 'observed-held' : 'observed',
       posted: false,
       postUri: null,
+      evidence,
     });
     return;
   }
@@ -222,6 +243,7 @@ async function handleCandidate(candidate, agentGetter, now) {
       source: isHeld ? 'observed-held' : 'observed',
       posted: false,
       postUri: null,
+      evidence,
     });
     return;
   }
@@ -252,6 +274,7 @@ async function handleCandidate(candidate, agentGetter, now) {
     source: isHeld ? 'observed-held' : 'observed',
     posted: true,
     postUri: result.uri,
+    evidence,
   });
   upsertBusPulseState({
     route,

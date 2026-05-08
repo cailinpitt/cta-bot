@@ -270,6 +270,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       source: candidate.kind === 'held' ? 'observed-held' : 'observed',
       posted: false,
       postUri: null,
+      evidence: disruption.evidence,
     });
     return;
   }
@@ -285,6 +286,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
       source: candidate.kind === 'held' ? 'observed-held' : 'observed',
       posted: false,
       postUri: null,
+      evidence: disruption.evidence,
     });
     return;
   }
@@ -323,6 +325,7 @@ async function handleCandidate(line, direction, candidate, agentGetter, now) {
     source: candidate.kind === 'held' ? 'observed-held' : 'observed',
     posted: true,
     postUri: result.uri,
+    evidence: disruption.evidence,
   });
   // Pin the canonical post for this outage. Subsequent ticks see active_post_uri
   // and skip; the eventual clear targets this URI directly.
