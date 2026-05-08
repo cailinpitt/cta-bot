@@ -72,6 +72,29 @@ test('summarizeMotion buckets correctly', () => {
   assert.equal(s.unknown, 1);
 });
 
+test('2 obs over 6 min in the same place → stationary (sparse-ping case)', () => {
+  // A held train's GPS often drops to 1-2 pings before going silent. With
+  // the 2-obs floor the held detector still sees these trains; the prior
+  // 3-obs floor was rejecting them as `unknown`.
+  const recent = [
+    position('train_sparse', 30000, NOW - 6 * 60 * 1000),
+    position('train_sparse', 30050, NOW),
+  ];
+  const m = classifyTrainMotion({ line: 'red', trainLines, recent, now: NOW });
+  assert.equal(m.get('train_sparse').bucket, 'stationary');
+});
+
+test('2 obs over 4 min in the same place → unknown (span gate still applies)', () => {
+  // The 5-min span requirement keeps short same-place samples out — a train
+  // that pinged twice 3 min apart hasn't been still long enough to call held.
+  const recent = [
+    position('train_short', 30000, NOW - 3 * 60 * 1000),
+    position('train_short', 30050, NOW),
+  ];
+  const m = classifyTrainMotion({ line: 'red', trainLines, recent, now: NOW });
+  assert.equal(m.get('train_short').bucket, 'unknown');
+});
+
 test('empty recent → empty map', () => {
   const m = classifyTrainMotion({ line: 'red', trainLines, recent: [], now: NOW });
   assert.equal(m.size, 0);

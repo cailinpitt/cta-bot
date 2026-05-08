@@ -11,6 +11,11 @@ const DEFAULT_HELD_CLUSTER_FT = 1320; // 0.25 mi (~3 city blocks)
 const DEFAULT_HELD_MIN_BUSES = 2;
 const DEFAULT_HELD_MIN_DURATION_MS = 10 * 60 * 1000;
 const DEFAULT_MOVING_VETO_FT = 2640;
+// Within `movingVetoFt`, a single moving bus kills the candidate only when
+// it's also within `MOVING_VETO_CLOSE_FT` of the cluster center. One drift-by
+// at the far edge of the 0.5 mi window doesn't disprove a real hold;
+// ≥2 moving buses anywhere inside the window does.
+const MOVING_VETO_CLOSE_FT = 1320; // 0.25 mi
 const DEFAULT_TERMINAL_GRACE_FT = 1320; // ¼ mi — buses routinely lay over at terminals
 
 function detectHeldBusClusters({
@@ -80,7 +85,13 @@ function detectHeldBusClusters({
     const movingNearCluster = group.moving.filter(
       (m) => Math.abs(m.lastPdist - clusterMidFt) <= movingVetoFt,
     );
-    if (movingNearCluster.length > 0) continue;
+    if (movingNearCluster.length >= 2) continue;
+    if (
+      movingNearCluster.length === 1 &&
+      Math.abs(movingNearCluster[0].lastPdist - clusterMidFt) <= MOVING_VETO_CLOSE_FT
+    ) {
+      continue;
+    }
 
     // Terminal layover suppression. Buses routinely sit at the start/end
     // of a pattern between trips; without pattern length we can't tell a

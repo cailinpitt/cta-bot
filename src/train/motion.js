@@ -5,7 +5,12 @@ const { buildLineBranches, snapToLineWithPerp } = require('./speedmap');
 const { MAX_PERP_FT } = require('./pulse');
 
 const DEFAULT_STATIONARY_FT = 500;
-const DEFAULT_STATIONARY_MIN_OBS = 3;
+// Two pings in the same place over a ≥5 min span is enough to call a train
+// stationary. Demanding three pings was rejecting genuinely-held trains during
+// outages — the failure mode where a held train's GPS goes sparse (or stops
+// entirely) often produces exactly 1-2 obs before silence, which used to fall
+// to 'unknown' and never count toward held-cluster detection.
+const DEFAULT_STATIONARY_MIN_OBS = 2;
 const DEFAULT_STATIONARY_MIN_SPAN_MS = 5 * 60 * 1000;
 const DEFAULT_MOVING_MIN_FT = 500;
 const DEFAULT_MOVING_MIN_OBS = 2;

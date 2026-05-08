@@ -76,6 +76,47 @@ test('2 stationary on same pid + 1 fast-moving through cluster area → drop', (
   assert.equal(candidates.length, 0);
 });
 
+test('1 moving bus inside veto window but >0.25mi from cluster center → admit', () => {
+  // Cluster center ~5400. Moving bus ends at pdist 7500: inside the 2640-ft
+  // veto window (5400+2640 = 8040), outside the 1320-ft close window
+  // (5400+1320 = 6720). One drift-by at the far edge shouldn't kill a real
+  // hold — only ≥2 moving buses or 1 close-in moving bus does. The fromPd
+  // span keeps tail displacement ≥ 8000 ft so the bus actually classifies
+  // as moving rather than 'unknown'.
+  const obs = [
+    ...stationaryBus('a', 'p1', 5000),
+    ...stationaryBus('b', 'p1', 5800),
+    ...movingBus('c', 'p1', -5000, 7500),
+  ];
+  const { candidates } = detectHeldBusClusters({
+    route: '147',
+    observations: obs,
+    headwayMin: 8,
+    patternLengthByPid: DEFAULT_PATTERN_LENGTHS,
+    now: NOW,
+  });
+  assert.equal(candidates.length, 1);
+});
+
+test('2 moving buses inside veto window → drop', () => {
+  // Two moving buses anywhere in the 2640-ft window vetoes — the corridor is
+  // clearly still moving, even if neither is right on top of the cluster.
+  const obs = [
+    ...stationaryBus('a', 'p1', 5000),
+    ...stationaryBus('b', 'p1', 5800),
+    ...movingBus('c', 'p1', -5000, 7500),
+    ...movingBus('d', 'p1', -5500, 7000),
+  ];
+  const { candidates } = detectHeldBusClusters({
+    route: '147',
+    observations: obs,
+    headwayMin: 8,
+    patternLengthByPid: DEFAULT_PATTERN_LENGTHS,
+    now: NOW,
+  });
+  assert.equal(candidates.length, 0);
+});
+
 test('2 stationary on same pid + 1 fast-moving > 2640ft away → admit', () => {
   const obs = [
     ...stationaryBus('a', 'p1', 5000),

@@ -454,7 +454,44 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       continue;
     }
 
-    candidates.push({
+    // Inferred-held reclassification: the strict held detector requires ≥2
+    // trains visibly stationary together for ≥10 min, but the dominant real-
+    // world held failure is "trains held in place, then GPS goes silent" —
+    // exactly what trips the cold detector. Recover that case by checking
+    // whether any train's trajectory ENDS inside this cold run with low
+    // displacement over its tail. If so, relabel the candidate as `held` so
+    // the pipeline records `observed-held` and the post says trains are
+    // stuck rather than missing.
+    const INFERRED_TAIL_MS = 10 * 60 * 1000;
+    const INFERRED_STATIONARY_FT = 500;
+    const INFERRED_MIN_TAIL_SPAN_MS = 5 * 60 * 1000;
+    let inferredHeld = null;
+    for (const [rn, traj] of trajByRun) {
+      if (traj.length < 2) continue;
+      const sorted = [...traj].sort((a, b) => a.ts - b.ts);
+      const last = sorted[sorted.length - 1];
+      if (last.along < runLoFt || last.along > runHiFt) continue;
+      const tail = sorted.filter((p) => last.ts - p.ts <= INFERRED_TAIL_MS);
+      if (tail.length < 2) continue;
+      let minA = Infinity;
+      let maxA = -Infinity;
+      for (const p of tail) {
+        if (p.along < minA) minA = p.along;
+        if (p.along > maxA) maxA = p.along;
+      }
+      const tailSpanMs = last.ts - tail[0].ts;
+      if (maxA - minA <= INFERRED_STATIONARY_FT && tailSpanMs >= INFERRED_MIN_TAIL_SPAN_MS) {
+        if (
+          !inferredHeld ||
+          tailSpanMs > inferredHeld.lastStationaryMs ||
+          (tailSpanMs === inferredHeld.lastStationaryMs && last.ts > inferredHeld.lastSeenTs)
+        ) {
+          inferredHeld = { rn, lastStationaryMs: tailSpanMs, lastSeenTs: last.ts };
+        }
+      }
+    }
+
+    const candidate = {
       line,
       direction: directionKeyFor(branches, branchIdx, directionHint),
       directionHint: directionHint || null,
@@ -475,7 +512,19 @@ function detectDeadSegments({ line, trainLines, stations, headwayMin, now, opts 
       expectedTrains,
       headwayMin: headwayMin != null ? headwayMin : null,
       directionDestinationName,
-    });
+    };
+    if (inferredHeld) {
+      candidate.kind = 'held';
+      candidate.heldEvidence = {
+        inferredFromCold: true,
+        trainCount: 1,
+        stationaryMs: inferredHeld.lastStationaryMs,
+        cohesionFt: 0,
+        trainRns: [inferredHeld.rn],
+        lastSeenTs: inferredHeld.lastSeenTs,
+      };
+    }
+    candidates.push(candidate);
   }
 
   if (allBranchesSparse && candidates.length === 0 && branches.length > 0) {

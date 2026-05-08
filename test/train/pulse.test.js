@@ -127,6 +127,91 @@ test('flags a real outage when coverage and span gates are met', () => {
   assert.ok(c.runLoFt > 25000 && c.runHiFt < 50000);
 });
 
+test('inferred-held: train pinged into cold run, sat, then went silent → kind=held', () => {
+  const now = 1_700_000_000_000;
+  const stations = buildStations();
+  const recent = [];
+  // Cover both ends of the line so the cold run sits in the middle.
+  for (let ft = 6000; ft <= 22000; ft += 2000) recent.push(position(ft, now - 2 * 60 * 1000));
+  for (let ft = 55000; ft <= 74000; ft += 2000) recent.push(position(ft, now - 3 * 60 * 1000));
+  // A held train pinged into the cold run earlier, sat for ~6 min, then went
+  // silent ~20 min ago. The cold detector sees the run as cold (no recent
+  // pings); the inferred-held check should still find this train's stationary
+  // tail and relabel.
+  const heldStart = now - 26 * 60 * 1000;
+  const heldEnd = now - 20 * 60 * 1000;
+  const heldFt = 36000;
+  const p = pointAtFt(TOTAL_FT, heldFt);
+  recent.push({ ts: heldStart, lat: p.lat, lon: p.lon, rn: 'held1', trDr: '1' });
+  recent.push({ ts: heldEnd, lat: p.lat, lon: p.lon, rn: 'held1', trDr: '1' });
+
+  const { candidates } = detectDeadSegments({
+    line: 'red',
+    observations: [],
+    trainLines,
+    stations,
+    headwayMin: 7,
+    now,
+    opts: {
+      recentPositions: recent,
+      minRunFt: 5000,
+      minCoverageFrac: 0,
+      minSpanFrac: 0,
+      lookbackMs: 30 * 60 * 1000,
+    },
+  });
+
+  assert.ok(candidates.length >= 1);
+  const c = candidates[0];
+  assert.equal(c.kind, 'held');
+  assert.ok(c.heldEvidence);
+  assert.equal(c.heldEvidence.inferredFromCold, true);
+  assert.ok(c.heldEvidence.stationaryMs >= 5 * 60 * 1000);
+});
+
+test('inferred-held: train traversed the cold run before silence → stays cold', () => {
+  const now = 1_700_000_000_000;
+  const stations = buildStations();
+  const recent = [];
+  for (let ft = 6000; ft <= 22000; ft += 2000) recent.push(position(ft, now - 2 * 60 * 1000));
+  for (let ft = 55000; ft <= 74000; ft += 2000) recent.push(position(ft, now - 3 * 60 * 1000));
+  // A train that drove through and out — last position is past the cold run.
+  recent.push({
+    ts: now - 25 * 60 * 1000,
+    ...pointAtFt(TOTAL_FT, 30000),
+    rn: 'thru',
+    trDr: '1',
+  });
+  recent.push({
+    ts: now - 22 * 60 * 1000,
+    ...pointAtFt(TOTAL_FT, 50000),
+    rn: 'thru',
+    trDr: '1',
+  });
+
+  const { candidates } = detectDeadSegments({
+    line: 'red',
+    observations: [],
+    trainLines,
+    stations,
+    headwayMin: 7,
+    now,
+    opts: {
+      recentPositions: recent,
+      minRunFt: 5000,
+      minCoverageFrac: 0,
+      minSpanFrac: 0,
+      lookbackMs: 30 * 60 * 1000,
+    },
+  });
+
+  // Either it became cold (no held inference) or no candidate; what we care
+  // about is `kind` is not set to 'held'.
+  for (const c of candidates) {
+    assert.notEqual(c.kind, 'held');
+  }
+});
+
 test('ignores terminal zones at both ends', () => {
   const now = 1_700_000_000_000;
   const stations = buildStations();

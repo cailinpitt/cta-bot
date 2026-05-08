@@ -13,6 +13,11 @@ const DEFAULT_HELD_CLUSTER_FT = 5280; // 1 mi
 const DEFAULT_HELD_MIN_TRAINS = 2;
 const DEFAULT_HELD_MIN_DURATION_MS = 10 * 60 * 1000;
 const DEFAULT_MOVING_VETO_FT = 5280;
+// Within `movingVetoFt`, a single moving train kills the candidate only when
+// it's also within `MOVING_VETO_CLOSE_FT` of the cluster center. One drift-by
+// at the far edge of the 1 mi window doesn't disprove a real hold; ≥2 moving
+// trains anywhere inside the window does.
+const MOVING_VETO_CLOSE_FT = 2640; // 0.5 mi
 
 function detectHeldClusters({ line, trainLines, stations, headwayMin, now, recent, opts = {} }) {
   const clusterFt = opts.clusterFt || DEFAULT_HELD_CLUSTER_FT;
@@ -81,7 +86,13 @@ function detectHeldClusters({ line, trainLines, stations, headwayMin, now, recen
     const movingNearCluster = moving.filter(
       (m) => Math.abs(m.along - clusterMidFt) <= movingVetoFt,
     );
-    if (movingNearCluster.length > 0) continue;
+    if (movingNearCluster.length >= 2) continue;
+    if (
+      movingNearCluster.length === 1 &&
+      Math.abs(movingNearCluster[0].along - clusterMidFt) <= MOVING_VETO_CLOSE_FT
+    ) {
+      continue;
+    }
 
     const zoneFt = terminalZoneFt(totalFt);
     if (clusterLoFt < zoneFt || clusterHiFt > totalFt - zoneFt) continue;
