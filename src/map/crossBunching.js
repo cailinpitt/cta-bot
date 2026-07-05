@@ -1,4 +1,4 @@
-// Cross-route bunching map — a pileup involving multiple routes/lines at one
+// Cross-route bunching map — a cluster involving multiple routes/lines at one
 // spot. Unlike the per-route bunching map (which traces one pattern's polyline
 // with origin/dest glyphs), this is an intersection view centered on the
 // cluster centroid: each vehicle is a bus/train marker colored by its route,
@@ -46,7 +46,7 @@ const ROUTE_PATH_HALO_STROKE = 11;
 const ROUTE_PATH_CORE_STROKE = 6;
 const ROUTE_PATH_HALO_COLOR = '000';
 // Grow the clip past the visible frame so route lines that continue beyond the
-// pileup always run fully off every edge rather than stopping at the border.
+// cluster always run fully off every edge rather than stopping at the border.
 const FRAME_CLIP_MARGIN = 0.35;
 
 function colorForIndex(i) {
@@ -97,9 +97,10 @@ function computeCrossView(points) {
     minLon: Math.min(...lons),
     maxLon: Math.max(...lons),
   };
-  // Pad so a tight pileup isn't max-zoomed into a blank patch of map.
-  const padLat = Math.max((bbox.maxLat - bbox.minLat) * 0.6, 0.0025);
-  const padLon = Math.max((bbox.maxLon - bbox.minLon) * 0.6, 0.0025);
+  // Pad so a tight cluster isn't max-zoomed into a blank patch of map; the min
+  // floor handles a 0-span cluster (all vehicles close together at one stop).
+  const padLat = Math.max((bbox.maxLat - bbox.minLat) * 0.25, 0.0025);
+  const padLon = Math.max((bbox.maxLon - bbox.minLon) * 0.25, 0.0025);
   const padded = {
     minLat: bbox.minLat - padLat,
     maxLat: bbox.maxLat + padLat,
@@ -108,14 +109,16 @@ function computeCrossView(points) {
   };
   const centerLat = (padded.minLat + padded.maxLat) / 2;
   const centerLon = (padded.minLon + padded.maxLon) / 2;
-  const zoom = Math.max(12, Math.min(17, Math.floor(fitZoom(padded, WIDTH, HEIGHT, 90))));
+  // Fractional zoom (Mapbox static accepts it) — flooring dropped up to a full
+  // level, doubling the ground area and leaving a wide cluster tiny in the frame.
+  const zoom = Math.max(12, Math.min(17, fitZoom(padded, WIDTH, HEIGHT, 90)));
   return { centerLat, centerLon, zoom, bbox: padded };
 }
 
 // Geographic bounds of the rendered frame, recovered from its center + zoom and
 // grown by `margin` (fraction of the frame) on every side. Clipping route lines
 // to *this* — the actual viewport, not the data bbox — is what guarantees a line
-// that continues past the pileup runs all the way off every edge, at any zoom.
+// that continues past the cluster runs all the way off every edge, at any zoom.
 function frameBounds(view, margin = FRAME_CLIP_MARGIN) {
   const worldSize = TILE_SIZE * 2 ** view.zoom;
   const cx = lonToX(view.centerLon);

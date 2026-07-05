@@ -49,9 +49,9 @@ async function main() {
     );
   }
 
-  // Trains already covered by a recently-posted cross-line pileup (the
+  // Trains already covered by a recently-posted cross-line cluster (the
   // cross-bunching bin runs just before this one). A per-line candidate that is
-  // mostly the same trains is the same physical pileup — suppress this one.
+  // mostly the same trains is the same physical cluster — suppress this one.
   const crossClaimed = argv['dry-run'] ? new Set() : history.recentCrossBunchMemberIds();
 
   // Two cooldown layers: line+direction (specific) and line-wide (prevents
@@ -69,7 +69,7 @@ async function main() {
       const overlap = candidate.trains.filter((t) => crossClaimed.has(String(t.rn))).length;
       if (overlap >= 2) {
         console.log(
-          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${overlap} trains already covered by a cross-line pileup`,
+          `  skip ${LINE_NAMES[candidate.line]} ${candidate.trDr}: ${overlap} trains already covered by a cross-line cluster`,
         );
         history.recordBunching({
           kind: 'train',

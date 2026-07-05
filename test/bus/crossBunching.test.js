@@ -14,7 +14,7 @@ const dLatForFt = (ft) => ft / FT_PER_MILLIDEG_LAT / 1000;
 const at = (vid, route, ft, extra = {}) =>
   bus({ vid, route, pid: `p${route}`, lat: 41.9 + dLatForFt(ft), lon: -87.65, ...extra });
 
-test('detects a multi-route pileup (2 routes, 3 buses)', () => {
+test('detects a multi-route cluster (2 routes, 3 buses)', () => {
   const vs = [at('a', '22', 0), at('b', '22', 200), at('c', '36', 400)];
   const [bunch] = detectCrossRouteBunches(vs, { now: FRESH });
   assert.equal(bunch.vehicles.length, 3);
@@ -32,7 +32,7 @@ test('ignores a multi-route cluster below the vehicle minimum', () => {
   assert.equal(detectCrossRouteBunches(vs, { now: FRESH }).length, 0);
 });
 
-test('separates two distant pileups and ranks larger first', () => {
+test('separates two distant clusters and ranks larger first', () => {
   const vs = [
     at('a', '22', 0),
     at('b', '36', 200),

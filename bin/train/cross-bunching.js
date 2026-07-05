@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Cross-line train bunching: a pileup at one spot involving 2+ lines (e.g. the
-// shared Loop track — Brown/Orange/Pink/Purple stacked at Tower 18). detect →
+// Cross-line train bunching: a cluster at one spot involving 2+ lines (e.g. the
+// shared Loop track — Brown/Orange/Pink/Purple close together at Tower 18). detect →
 // render station map → post (train account), keyed on the PLACE. Runs just
-// before bin/train/bunching.js so its posted pileups suppress the per-line post
+// before bin/train/bunching.js so its posted clusters suppress the per-line post
 // for the same trains. Replies with a ~10-min timelapse (from observation
 // history). Supports --dry-run.
 require('../../src/shared/env');
@@ -124,7 +124,7 @@ async function main() {
     console.log('No cross-line train bunching detected');
     return;
   }
-  console.log(`Found ${clusters.length} candidate cross-line pileup(s)`);
+  console.log(`Found ${clusters.length} candidate cross-line cluster(s)`);
 
   let chosen = null;
   let placeKey = null;
@@ -174,7 +174,8 @@ async function main() {
   const callouts = history.bunchingCallouts({
     kind: 'train-multi',
     route: placeKey,
-    routeLabel: placeName ? `pileup at ${placeName}` : 'multi-line pileup',
+    routeLabel: placeName ? `cluster at ${placeName}` : 'multi-line cluster',
+    calloutNoun: '',
     vehicleCount: chosen.trains.length,
     severityFt: chosen.spanFt,
   });

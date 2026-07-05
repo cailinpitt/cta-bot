@@ -11,7 +11,7 @@ test('headline names the place and line count; groups trains by line', () => {
   const ts = [at('801', 'brn', 0), at('900', 'org', 300), at('901', 'org', 600)];
   const [cluster] = detectCrossLineBunches(ts);
   const text = buildPostText(cluster, { placeName: 'the Loop' }, []);
-  assert.match(text, /3 trains from 2 lines stacked up at the Loop/);
+  assert.match(text, /3 trains from 2 lines are close together at the Loop right now/);
   assert.match(text, /Orange Line:/);
   assert.match(text, /Brown Line:/);
   assert.match(text, /#900 \(1️⃣\)/);

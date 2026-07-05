@@ -321,7 +321,7 @@ function db() {
     _db.exec('ALTER TABLE cooldowns ADD COLUMN expires_at INTEGER');
   }
   // member_ids = JSON array of the vehicle/run ids in a cross-route bunch,
-  // used to suppress the per-route post for the same pileup (see crossBunching).
+  // used to suppress the per-route post for the same cluster (see crossBunching).
   const bunchingCols = _db
     .prepare('PRAGMA table_info(bunching_events)')
     .all()
@@ -1655,7 +1655,7 @@ function recordBunching(
 
 // The vehicle/run ids in cross-route bunches (`kind` ending in `-multi`) posted
 // within `withinMs`. The per-route bunching bins consult this to suppress the
-// per-route post for a pileup the cross-route bin already covered.
+// per-route post for a cluster the cross-route bin already covered.
 function recentCrossBunchMemberIds({ withinMs = 10 * 60 * 1000 } = {}, now = Date.now()) {
   const rows = db()
     .prepare(`
@@ -1719,7 +1719,10 @@ function recordSpeedmap(
 //
 // Severity semantics: for buses larger vehicle_count wins (tiebreak on span),
 // for trains smaller severity_ft (the inter-train distance) wins.
-function bunchingCallouts({ kind, route, routeLabel, vehicleCount, severityFt }, now = Date.now()) {
+function bunchingCallouts(
+  { kind, route, routeLabel, calloutNoun = 'bunch', vehicleCount, severityFt },
+  now = Date.now(),
+) {
   const out = [];
   const startOfDay = chicagoStartOfDay(now);
   const todayCount = db()
@@ -1730,7 +1733,9 @@ function bunchingCallouts({ kind, route, routeLabel, vehicleCount, severityFt },
     .get(kind, route, startOfDay).c;
   const nth = todayCount + 1;
   if (nth >= 2) {
-    const label = routeLabel ? `${routeLabel} bunch` : 'bunch';
+    // routeLabel already reads as a full noun phrase for cross-route (calloutNoun
+    // '') — "cluster near X"; per-route appends the default "bunch".
+    const label = [routeLabel, calloutNoun].filter(Boolean).join(' ') || 'bunch';
     out.push(`${ordinal(nth)} ${label} reported today`);
   }
 
@@ -1858,7 +1863,7 @@ function formatCallouts(callouts) {
 }
 
 // Soft cap: a chronically-bad route gets `cap` posts/day, but a strictly-more-
-// severe escalation ("3-bus pileup → 6") still gets through.
+// severe escalation ("3-bus cluster → 6") still gets through.
 // Records the highest vehicle_count ever posted for `kind` (across all
 // routes / lines). Used by the post-text builder to award a 🥇 medal when a
 // new record is set. Excludes the current event itself by virtue of

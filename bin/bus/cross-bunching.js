@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Cross-route bus bunching: a pileup at one spot involving 2+ routes (e.g.
-// 2 #22 + 3 #36 stacked at Clark & Belmont). detect → render intersection map →
+// Cross-route bus bunching: a cluster at one spot involving 2+ routes (e.g.
+// 2 #22 + 3 #36 close together at Clark & Belmont). detect → render intersection map →
 // post (bus account), with the bunching incident lifecycle keyed on the PLACE
 // instead of a route. Runs just before bin/bus/bunching.js so its posted
-// pileups suppress the per-route post for the same buses. Replies with a
-// ~10-min timelapse of the pileup (from observation history). Supports --dry-run.
+// clusters suppress the per-route post for the same buses. Replies with a
+// ~10-min timelapse of the cluster (from observation history). Supports --dry-run.
 require('../../src/shared/env');
 
 const argv = require('minimist')(process.argv.slice(2));
@@ -46,7 +46,7 @@ function placeKeyFor(centroid) {
 // Layover gate: a parked bus sitting at its pattern terminal (start-of-run or
 // end-of-run) is between trips, not stuck in traffic — and several routes lay
 // over together at the same transit center (e.g. Midway, where 47/55/63 all
-// terminate), which otherwise reads as a multi-route street pileup. Returns the
+// terminate), which otherwise reads as a multi-route street cluster. Returns the
 // subset of `vehicles` (vids) to drop before clustering. Pattern lengths come
 // from the cached pattern loader; lookups are memoized per pid.
 //
@@ -74,7 +74,7 @@ async function findLayoverVids(vehicles, stoppedIds) {
   return layoverIds;
 }
 
-// Name the pileup by the nearest stop across the involved routes' patterns
+// Name the cluster by the nearest stop across the involved routes' patterns
 // (CTA has no global stop list; stops live on patterns). Best-effort — returns
 // null when nothing is close, and the post just drops the "near X" clause.
 async function placeNameForCluster(cluster) {
@@ -97,7 +97,7 @@ async function placeNameForCluster(cluster) {
 }
 
 // Route-line overlays for the map: for each route group, draw the pattern the
-// pileup is actually sitting on. We pick the clustered bus of that route nearest
+// cluster is actually sitting on. We pick the clustered bus of that route nearest
 // the centroid and load its pattern (buses in a bunch share a pid, so any of
 // them resolves the same line through the corner). groupIndex matches the disc
 // color so each line ties to its vehicles + legend. Best-effort — a route whose
@@ -176,13 +176,13 @@ async function main() {
           now: nowMs,
         })
       : [];
-    if (closed.length > 0) console.log(`Resolved ${closed.length} open cross-route bus pileup(s)`);
+    if (closed.length > 0) console.log(`Resolved ${closed.length} open cross-route bus cluster(s)`);
   }
   if (clusters.length === 0) {
     console.log('No cross-route bus bunching detected');
     return;
   }
-  console.log(`Found ${clusters.length} candidate cross-route pileup(s)`);
+  console.log(`Found ${clusters.length} candidate cross-route cluster(s)`);
 
   let chosen = null;
   let placeKey = null;
@@ -232,7 +232,8 @@ async function main() {
   const callouts = history.bunchingCallouts({
     kind: 'bus-multi',
     route: placeKey,
-    routeLabel: placeName ? `pileup near ${placeName}` : 'multi-route pileup',
+    routeLabel: placeName ? `cluster near ${placeName}` : 'multi-route cluster',
+    calloutNoun: '',
     vehicleCount: chosen.vehicles.length,
     severityFt: chosen.spanFt,
   });

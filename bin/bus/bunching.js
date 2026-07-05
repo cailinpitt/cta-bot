@@ -65,9 +65,9 @@ async function main() {
     return;
   }
 
-  // Vehicles already covered by a recently-posted cross-route pileup (the
+  // Vehicles already covered by a recently-posted cross-route cluster (the
   // cross-bunching bin runs just before this one). A per-route candidate that
-  // is mostly the same buses is the same physical pileup — the multi-route post
+  // is mostly the same buses is the same physical cluster — the multi-route post
   // is the better story, so suppress this one. See src/bus/crossBunching.js.
   const crossClaimed = argv['dry-run'] ? new Set() : history.recentCrossBunchMemberIds();
 
@@ -88,7 +88,7 @@ async function main() {
   for (const candidate of bunches) {
     // A real bunch is moving vehicles that caught up to each other. If fewer
     // than 2 of the clustered buses are actually moving (the rest confirmed
-    // parked), it's a knot of stopped buses, not a pileup — skip without
+    // parked), it's a knot of stopped buses, not a cluster — skip without
     // recording, so stale clusters don't pollute analytics or the feed.
     const movingCount = candidate.vehicles.filter((v) => !parkedVids.has(v.vid)).length;
     if (movingCount < 2) {
@@ -123,12 +123,12 @@ async function main() {
       continue;
     }
 
-    // Suppress when a cross-route pileup already covered ≥2 of these buses.
+    // Suppress when a cross-route cluster already covered ≥2 of these buses.
     if (!argv['dry-run']) {
       const overlap = candidate.vehicles.filter((v) => crossClaimed.has(String(v.vid))).length;
       if (overlap >= 2) {
         console.log(
-          `  skip pid ${candidate.pid}: ${overlap} buses already covered by a cross-route pileup`,
+          `  skip pid ${candidate.pid}: ${overlap} buses already covered by a cross-route cluster`,
         );
         history.recordBunching({
           kind: 'bus',

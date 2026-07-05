@@ -1,7 +1,7 @@
 // Geographic clustering primitive — the substrate for cross-route bunching.
 //
 // Every along-route detector (src/{bus,train}/bunching.js) groups by a single
-// pattern/line and measures distance ALONG that route. That can't see a pileup
+// pattern/line and measures distance ALONG that route. That can't see a cluster
 // where vehicles from *different* routes converge on one spot — a #22 at
 // pdist 12,000 and a #36 at pdist 3,000 can sit at the same corner, but their
 // pdists live in different coordinate systems. Cross-route bunching is therefore

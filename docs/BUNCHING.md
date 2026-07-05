@@ -68,7 +68,7 @@ The chosen cluster is rendered as a map showing the line with each train marked 
 
 A successful post records the pid (or line/trDr) on cooldown so we don't keep firing on the same incident. Pattern-level *and* route-level cooldowns exist for buses; line-level cooldowns for trains. There's also a daily cap (3 bus bunches/day) so a bad day doesn't drown the feed.
 
-Both the daily cap and the route/line-level cooldown carry a strict-dominance override: a candidate that's strictly worse than every prior post within the window (more vehicles, or same count + larger span for buses; tighter span for trains) bypasses the gate. A 3-bus pileup at 3 PM shouldn't suppress a 5-bus pileup at 3:30 PM on the same route. The pid (bus) and direction (train) cooldowns stay strict — same direction within the hour is almost always the same incident.
+Both the daily cap and the route/line-level cooldown carry a strict-dominance override: a candidate that's strictly worse than every prior post within the window (more vehicles, or same count + larger span for buses; tighter span for trains) bypasses the gate. A 3-bus cluster at 3 PM shouldn't suppress a 5-bus cluster at 3:30 PM on the same route. The pid (bus) and direction (train) cooldowns stay strict — same direction within the hour is almost always the same incident.
 
 ### Timelapse video
 
@@ -107,8 +107,8 @@ than fading (`turnaroundPark`).
 ## Cross-route / cross-line bunching
 
 The detectors above are *per-route*: each groups by one pattern/line and measures
-distance **along that route**. They can't see a pileup where vehicles from
-*different* routes converge on one spot — 2 #22 + 3 #36 stacked at Clark &
+distance **along that route**. They can't see a cluster where vehicles from
+*different* routes converge on one spot — 2 #22 + 3 #36 close together at Clark &
 Belmont, or Brown/Orange/Pink trains knotted on the shared Loop track. A #22 at
 `pdist 12,000` and a #36 at `pdist 3,000` can sit at the same corner, but those
 pdists are different coordinate systems, so the per-route sweep never compares
@@ -123,10 +123,10 @@ keep clusters that pass three gates:
 
 1. **≥ 2 distinct routes/lines** — otherwise it's ordinary bunching the
    per-route detector already catches.
-2. **≥ 3 vehicles** — a pileup, not one bus meeting another.
+2. **≥ 3 vehicles** — a cluster, not one bus meeting another.
 3. **Congestion** — ≥ 2 members must be confirmed barely-moving (buses via
    `findParkedBusVids`; trains via recent-position drift < ~350 ft). This is what
-   separates a real pileup from vehicles merely crossing the same junction in
+   separates a real cluster from vehicles merely crossing the same junction in
    motion.
 
 Radius defaults: **660 ft** bus (~an intersection + its approaches), **1,500 ft**
@@ -138,7 +138,7 @@ tie-break tightest span.
 Rail stations double as bus terminals (Midway, 95th/Dan Ryan, Jefferson Park, …)
 where several routes lay over between trips — e.g. 47 + 55 + 63 all terminate at
 **Midway**. Those parked buses pass all three gates above and read as a
-multi-route pileup, so the bus bin tags **layover buses and drops them before
+multi-route cluster, so the bus bin tags **layover buses and drops them before
 clustering** (`detectCrossRouteBunches` accepts a `layoverIds` set;
 `findLayoverVids` builds it). A parked bus is a layover when its `pdist` sits
 within `LAYOVER_TERMINAL_FT` (750 ft) of either end of its pattern
@@ -167,7 +167,7 @@ place** (rounded centroid / nearest stop) under a new `kind` (`bus-multi` /
 **Route lines under the discs.** Like the per-route bunching maps, the still
 image and the timelapse draw each involved route's polyline baked into the
 Mapbox base map as a `path-` overlay (black halo + a route-colored core), so a
-viewer sees the lines that are actually converging on the pileup, not just a
+viewer sees the lines that are actually converging on the cluster, not just a
 floating cluster of discs. The bins source the geometry per group — buses load
 the pattern (`loadPattern(pid)`) the route's nearest-to-centroid clustered bus
 is on; trains use `buildLinePolyline(trainLines, line)` — and hand it to the map
@@ -178,7 +178,7 @@ as `routePaths: [{ points, groupIndex }]`.
 - **Clips to the visible frame**, grown ~35% on each side (`clipPathToView` →
   `frameBounds`, which recovers the rendered viewport's lat/lon from its
   center + zoom). Keeping one point past each boundary crossing means a route
-  that continues beyond the pileup runs all the way *off* every edge instead of
+  that continues beyond the cluster runs all the way *off* every edge instead of
   stopping short — at any zoom, including the wider window the video frames over.
 - **Thins** the survivors to ≤ 120 vertices (`thinPolylinePoints`) so a dense
   GTFS shape (a vertex every few feet) doesn't blow the Mapbox static URL length
@@ -199,8 +199,8 @@ The cross-route bin runs **1 minute before** the per-route bin (see
 `cron/crontab.txt`). When it posts, it records the cluster's member vehicle/run
 ids (`bunching_events.member_ids`). The per-route bins consult
 `history.recentCrossBunchMemberIds()` and **skip** any candidate that shares ≥ 2
-vehicles with a recently-posted pileup — the multi-route post is the better
-story, so the same physical pileup is never posted twice.
+vehicles with a recently-posted cluster — the multi-route post is the better
+story, so the same physical cluster is never posted twice.
 
 Each cross-route post replies with a ~10-min timelapse
 (`src/map/crossBunchingVideo.js`). Since the cluster spans routes there's no

@@ -6,7 +6,7 @@ const FT_PER_MILLIDEG_LAT = 365;
 const dLatForFt = (ft) => ft / FT_PER_MILLIDEG_LAT / 1000;
 const at = (rn, line, ft) => ({ rn, line, lat: 41.88 + dLatForFt(ft), lon: -87.63 });
 
-test('detects a multi-line pileup on the Loop (Brn + Org + Pink)', () => {
+test('detects a multi-line cluster on the Loop (Brn + Org + Pink)', () => {
   const ts = [at('801', 'Brn', 0), at('802', 'Org', 300), at('803', 'Pink', 600)];
   const [bunch] = detectCrossLineBunches(ts);
   assert.equal(bunch.trains.length, 3);

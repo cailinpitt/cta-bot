@@ -1,5 +1,5 @@
-// Cross-route bus bunching — a pileup at one spot involving 2+ routes
-// (e.g. 2 #22 + 3 #36 stacked at Clark & Belmont). The per-pattern detector in
+// Cross-route bus bunching — a cluster at one spot involving 2+ routes
+// (e.g. 2 #22 + 3 #36 close together at Clark & Belmont). The per-pattern detector in
 // bunching.js can't see this: each route's pdist is a separate coordinate
 // system, so it never compares a #22 against a #36. Here we cluster purely on
 // geography (lat/lon) across ALL routes, then require the cluster to span 2+
@@ -7,14 +7,14 @@
 const { clusterByProximity, clusterStats } = require('../shared/geoClusters');
 
 const CROSS_RADIUS_FT = 660; // ~2 city blocks — an intersection + its approaches
-const MIN_VEHICLES = 3; // a pileup, not just one bus meeting another
+const MIN_VEHICLES = 3; // a cluster, not just one bus meeting another
 const MIN_ROUTES = 2; // the whole point: distinct routes, else regular bunching catches it
-const MIN_STOPPED = 2; // congestion evidence — real pileup, not vehicles crossing in motion
+const MIN_STOPPED = 2; // congestion evidence — real cluster, not vehicles crossing in motion
 const STALE_MS = 3 * 60 * 1000;
 // Layover zone — a bus sitting at the start/end of its pattern is between trips,
 // not pinned in street traffic. Several routes lay over together at the same
 // transit center (e.g. Midway, where 47/55/63 all terminate), which otherwise
-// reads as a multi-route "pileup". The bin tags these (parked AND at a terminal)
+// reads as a multi-route "cluster". The bin tags these (parked AND at a terminal)
 // as layoverIds; we drop them before clustering. (CTA omits a "near any 'L'
 // station" signal — downtown stations are 30–400 ft apart, so it would blanket
 // the Loop; see bin/bus/cross-bunching.js.)
@@ -33,7 +33,7 @@ function isAtTerminal(pdistFt, lengthFt, marginFt = LAYOVER_TERMINAL_FT) {
 // congestion gate. Omit it to detect on geometry alone (tests / diagnostics).
 // `layoverIds` is a Set of vids the caller classified as laying over (parked at
 // a pattern terminal); they're dropped before clustering so a knot of routes
-// resting at a transit center doesn't read as a street pileup.
+// resting at a transit center doesn't read as a street cluster.
 // Returns clusters best-first: most vehicles, tie-break tightest span.
 function detectCrossRouteBunches(
   vehicles,
