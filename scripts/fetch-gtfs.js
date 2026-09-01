@@ -110,6 +110,43 @@ function median(arr) {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+// Cap on the reported headway: past this, service has effectively stopped and
+// the exact number doesn't matter to any consumer.
+const MAX_MEANINGFUL_GAP_MIN = 90;
+
+// The headway a rider actually experiences during `hour`, from the pattern's
+// full-day sorted first-departure list (seconds since service-day start). For a
+// rider arriving at a uniformly-random second of the hour that has service
+// ahead of it, integrate the wait until the next departure; the experienced
+// headway is twice that mean wait. This reads the real spacing whether the hour
+// clusters departures then goes quiet (Route 9 NB 2 PM: 7 buses in :39–:59 after
+// a 25-min hole — a median-of-gaps reads 5.5 min, a rider at :20 waits ~19) or
+// starts raggedly (one 4 AM tripper then frequent service from 7:28 — the long
+// pre-service gap isn't a 3-hour headway, a 7:15 rider waits 13 min). Windows
+// cover the after-midnight wrap (a "25:xx" owl departure is display hour 1).
+function occupancyWeightedHeadwayMin(sortedDeps, hour) {
+  const windows = [
+    [hour * 3600, hour * 3600 + 3600],
+    [(hour + 24) * 3600, (hour + 24) * 3600 + 3600],
+  ];
+  let coveredSec = 0;
+  let waitIntegral = 0; // ∫ (nextDeparture − t) dt over the covered seconds
+  for (let i = 1; i < sortedDeps.length; i++) {
+    const d0 = sortedDeps[i - 1];
+    const d1 = sortedDeps[i];
+    if (d1 <= d0) continue;
+    for (const [ws, we] of windows) {
+      const a = Math.max(d0, ws);
+      const b = Math.min(d1, we);
+      if (b <= a) continue;
+      coveredSec += b - a;
+      waitIntegral += d1 * (b - a) - (b * b - a * a) / 2;
+    }
+  }
+  if (coveredSec <= 0) return null;
+  return Math.min((2 * waitIntegral) / coveredSec / 60, MAX_MEANINGFUL_GAP_MIN);
+}
+
 const DOW_COL = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 function ymdToDate(ymd) {
@@ -379,6 +416,33 @@ async function main() {
   const stops = parseCsv(await readFromZip('stops.txt'));
   const byStopId = new Map(stops.map((s) => [s.stop_id, s]));
 
+  // Within each day-type, collapse schedule-identical trips (same route,
+  // direction, terminals, exact times) to one: across a schedule change CTA can
+  // publish the outgoing and incoming service_id family with overlapping date
+  // ranges, both classed the same day-type, which would otherwise double every
+  // active count and headway sample for the ~1–2 week overlap. A run that
+  // operates *both* weekdays and Saturdays is two different services and is
+  // NOT collapsed — the signature is scoped per day-type.
+  const seenSig = new Map(); // dayType -> Set<sig>
+  let dupSamples = 0;
+  for (const [tripId, meta] of [...tripMeta]) {
+    const sig = `${meta.route}|${meta.dir}|${firstDeparture.get(tripId)}|${lastArrival.get(tripId)}|${firstStopId.get(tripId)}|${lastStopId.get(tripId)}`;
+    const keep = new Set();
+    for (const dt of meta.dayTypes) {
+      if (!seenSig.has(dt)) seenSig.set(dt, new Set());
+      if (seenSig.get(dt).has(sig)) {
+        dupSamples++;
+        continue;
+      }
+      seenSig.get(dt).add(sig);
+      keep.add(dt);
+    }
+    if (keep.size === 0) tripMeta.delete(tripId);
+    else meta.dayTypes = keep;
+  }
+  if (dupSamples)
+    console.log(`  collapsed ${dupSamples} duplicate trip-samples across service families`);
+
   writeScheduleDb({ busTripStops, tripMeta, firstDeparture, byStopId });
 
   // Concurrent service_ids (daytime + Owl) overlap one dayType — resolve
@@ -426,17 +490,18 @@ async function main() {
     }
   }
 
-  // Headway/duration are measured PER PATTERN — grouped by (origin terminal →
-  // destination terminal) — not per direction. Mixing patterns in one bucket
-  // corrupts the median: owl short-turns made the 66 read ~6 min when the
-  // through service is 30, and a route with two start terminals (87) collapsed
-  // to <1 min by comparing departures from different terminals. With origin and
-  // dest in the key each group is a single pattern, so first-departure gaps are
-  // meaningful again. Cross-date-range family dupes are still removed via
-  // dominantService; garage pull-outs/deadheads form their own tiny groups and
-  // are dropped at emit time by MIN_PATTERN_TRIPS.
-  const headwayBuckets = new Map(); // route|dir|origin|dest|dayType|hour → [dep,...]
-  const durationBuckets = new Map(); // same key → [durMin,...]
+  // Collect first-departure times PER PATTERN — grouped by (origin terminal →
+  // destination terminal), not per direction. A direction runs several patterns
+  // at once (a through route plus owl short-turns or branches); mixing their
+  // departures corrupted the old per-direction median — owl short-turns made the
+  // 66 read ~6 min against a true 30, and a route with two start terminals (87)
+  // collapsed to <1 min. Each per-hour headway (below) is then the occupancy-
+  // weighted spacing over the pattern's whole-day list; the direction-level
+  // number re-merges the kept patterns. `dominantService` drops the losing
+  // service_id where daytime + owl overlap one day-type.
+  const patternDeps = new Map(); // route|dir|origin|dest|dayType → [dep,...] (full day)
+  const patternHourCount = new Map(); // same key → Map(hour → count of departures starting in it)
+  const durationBuckets = new Map(); // route|dir|origin|dest|dayType|hour → [durMin,...]
   const patternTripCount = new Map(); // route|dir|origin|dest → sample count
   const patternHeadsign = new Map(); // route|dir|origin|dest → headsign
   for (const [tripId, meta] of tripMeta) {
@@ -452,13 +517,19 @@ async function main() {
       if (!dominant || dominant.serviceId !== meta.serviceId) continue;
       patternTripCount.set(pk, (patternTripCount.get(pk) || 0) + 1);
       if (!patternHeadsign.has(pk)) patternHeadsign.set(pk, meta.headsign || '');
-      const key = `${pk}|${dayType}|${hour}`;
-      if (!headwayBuckets.has(key)) headwayBuckets.set(key, []);
-      headwayBuckets.get(key).push(dep);
+      const pdk = `${pk}|${dayType}`;
+      if (!patternDeps.has(pdk)) {
+        patternDeps.set(pdk, []);
+        patternHourCount.set(pdk, new Map());
+      }
+      patternDeps.get(pdk).push(dep);
+      const hc = patternHourCount.get(pdk);
+      hc.set(hour, (hc.get(hour) || 0) + 1);
       const arr = lastArrival.get(tripId);
       if (arr != null && arr > dep) {
-        if (!durationBuckets.has(key)) durationBuckets.set(key, []);
-        durationBuckets.get(key).push((arr - dep) / 60);
+        const dkey = `${pdk}|${hour}`;
+        if (!durationBuckets.has(dkey)) durationBuckets.set(dkey, []);
+        durationBuckets.get(dkey).push((arr - dep) / 60);
       }
     }
   }
@@ -467,44 +538,78 @@ async function main() {
   const routeMode = new Map();
   for (const meta of tripMeta.values()) routeMode.set(meta.route, meta.mode);
 
-  // Fold per-(pattern, dayType, hour) buckets into per-pattern headway/duration
-  // maps, taking the median of consecutive departure gaps within each pattern.
+  // Fold into per-pattern headway/duration maps. Headway per hour is the
+  // occupancy-weighted spacing over the pattern's whole-day departure list.
   const patternData = new Map(); // route|dir → Map(origin|dest → { origin, dest, headways, durations })
-  for (const [key, times] of headwayBuckets) {
-    if (times.length < 2) continue; // need 2 departures to measure a gap
-    const [route, dir, origin, dest, dayType, hourStr] = key.split('|');
-    const hour = parseInt(hourStr, 10);
-    const sorted = [...times].sort((a, b) => a - b);
-    const gaps = [];
-    for (let i = 1; i < sorted.length; i++) gaps.push((sorted[i] - sorted[i - 1]) / 60);
-    const medMin = median(gaps);
-    if (medMin == null) continue;
-    // A lone gap (2-trip hour) below the trust threshold is a scheduled bunched
-    // pair, not a headway; an absolute floor catches degenerate 3+ trip clusters.
-    if (gaps.length < 2 && medMin < TWO_TRIP_MIN_HEADWAY_MIN) continue;
-    if (medMin < (MIN_HEADWAY_MIN[routeMode.get(route)] ?? MIN_HEADWAY_MIN.bus)) continue;
-    const rd = `${route}|${dir}`;
-    if (!patternData.has(rd)) patternData.set(rd, new Map());
-    const pm = patternData.get(rd);
-    const pk = `${origin}|${dest}`;
-    if (!pm.has(pk)) pm.set(pk, { origin, dest, headways: {}, durations: {} });
-    const pat = pm.get(pk);
-    if (!pat.headways[dayType]) pat.headways[dayType] = {};
-    pat.headways[dayType][hour] = Math.round(medMin * 10) / 10;
-    const durations = durationBuckets.get(key);
-    if (durations && durations.length > 0) {
-      const medDur = median(durations);
-      if (medDur != null) {
-        if (!pat.durations[dayType]) pat.durations[dayType] = {};
-        pat.durations[dayType][hour] = Math.round(medDur * 10) / 10;
+  for (const [pdk, deps] of patternDeps) {
+    const [route, dir, origin, dest, dayType] = pdk.split('|');
+    deps.sort((a, b) => a - b);
+    const floor = MIN_HEADWAY_MIN[routeMode.get(route)] ?? MIN_HEADWAY_MIN.bus;
+    for (const [hour, count] of patternHourCount.get(pdk)) {
+      if (count < 2) continue; // need 2 departures in the hour to publish it
+      const hwMin = occupancyWeightedHeadwayMin(deps, hour);
+      if (hwMin == null || hwMin < floor) continue;
+      // A 2-departure hour with an implausibly short result is a scheduled
+      // bunched pair, not a headway.
+      if (count === 2 && hwMin < TWO_TRIP_MIN_HEADWAY_MIN) continue;
+      const rd = `${route}|${dir}`;
+      if (!patternData.has(rd)) patternData.set(rd, new Map());
+      const pm = patternData.get(rd);
+      const pk = `${origin}|${dest}`;
+      if (!pm.has(pk)) pm.set(pk, { origin, dest, headways: {}, durations: {} });
+      const pat = pm.get(pk);
+      if (!pat.headways[dayType]) pat.headways[dayType] = {};
+      pat.headways[dayType][hour] = Math.round(hwMin * 10) / 10;
+      const durations = durationBuckets.get(`${pdk}|${hour}`);
+      if (durations && durations.length > 0) {
+        const medDur = median(durations);
+        if (medDur != null) {
+          if (!pat.durations[dayType]) pat.durations[dayType] = {};
+          pat.durations[dayType][hour] = Math.round(medDur * 10) / 10;
+        }
       }
     }
   }
 
+  // Occupancy-weighted headway per hour over the merged departure list of a set
+  // of patterns — used for the direction-level number. A route that alternates
+  // patterns by time of day (Route 79 WB: a different pattern fills 6:39–7:46)
+  // leaves each individual pattern with schedule-window holes, so hoisting the
+  // dominant pattern's headway reads "every 40 min" at 7 AM; merging first puts
+  // the frequency back.
+  function mergedHeadways(route, dir, patternKeys) {
+    const floor = MIN_HEADWAY_MIN[routeMode.get(route)] ?? MIN_HEADWAY_MIN.bus;
+    const byDayType = {};
+    for (const dayType of ['weekday', 'saturday', 'sunday']) {
+      const deps = [];
+      const hourCount = new Map();
+      for (const pk of patternKeys) {
+        const pdk = `${route}|${dir}|${pk}|${dayType}`;
+        const d = patternDeps.get(pdk);
+        if (!d) continue;
+        deps.push(...d);
+        for (const [h, c] of patternHourCount.get(pdk))
+          hourCount.set(h, (hourCount.get(h) || 0) + c);
+      }
+      if (deps.length < 2) continue;
+      deps.sort((a, b) => a - b);
+      const hours = {};
+      for (const [hour, count] of hourCount) {
+        if (count < 2) continue;
+        const hw = occupancyWeightedHeadwayMin(deps, hour);
+        if (hw == null || hw < floor) continue;
+        if (count === 2 && hw < TWO_TRIP_MIN_HEADWAY_MIN) continue;
+        hours[hour] = Math.round(hw * 10) / 10;
+      }
+      if (Object.keys(hours).length) byDayType[dayType] = hours;
+    }
+    return byDayType;
+  }
+
   // Emit. Each direction carries its full pattern list (consumers match a live
-  // pattern's endpoints to the right group) plus the dominant pattern's
-  // headway/duration/terminals hoisted to the direction level — a fallback for
-  // patternless consumers and for live patterns that match no group.
+  // pattern's endpoints to the right group), the dominant pattern's
+  // terminals/duration, and a direction-level headway merged across all the
+  // kept patterns' departures.
   const out = { generatedAt: Date.now(), routes: {}, lines: {} };
   for (const [rd, pm] of patternData) {
     const [route, dir] = rd.split('|');
@@ -515,6 +620,8 @@ async function main() {
       const o = byStopId.get(pat.origin);
       const d = byStopId.get(pat.dest);
       list.push({
+        origin: pat.origin,
+        dest: pat.dest,
         headsign: patternHeadsign.get(pk) || '',
         tripCount: patternTripCount.get(pk) || 0,
         originLat: o ? parseFloat(o.stop_lat) : null,
@@ -541,9 +648,13 @@ async function main() {
       terminalLon: dom.terminalLon,
       originLat: dom.originLat,
       originLon: dom.originLon,
-      headways: dom.headways,
+      headways: mergedHeadways(
+        route,
+        dir,
+        list.map((p) => `${p.origin}|${p.dest}`),
+      ),
       durations: dom.durations,
-      patterns: list,
+      patterns: list.map(({ origin: _o, dest: _d, ...rest }) => rest),
     };
   }
 
@@ -572,9 +683,11 @@ async function main() {
 module.exports = {
   resolveServiceDayTypes,
   referenceDates,
+  occupancyWeightedHeadwayMin,
   MIN_PATTERN_TRIPS,
   TWO_TRIP_MIN_HEADWAY_MIN,
   MIN_HEADWAY_MIN,
+  MAX_MEANINGFUL_GAP_MIN,
 };
 
 if (require.main === module) {
