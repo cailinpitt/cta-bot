@@ -95,6 +95,35 @@ test('skips pids whose pattern lacks a lengthFt', () => {
   assert.equal(detectAllGaps(vs, expected, pf, FRESH).length, 0);
 });
 
+test('uses the scheduled traverse time when it lands in the sane band', () => {
+  const a = bus({ vid: '1', pdist: 10000 });
+  const b = bus({ vid: '2', pdist: 10000 + MIN_QUALIFYING_FT + 5000 }); // ~31 min at 880 ft/min
+  // CTA schedule says that stretch is really ~26 min (an express segment).
+  const schedFor = () => 26;
+  const [gap] = detectAllGaps([a, b], expected, patternFor, FRESH, schedFor);
+  assert.equal(gap.schedBased, true);
+  assert.ok(Math.abs(gap.gapMin - 26) < 0.01);
+  assert.ok(Math.abs(gap.ratio - 2.6) < 0.01);
+  assert.ok(gap.gapMinDist > 30); // distance estimate still carried for logging
+});
+
+test('ignores a scheduled traverse that diverges wildly (misprojection)', () => {
+  const a = bus({ vid: '1', pdist: 10000 });
+  const b = bus({ vid: '2', pdist: 10000 + MIN_QUALIFYING_FT + 5000 });
+  const wild = () => 2; // 2 min for a ~39,000 ft stretch — impossible
+  const [gap] = detectAllGaps([a, b], expected, patternFor, FRESH, wild);
+  assert.equal(gap.schedBased, false);
+  assert.ok(gap.gapMin > 30); // fell back to the distance estimate
+});
+
+test('a scheduled traverse below the ratio threshold suppresses the gap', () => {
+  const a = bus({ vid: '1', pdist: 10000 });
+  const b = bus({ vid: '2', pdist: 10000 + MIN_QUALIFYING_FT + 5000 });
+  // Real scheduled time is only 18 min → 1.8x a 10-min headway, under 2.5x.
+  const [gap] = detectAllGaps([a, b], expected, patternFor, FRESH, () => 18);
+  assert.equal(gap, undefined);
+});
+
 test('sorts multiple gaps worst-first by ratio', () => {
   const vs = [
     // pid 100: 30-min-ish gap on a 10-min headway → ratio ~3

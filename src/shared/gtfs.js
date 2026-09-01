@@ -554,6 +554,29 @@ function schedDb() {
   return _schedDb;
 }
 
+// Scheduled stop curves for every GTFS trip sharing a (route, start_sec)
+// anchor, grouped by trip_id. `start_sec` is the trip's first-stop departure —
+// what a live bus reports as `stst`. Two trips can share the anchor (distinct
+// service_ids, often identical geometry). Null when the DB is absent or no
+// trip matches.
+function schedStopsByTrip(route, startSec) {
+  const db = schedDb();
+  if (!db) return null;
+  if (!_schedStmt) {
+    _schedStmt = db.prepare(
+      'SELECT trip_id AS tripId, lat, lon, sched_sec AS schedSec FROM sched_stops WHERE route = ? AND start_sec = ? ORDER BY trip_id, seq',
+    );
+  }
+  const rows = _schedStmt.all(String(route), startSec);
+  if (rows.length === 0) return null;
+  const byTrip = new Map();
+  for (const r of rows) {
+    if (!byTrip.has(r.tripId)) byTrip.set(r.tripId, []);
+    byTrip.get(r.tripId).push(r);
+  }
+  return byTrip;
+}
+
 // Seconds since midnight in Chicago wall-clock for `now`. Matches the base of
 // GTFS scheduled times (and stst) for daytime trips; the plausibility cap above
 // absorbs the after-midnight service-day wrap that this doesn't model.
@@ -610,23 +633,10 @@ function deviationFromStops(
 function scheduleDeviationMin(vehicle, now = new Date()) {
   if (!vehicle || vehicle.schedStartSec == null || vehicle.route == null) return null;
   if (!Number.isFinite(vehicle.lat) || !Number.isFinite(vehicle.lon)) return null;
-  const db = schedDb();
-  if (!db) return null;
-  if (!_schedStmt) {
-    _schedStmt = db.prepare(
-      'SELECT trip_id AS tripId, lat, lon, sched_sec AS schedSec FROM sched_stops WHERE route = ? AND start_sec = ? ORDER BY trip_id, seq',
-    );
-  }
-  const rows = _schedStmt.all(String(vehicle.route), vehicle.schedStartSec);
-  if (rows.length === 0) return null;
-  // Group by trip — two trips can share a (route, start_sec); the bus's own
-  // direction's stop path is the one it actually lies along, so projection
-  // distance disambiguates.
-  const byTrip = new Map();
-  for (const r of rows) {
-    if (!byTrip.has(r.tripId)) byTrip.set(r.tripId, []);
-    byTrip.get(r.tripId).push(r);
-  }
+  // Two trips can share a (route, start_sec); the bus's own direction's stop
+  // path is the one it actually lies along, so projection distance disambiguates.
+  const byTrip = schedStopsByTrip(vehicle.route, vehicle.schedStartSec);
+  if (!byTrip) return null;
   let best = null;
   for (const stops of byTrip.values()) {
     const res = deviationFromStops(stops, vehicle.lat, vehicle.lon);
@@ -638,9 +648,44 @@ function scheduleDeviationMin(vehicle, now = new Date()) {
   return dev;
 }
 
+// How long CTA's timetable says a bus takes to travel from `from` to `to`
+// (both { lat, lon }), read off the scheduled trip curve anchored by
+// `{ route, schedStartSec }` — normally the trailing bus's own trip. This is
+// the schedule-honest cost of the empty stretch in a gap: a flat "typical
+// speed" constant overstates it ~2x on routes that run long Lake Shore Drive
+// express segments (147, 6, 26, 146…), which CTA schedules at highway speed.
+//
+// When several trips share the anchor their traverse times are combined by
+// median (robust to one odd booking). A short-turn trip that ends before `to`
+// puts `to` well off its path, so the MAX_OFFROUTE_FT gate drops it. Returns
+// null when the DB is absent or no trip carries both points close to its path;
+// callers fall back to their distance estimate.
+function scheduledTraverseMin({ route, schedStartSec } = {}, from, to) {
+  if (route == null || schedStartSec == null) return null;
+  if (!from || !to) return null;
+  if (!Number.isFinite(from.lat) || !Number.isFinite(from.lon)) return null;
+  if (!Number.isFinite(to.lat) || !Number.isFinite(to.lon)) return null;
+  const byTrip = schedStopsByTrip(route, schedStartSec);
+  if (!byTrip) return null;
+  const traverses = [];
+  for (const stops of byTrip.values()) {
+    const a = deviationFromStops(stops, from.lat, from.lon);
+    const b = deviationFromStops(stops, to.lat, to.lon);
+    if (!a || !b) continue;
+    if (Math.max(a.distFt, b.distFt) > MAX_OFFROUTE_FT) continue;
+    const min = (b.schedSec - a.schedSec) / 60;
+    if (Number.isFinite(min) && min > 0) traverses.push(min);
+  }
+  if (traverses.length === 0) return null;
+  traverses.sort((x, y) => x - y);
+  const mid = traverses.length >> 1;
+  return traverses.length % 2 ? traverses[mid] : (traverses[mid - 1] + traverses[mid]) / 2;
+}
+
 module.exports = {
   loadIndex,
   scheduleDeviationMin,
+  scheduledTraverseMin,
   deviationFromStops,
   chicagoSecondsOfDay,
   expectedHeadwayMin,

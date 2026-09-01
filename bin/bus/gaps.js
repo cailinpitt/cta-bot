@@ -12,7 +12,12 @@ const { captureBusGapVideo } = require('../../src/bus/gapVideo');
 const { loginBus, postWithImage, postText, postWithVideo } = require('../../src/bus/bluesky');
 const { isOnCooldown } = require('../../src/shared/state');
 const { commitAndPost } = require('../../src/shared/postDetection');
-const { expectedHeadwayMin, loadIndex, scheduleDeviationMin } = require('../../src/shared/gtfs');
+const {
+  expectedHeadwayMin,
+  loadIndex,
+  scheduleDeviationMin,
+  scheduledTraverseMin,
+} = require('../../src/shared/gtfs');
 const history = require('../../src/shared/history');
 const { setup, writeDryRunAsset, runBin } = require('../../src/shared/runBin');
 const {
@@ -70,11 +75,22 @@ async function main() {
   const uniquePids = [...new Set(vehicles.map((v) => v.pid))];
   for (const pid of uniquePids) await primePid(pid);
 
+  // Scheduled run time for the empty stretch, read off the trailing bus's own
+  // GTFS trip curve — replaces the flat 10-mph estimate, which overstates
+  // express-on-Lake-Shore-Drive gaps ~2x.
+  const schedTraverse = (trailing, leading) =>
+    scheduledTraverseMin(
+      { route: trailing.route, schedStartSec: trailing.schedStartSec },
+      { lat: trailing.lat, lon: trailing.lon },
+      { lat: leading.lat, lon: leading.lon },
+    );
+
   const gaps = detectAllGaps(
     vehicles,
     (pid) => headwayCache.get(pid) ?? null,
     (pid) => patternCache.get(pid) || null,
     now,
+    schedTraverse,
   );
 
   if (gaps.length === 0) {
@@ -85,7 +101,7 @@ async function main() {
   console.log(`Found ${gaps.length} candidate gap(s); picking best available:`);
   for (const g of gaps) {
     console.log(
-      `  route ${g.route} pid ${g.pid} — gap ${Math.round(g.gapMin)} min vs ${g.expectedMin} expected (ratio ${g.ratio.toFixed(2)})`,
+      `  route ${g.route} pid ${g.pid} — gap ${Math.round(g.gapMin)} min ${g.schedBased ? `(schedule; distance said ${Math.round(g.gapMinDist)})` : '(distance)'} vs ${g.expectedMin} expected (ratio ${g.ratio.toFixed(2)})`,
     );
   }
 
@@ -205,9 +221,11 @@ async function main() {
   }
 
   // BusTime caps predictions at ~30 min, so the big gaps (the ones we care
-  // about) never have a direct prediction at the leading bus's stop. Anchor
-  // on the trailing bus's farthest on-pattern predicted stop and extrapolate
-  // the remaining distance at 10 mph.
+  // about) never have a direct prediction at the leading bus's stop. If BusTime
+  // says the trailing bus is running even later than its position implies (it's
+  // stuck), believe it: anchor on its farthest on-pattern predicted stop and
+  // add CTA's scheduled run time for the remaining stretch. Only ever raises
+  // the estimate — BusTime optimism shouldn't shrink a schedule-honest gap.
   try {
     const leadingStop = findNearestStop(pattern, gap.leading.pdist);
     const preds = await getPredictions({ vid: gap.trailing.vid });
@@ -232,13 +250,24 @@ async function main() {
       // Pick the closest-to-leading stop so the extrapolation tail is shortest.
       const anchor = onPattern.reduce((best, x) => (x.stop.pdist > best.stop.pdist ? x : best));
       const remainingFt = gap.leading.pdist - anchor.stop.pdist;
-      const tailMin = remainingFt / 880; // 10 mph ≈ 880 ft/min
+      const tailMin =
+        scheduledTraverseMin(
+          { route: gap.trailing.route, schedStartSec: gap.trailing.schedStartSec },
+          { lat: anchor.stop.lat, lon: anchor.stop.lon },
+          { lat: leadingStop.lat, lon: leadingStop.lon },
+        ) ?? remainingFt / 880; // fall back to 10 mph ≈ 880 ft/min
       const refined = anchor.min + tailMin;
-      console.log(
-        `Prediction refinement: ${gap.gapMin.toFixed(1)} min (distance) → ${refined.toFixed(1)} min (anchor: ${anchor.min} min at ${anchor.stop.stopName} + ${tailMin.toFixed(1)} min to ${leadingStop.stopName})`,
-      );
-      gap.gapMin = refined;
-      gap.ratio = refined / gap.expectedMin;
+      if (refined > gap.gapMin) {
+        console.log(
+          `Prediction refinement: ${gap.gapMin.toFixed(1)} → ${refined.toFixed(1)} min (anchor: ${anchor.min} min at ${anchor.stop.stopName} + ${tailMin.toFixed(1)} min to ${leadingStop.stopName})`,
+        );
+        gap.gapMin = refined;
+        gap.ratio = refined / gap.expectedMin;
+      } else {
+        console.log(
+          `Prediction refinement (${refined.toFixed(1)} min) not above current estimate (${gap.gapMin.toFixed(1)} min); keeping it`,
+        );
+      }
     } else {
       console.log(
         `No usable predictions for vid ${gap.trailing.vid} on this pattern; keeping distance estimate`,
@@ -248,11 +277,12 @@ async function main() {
     console.warn(`Prediction refinement failed: ${e.message}; keeping distance estimate`);
   }
 
-  // Re-check thresholds: refinement may have moved us below the bar.
+  // Defensive threshold re-check (refinement only raises the estimate now, but
+  // keep the guard in case the detector's gates change).
   const { RATIO_THRESHOLD, ABSOLUTE_MIN_MIN } = require('../../src/bus/gaps');
   if (gap.gapMin < ABSOLUTE_MIN_MIN || gap.ratio < RATIO_THRESHOLD) {
     console.log(
-      `After refinement, gap no longer meets threshold (${gap.gapMin} min, ${gap.ratio.toFixed(2)}x); skipping`,
+      `Gap no longer meets threshold (${gap.gapMin} min, ${gap.ratio.toFixed(2)}x); skipping`,
     );
     return;
   }

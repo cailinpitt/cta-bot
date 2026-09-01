@@ -16,6 +16,7 @@ const {
   deviationFromStops,
   chicagoSecondsOfDay,
   scheduleDeviationMin,
+  scheduledTraverseMin,
 } = require('../../src/shared/gtfs');
 
 test('formatDeviation reads as words with no signs', () => {
@@ -94,6 +95,27 @@ test('scheduleDeviationMin: vehicle on-route returns + late minutes', (t) => {
   ins.run('79', 36000, 'T2', 1, 41.85, -87.62, 36000);
   ins.run('79', 36000, 'T2', 2, 41.85, -87.6, 36300);
 
+  // --- scheduledTraverseMin fixtures (module caches the DB handle, so every
+  // DB-backed assertion in this file shares this one connection) ---
+  // Route 147: slow first leg (10 min / 0.02°), then two fast "express" legs
+  // (2 min each) — a flat speed would badly overstate the tail.
+  ins.run('147', 60000, 'N1', 1, 41.9, -87.68, 60000);
+  ins.run('147', 60000, 'N1', 2, 41.9, -87.66, 60600);
+  ins.run('147', 60000, 'N1', 3, 41.9, -87.64, 60720);
+  ins.run('147', 60000, 'N1', 4, 41.9, -87.62, 60840);
+  // Route 6: two full trips, identical geometry, 8 vs 12 min booked end to end
+  // (distinct service_ids) + a short-turn ending mid-route.
+  for (const [tid, t3] of [
+    ['A', 60480],
+    ['B', 60720],
+  ]) {
+    ins.run('6', 60000, tid, 1, 41.9, -87.68, 60000);
+    ins.run('6', 60000, tid, 2, 41.9, -87.64, 60240);
+    ins.run('6', 60000, tid, 3, 41.9, -87.6, t3);
+  }
+  ins.run('6', 60000, 'S', 1, 41.9, -87.68, 60000);
+  ins.run('6', 60000, 'S', 2, 41.9, -87.64, 60180);
+
   // Bus at the segment midpoint (scheduled ~36150) observed at 10:05:00 CDT
   // (=36300s) → ~2.5 min behind schedule.
   const now = new Date('2026-06-13T15:05:00Z');
@@ -115,4 +137,42 @@ test('scheduleDeviationMin: vehicle on-route returns + late minutes', (t) => {
   );
   // Missing schedule anchor → null (e.g. a snapshot row that predates capture).
   assert.equal(scheduleDeviationMin({ route: '79', lat: 41.75, lon: -87.61 }, now), null);
+
+  // --- scheduledTraverseMin: CTA-timetabled run time for an arbitrary stretch ---
+  const n147 = { route: '147', schedStartSec: 60000 };
+  // Mid-first-leg (~60300) to just shy of the last stop (~60840) → ~9 min, and
+  // the fast tail alone is only ~2 min — a flat 10-mph model can't see that.
+  const full = scheduledTraverseMin(n147, { lat: 41.9, lon: -87.67 }, { lat: 41.9, lon: -87.621 });
+  assert.ok(full != null && Math.abs(full - 9) < 1.5, `expected ~9 min, got ${full}`);
+  const tail = scheduledTraverseMin(n147, { lat: 41.9, lon: -87.66 }, { lat: 41.9, lon: -87.641 });
+  assert.ok(tail != null && tail < 3, `express leg should be ~2 min, got ${tail}`);
+
+  // Off-route `from` → null (caller falls back to its distance estimate).
+  assert.equal(
+    scheduledTraverseMin(n147, { lat: 41.95, lon: -87.67 }, { lat: 41.9, lon: -87.62 }),
+    null,
+  );
+  // Missing anchor / unknown start_sec → null.
+  assert.equal(
+    scheduledTraverseMin({ route: '147' }, { lat: 41.9, lon: -87.67 }, { lat: 41.9, lon: -87.62 }),
+    null,
+  );
+  assert.equal(
+    scheduledTraverseMin(
+      { route: '147', schedStartSec: 1 },
+      { lat: 41.9, lon: -87.67 },
+      { lat: 41.9, lon: -87.62 },
+    ),
+    null,
+  );
+
+  // Multiple trips sharing an anchor → median (robust to one odd booking). For
+  // the -87.675→-87.605 stretch trip A ≈ 7 min, trip B ≈ 11 min → ~9. Short-turn
+  // 'S' ends at -87.64, so `to` lands far off its path and it's dropped.
+  const med = scheduledTraverseMin(
+    { route: '6', schedStartSec: 60000 },
+    { lat: 41.9, lon: -87.675 },
+    { lat: 41.9, lon: -87.605 },
+  );
+  assert.ok(med != null && med > 6 && med < 12, `expected ~9 (median of 7 & 11), got ${med}`);
 });

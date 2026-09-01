@@ -8,7 +8,18 @@ const { terminalZoneFt } = require('../shared/geo');
 const RATIO_THRESHOLD = 2.5;
 const ABSOLUTE_MIN_MIN = 15;
 
-function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new Date()) {
+// `scheduledTraverseFor(trailing, leading)` → CTA-timetabled minutes to cover
+// the empty stretch between the two buses, or null. When available it replaces
+// the flat-10-mph estimate (which overstates express-on-Lake-Shore-Drive gaps
+// ~2x). Trusted only when it lands in a sane band around the crude estimate —
+// the schedule can be much faster on express segments, rarely much slower.
+function detectAllGaps(
+  vehicles,
+  expectedHeadwayForPid,
+  patternForPid,
+  now = new Date(),
+  scheduledTraverseFor = null,
+) {
   const fresh = vehicles.filter((v) => now - v.tmstmp < STALE_MS);
 
   const byPid = new Map();
@@ -37,12 +48,21 @@ function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new
       const a = sorted[i];
       const b = sorted[i + 1];
       const gapFt = b.pdist - a.pdist;
-      const gapMin = gapFt / TYPICAL_SPEED_FT_PER_MIN;
+      const distGapMin = gapFt / TYPICAL_SPEED_FT_PER_MIN;
 
       // Buses inside the terminal zone aren't in "service territory" yet —
       // their headway measurement against the next bus is misleading.
       if (a.pdist < zoneFt) continue;
       if (patternLengthFt - b.pdist < zoneFt) continue;
+
+      // Prefer CTA's scheduled run time for this exact stretch over the flat
+      // 10-mph model. Guard band: schedule up to 4x faster (express segments)
+      // and up to 2x slower than the crude estimate — outside that is a
+      // misprojection (short-turn trip, terminal clamp), so keep the flat number.
+      const schedGapMin = scheduledTraverseFor ? scheduledTraverseFor(a, b) : null;
+      const schedBased =
+        schedGapMin != null && schedGapMin >= distGapMin / 4 && schedGapMin <= distGapMin * 2;
+      const gapMin = schedBased ? schedGapMin : distGapMin;
 
       const ratio = gapMin / expectedMin;
       if (gapMin < ABSOLUTE_MIN_MIN) continue;
@@ -88,6 +108,8 @@ function detectAllGaps(vehicles, expectedHeadwayForPid, patternForPid, now = new
           : null,
         gapFt,
         gapMin,
+        gapMinDist: distGapMin,
+        schedBased,
         expectedMin,
         ratio,
       });

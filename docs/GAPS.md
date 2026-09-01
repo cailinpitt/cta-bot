@@ -16,7 +16,7 @@ Every few minutes, the bot:
 
 1. Pulls live positions of every bus/train.
 2. Sorts vehicles by their position along the route.
-3. For each pair of consecutive vehicles, estimates how long it would take a vehicle to cover the empty stretch at typical service speed.
+3. For each pair of consecutive vehicles, estimates how long it would take a vehicle to cover the empty stretch. For buses this is **CTA's own scheduled run time** for that exact stretch (read off the trailing bus's GTFS trip curve); a flat typical-speed estimate is the fallback. Trains always use the flat estimate.
 4. Compares that estimate to the scheduled headway.
 5. If the gap is more than 2.5× scheduled — and at least 15 minutes for buses or 10 for trains — flags it.
 
@@ -52,19 +52,25 @@ When the next-up bus *is* the cause (e.g. 22 min late), the adherence line alrea
 
 ### The core comparison
 
-We don't have ride times for empty stretches — no vehicle is there to measure. So we estimate them from a typical service speed:
+We don't have ride times for empty stretches — no vehicle is there to measure. Two ways to estimate them:
+
+**Buses — CTA's scheduled run time.** The GTFS schedule (`schedule.sqlite`, also the substrate for schedule adherence) carries a position→time curve for every trip. We project the two flanking buses onto the *trailing* bus's own scheduled trip curve and difference the scheduled times — that's how long CTA's timetable says a bus takes to cover exactly that stretch (`scheduledTraverseMin` in `src/shared/gtfs.js`). When several trips share the `(route, start_sec)` anchor their traverse times are combined by median.
+
+**Fallback — a flat typical speed** (used for trains always, and for buses when the schedule curve is unavailable or a bus lacks its `stst` anchor):
 
 - Buses: **880 ft/min** (~10 mph, including stops and signals).
 - Trains: **2,200 ft/min** (~25 mph cruise + dwell).
 
-For two consecutive vehicles separated by `gapFt` along the route:
-
 ```
-gapMin = gapFt / TYPICAL_SPEED_FT_PER_MIN
+gapMin = scheduledTraverseMin(trailing → leading)   // or gapFt / TYPICAL_SPEED_FT_PER_MIN
 ratio  = gapMin / expectedHeadwayMin
 ```
 
-The number is intentionally crude. It's only used as a *ratio* against the scheduled headway, not as a literal ETA. A 2.5× ratio is the threshold: a gap that's two and a half times the schedule is worth posting.
+The schedule number is trusted only when it lands in a sane band around the flat estimate (up to 4× faster, up to 2× slower) — outside that is a misprojection and we keep the flat number.
+
+**Why the schedule curve, not just the constant:** a flat 10 mph badly overstates gaps on routes that run long express segments on DuSable Lake Shore Drive (147, 6, 26, 146, X-express variants), which CTA schedules at highway speed. A real 6.8-mi hole on the 147 that riders wait ~25 min through was posting as "~50 min" — the constant applied to the whole stretch plus a prediction-refinement tail that also used the constant. The scheduled run time for that stretch is ~26 min.
+
+The number is still approximate. It's used as a *ratio* against the scheduled headway, not as a literal ETA. A 2.5× ratio is the threshold: a gap that's two and a half times the schedule is worth posting.
 
 `expectedHeadwayMin` is **per pattern**, not per direction. The GTFS index stores a headway for each origin→dest terminal pair, and the live vehicle's pattern is matched to the right group by its endpoint coordinates (`matchPattern` in `src/shared/gtfs.js`). This matters because a direction often runs several patterns at once — a through route plus owl short-turns or branches — and lumping them together corrupts the scheduled headway: the 66's overnight eastbound through service is every ~30 min, but mixing in the Austin→Pulaski owl short-turns made the old per-direction median read ~6 min, firing false gaps on a normal overnight wait. When a live pattern matches no indexed group, the lookup falls back to the direction's dominant pattern.
 
@@ -75,9 +81,11 @@ For each pattern (`pid`), we already have `pdist` directly from the API, so:
 1. Filter to fresh observations (< 3 min).
 2. Sort by `pdist`.
 3. For each adjacent pair: skip if either bus is inside the start/end terminal zone (a route-length-scaled buffer — buses there are doing layovers, not running headways).
-4. Compute `gapMin` and `ratio`. Reject if `gapMin < 15` (absolute floor — protects 30-min-headway routes from spamming on a 31-min drift) or `ratio < 2.5`.
+4. Compute `gapMin` — CTA's scheduled run time for the stretch between the two buses (`scheduledTraverseMin`), falling back to `gapFt / 880` when there's no usable schedule curve or the schedule diverges wildly from the flat estimate — and `ratio`. Reject if `gapMin < 15` (absolute floor — protects 30-min-headway routes from spamming on a 31-min drift) or `ratio < 2.5`. `gapMinDist` (the flat estimate) and `schedBased` ride along for logging.
 5. For each surviving gap, find the stops **flanking** it — the named stop just outside each bus (`flankBefore` behind the trailing bus, `flankAfter` ahead of the leading bus, with their lat/lon) — to name the stretch as a range ("between A and B") in the post and label both ends on the map. The post falls back to the single anchor stop ("near X") when a flank is missing.
 6. Sort surviving gaps by `ratio` desc — biggest deviations first.
+
+**Prediction refinement** (`bin/bus/gaps.js`): BusTime predictions cap at ~30 min, so a deep gap never has a direct prediction at the leading bus's stop. If BusTime reports the trailing bus running *later* than its position implies (it's stuck), the bin anchors on its farthest on-pattern predicted stop and adds the scheduled run time from there to the leading stop. It only ever **raises** `gapMin` — BusTime optimism shouldn't shrink a schedule-honest gap. (Before this was symmetric and used the flat constant for the tail, which is how a 40-min estimate became a posted "~50".)
 
 Both gap maps share the same look: a warm-amber strip over the empty stretch and a pinned, named stop at each flank. They run on different renderers — the train map (`src/map/train/gaps.js`) reuses the bunching frame with Mapbox `pin-s` station pins; the bus map (`src/map/bus/gaps.js`) composites its own bus-stop sign markers — so the marker glyph differs by mode, but the strip color, the flank labeling, and the L/N vehicle chips match.
 
@@ -93,7 +101,7 @@ Same idea, but track distance comes from snapping lat/lon onto a polyline (same 
 
 ### Why a ratio, not a literal ETA
 
-Gap times computed this way will be wrong in absolute terms — a real bus on Western at PM peak averages slower than 10 mph. But the schedule headway has the same kind of error baked in (also derived from a smooth model). When you take their ratio, the modeling error cancels: a true 3× deviation looks like 3× regardless of the constant.
+Gap times are still approximate. The flat-speed fallback in particular will be wrong in absolute terms — a real bus on Western at PM peak averages slower than 10 mph, and the same constant on a Lake Shore Drive express segment is 2–3× too slow. The schedule headway has the same kind of error baked in (also derived from a smooth model), so taking their ratio cancels much of it: a true 3× deviation looks like 3× regardless of the constant. Reading the bus traverse straight off CTA's timetable (`scheduledTraverseMin`) tightens the numerator further — it knows the express segment is scheduled fast — so the posted minutes track the real rider wait, not just the ratio.
 
 This is why the post says "~24 min" with a tilde — it's deliberately approximate.
 
@@ -122,6 +130,7 @@ The reply leads with the gap, then reports the concrete progress against the mid
 ## Files
 
 - `src/bus/gaps.js` — bus gap detection.
+- `src/shared/gtfs.js` — `scheduledTraverseMin` (CTA-timetabled run time for the empty stretch) + `scheduleDeviationMin`, both off `schedule.sqlite`.
 - `src/bus/gapPost.js` — bus post + timelapse reply text.
 - `src/bus/gapVideo.js` — bus gap timelapse capture + clip assembly.
 - `src/train/gaps.js` — train gap detection with along-track snapping and station labeling.
