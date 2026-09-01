@@ -110,85 +110,93 @@ function median(arr) {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-// Coarse day_type bucket — Sat/Sun stay separate since headways differ a lot.
-function dayTypeFor(cal) {
-  const weekday =
-    cal.monday === '1' &&
-    cal.tuesday === '1' &&
-    cal.wednesday === '1' &&
-    cal.thursday === '1' &&
-    cal.friday === '1';
-  const sat = cal.saturday === '1';
-  const sun = cal.sunday === '1';
-  if (weekday && !sat && !sun) return 'weekday';
-  if (!weekday && sat && !sun) return 'saturday';
-  if (!weekday && !sat && sun) return 'sunday';
-  if (sat && sun && !weekday) return 'weekend';
-  return null; // mixed/unusual services — skip so we don't mash weekday + weekend headways together
+const DOW_COL = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function ymdToDate(ymd) {
+  return new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), 12));
+}
+function ymdShift(ymd, days) {
+  const d = ymdToDate(ymd);
+  d.setUTCDate(d.getUTCDate() + days);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+function ymdDow(ymd) {
+  return ymdToDate(ymd).getUTCDay(); // 0=Sun … 6=Sat
 }
 
-// Honors calendar.txt date ranges + calendar_dates.txt exceptions for today.
-function resolveServiceDayTypes({ calendars, calendarDates, todayStr, todayDow }) {
+// One representative date per bucket, near the build date, so every bucket
+// reflects a real instance of that day even though the index is built once a
+// day. weekday = today if a weekday, else the most recent Friday; saturday /
+// sunday = the nearest one (today if it is that day).
+function nearestDow(todayStr, targetDow) {
+  const fwd = (targetDow - ymdDow(todayStr) + 7) % 7; // 0..6 days ahead
+  return ymdShift(todayStr, fwd > 3 ? fwd - 7 : fwd); // prefer the closer direction
+}
+function referenceDates(todayStr) {
+  const n = ymdDow(todayStr);
+  return {
+    weekday: n >= 1 && n <= 5 ? todayStr : ymdShift(todayStr, n === 0 ? -2 : -1),
+    saturday: nearestDow(todayStr, 6),
+    sunday: nearestDow(todayStr, 0),
+  };
+}
+
+// Which day-type bucket(s) each service_id feeds. A service is in a bucket iff
+// it runs on that bucket's representative date — by calendar.txt day-of-week +
+// date range, then calendar_dates.txt add/remove overrides for that date. A
+// service that spans the boundary (e.g. a Tue–Sat owl) lands in both buckets it
+// serves rather than being dropped, which is what the old "must be exactly
+// Mon–Fri / Sat / Sun" rule did (silently losing single-day trippers, M–Th
+// service, Friday-only trips, …).
+function resolveServiceDayTypes({ calendars, calendarDates, todayStr }) {
+  const refs = referenceDates(todayStr);
+  const serviceDayType = new Map(); // service_id -> Set<'weekday'|'saturday'|'sunday'>
   const addForToday = new Set();
   const removeForToday = new Set();
-  for (const r of calendarDates) {
-    if (r.date !== todayStr) continue;
-    if (r.exception_type === '1') addForToday.add(r.service_id);
-    else if (r.exception_type === '2') removeForToday.add(r.service_id);
-  }
-  const out = new Map();
-  for (const c of calendars) {
-    const dt = dayTypeFor(c);
-    if (!dt) continue;
-    if (todayStr < c.start_date || todayStr > c.end_date) continue;
-    if (removeForToday.has(c.service_id)) continue;
-    out.set(c.service_id, dt);
-  }
-  if (addForToday.size) {
-    const fallbackDt = todayDow === 'Sat' ? 'saturday' : todayDow === 'Sun' ? 'sunday' : 'weekday';
-    for (const sid of addForToday) {
-      if (!out.has(sid)) out.set(sid, fallbackDt);
+
+  const put = (sid, dt) => {
+    if (!serviceDayType.has(sid)) serviceDayType.set(sid, new Set());
+    serviceDayType.get(sid).add(dt);
+  };
+
+  for (const [dayType, refDate] of Object.entries(refs)) {
+    const dowCol = DOW_COL[ymdDow(refDate)];
+    const add = new Set();
+    const remove = new Set();
+    for (const r of calendarDates) {
+      if (r.date !== refDate) continue;
+      if (r.exception_type === '1') add.add(r.service_id);
+      else if (r.exception_type === '2') remove.add(r.service_id);
     }
+    if (refDate === todayStr) {
+      for (const s of add) addForToday.add(s);
+      for (const s of remove) removeForToday.add(s);
+    }
+    for (const c of calendars) {
+      if (refDate < c.start_date || refDate > c.end_date) continue;
+      if (remove.has(c.service_id)) continue;
+      if (c[dowCol] !== '1' && !add.has(c.service_id)) continue;
+      put(c.service_id, dayType);
+    }
+    // Holiday-only service_ids that have no calendar.txt row at all.
+    for (const sid of add) put(sid, dayType);
   }
-  return { serviceDayType: out, addForToday, removeForToday };
+  return { serviceDayType, addForToday, removeForToday };
 }
 
-// Day-level dominance, not per-hour: per-hour was too aggressive for Route 55
-// at 2 AM. ≥60% threshold means short-turn-only periods keep all origins.
-const BUS_DOMINANCE_THRESHOLD = 0.6;
-function computeBusDominantOrigin(tripMeta, firstStopId, { log = false } = {}) {
-  const counts = new Map();
-  for (const [tripId, meta] of tripMeta) {
-    if (meta.mode !== 'bus') continue;
-    const origin = firstStopId.get(tripId);
-    if (!origin) continue;
-    const k = `${meta.route}|${meta.dir}`;
-    if (!counts.has(k)) counts.set(k, new Map());
-    const m = counts.get(k);
-    m.set(origin, (m.get(origin) || 0) + 1);
-  }
-  const dominant = new Map();
-  for (const [k, c] of counts) {
-    let best = null;
-    let bestCount = -1;
-    let total = 0;
-    for (const [stopId, n] of c) {
-      total += n;
-      if (n > bestCount) {
-        bestCount = n;
-        best = stopId;
-      }
-    }
-    if (best && bestCount / total >= BUS_DOMINANCE_THRESHOLD) {
-      dominant.set(k, best);
-    } else if (log) {
-      console.log(
-        `bus ${k}: no dominant origin (top=${bestCount}/${total}, ${c.size} origins) — keeping all`,
-      );
-    }
-  }
-  return dominant;
-}
+// Patterns below this many trips are garage pull-outs, deadheads, or one-off
+// specials — not rider-facing service. Emitting them lets matchPattern snap a
+// live vehicle onto a "pattern" whose per-hour headway is really just two
+// scheduled buses a minute apart (Route 87's 0.5-min bucket). A dropped pattern
+// falls back to the direction's dominant headway, which is the better estimate
+// for a minor short-turn anyway.
+const MIN_PATTERN_TRIPS = 15;
+// A 2-trip hour yields one gap with no central tendency. Trust it only when it's
+// clearly a real service interval — a route that genuinely runs more often than
+// this has far more than two departures in the hour, so a shorter lone gap is a
+// scheduled bunched pair, not a headway. 3+ trips just get the absolute floor.
+const TWO_TRIP_MIN_HEADWAY_MIN = 10;
+const MIN_HEADWAY_MIN = { bus: 2, rail: 1.5 };
 
 // Build the per-trip scheduled stop curves used by scheduleDeviationMin. One row
 // per (bus trip, stop): keyed by (route, start_sec) where start_sec is the
@@ -255,8 +263,15 @@ async function main() {
 
   console.log('Reading calendar.txt...');
   const calendars = parseCsv(await readFromZip('calendar.txt'));
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+  // Chicago calendar date — the schedule's own timezone, not the server's.
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(new Date())
+    .replace(/-/g, '');
 
   // Holiday service: exception_type=1 force-adds, =2 force-removes. Without
   // this, holidays (Memorial Day, Thanksgiving) ghost-fire en masse.
@@ -269,18 +284,13 @@ async function main() {
       `  could not read calendar_dates.txt: ${e.message} — proceeding without exceptions`,
     );
   }
-  const todayDow = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Chicago',
-    weekday: 'short',
-  }).format(today);
   const { serviceDayType, addForToday, removeForToday } = resolveServiceDayTypes({
     calendars,
     calendarDates,
     todayStr,
-    todayDow,
   });
   console.log(
-    `  ${serviceDayType.size} service_ids active on ${todayStr} (+${addForToday.size} added / -${removeForToday.size} removed via calendar_dates)`,
+    `  ${serviceDayType.size} service_ids active around ${todayStr} (+${addForToday.size} added / -${removeForToday.size} removed via calendar_dates today)`,
   );
 
   console.log('Reading trips.txt...');
@@ -294,12 +304,12 @@ async function main() {
     if (busRouteSet.has(t.route_id)) mode = 'bus';
     else if (railRouteSet.has(t.route_id)) mode = 'rail';
     if (!mode) continue;
-    const dt = serviceDayType.get(t.service_id);
-    if (!dt) continue;
+    const dayTypes = serviceDayType.get(t.service_id);
+    if (!dayTypes || dayTypes.size === 0) continue;
     tripMeta.set(t.trip_id, {
       route: t.route_id,
       dir: t.direction_id,
-      dayType: dt,
+      dayTypes, // Set — a boundary-spanning service (Tue–Sat owl) feeds 2 buckets
       serviceId: t.service_id,
       headsign: t.trip_headsign || t.direction || '',
       mode,
@@ -378,8 +388,10 @@ async function main() {
     const dep = firstDeparture.get(tripId);
     if (dep == null) continue;
     const hour = Math.floor(dep / 3600) % 24;
-    const k = `${meta.route}|${meta.dir}|${meta.dayType}|${hour}|${meta.serviceId}`;
-    serviceTripCounts.set(k, (serviceTripCounts.get(k) || 0) + 1);
+    for (const dayType of meta.dayTypes) {
+      const k = `${meta.route}|${meta.dir}|${dayType}|${hour}|${meta.serviceId}`;
+      serviceTripCounts.set(k, (serviceTripCounts.get(k) || 0) + 1);
+    }
   }
   const dominantService = new Map(); // key: route|dir|dayType|hour → serviceId
   for (const [k, c] of serviceTripCounts) {
@@ -402,13 +414,15 @@ async function main() {
     if (dep == null || arr == null || arr <= dep) continue;
     const startHour = Math.floor(dep / 3600);
     const endHour = Math.floor((arr - 1) / 3600);
-    for (let h = startHour; h <= endHour; h++) {
-      const hStart = h * 3600;
-      const hEnd = hStart + 3600;
-      const overlap = Math.min(arr, hEnd) - Math.max(dep, hStart);
-      if (overlap <= 0) continue;
-      const k = activeKey(meta.route, meta.dir, meta.dayType, h % 24);
-      activeBuckets.set(k, (activeBuckets.get(k) || 0) + overlap / 3600);
+    for (const dayType of meta.dayTypes) {
+      for (let h = startHour; h <= endHour; h++) {
+        const hStart = h * 3600;
+        const hEnd = hStart + 3600;
+        const overlap = Math.min(arr, hEnd) - Math.max(dep, hStart);
+        if (overlap <= 0) continue;
+        const k = activeKey(meta.route, meta.dir, dayType, h % 24);
+        activeBuckets.set(k, (activeBuckets.get(k) || 0) + overlap / 3600);
+      }
     }
   }
 
@@ -420,30 +434,32 @@ async function main() {
   // dest in the key each group is a single pattern, so first-departure gaps are
   // meaningful again. Cross-date-range family dupes are still removed via
   // dominantService; garage pull-outs/deadheads form their own tiny groups and
-  // fall out below for lack of any 2+ -departure hour.
+  // are dropped at emit time by MIN_PATTERN_TRIPS.
   const headwayBuckets = new Map(); // route|dir|origin|dest|dayType|hour → [dep,...]
   const durationBuckets = new Map(); // same key → [durMin,...]
-  const patternTripCount = new Map(); // route|dir|origin|dest → total trips
+  const patternTripCount = new Map(); // route|dir|origin|dest → sample count
   const patternHeadsign = new Map(); // route|dir|origin|dest → headsign
   for (const [tripId, meta] of tripMeta) {
     const dep = firstDeparture.get(tripId);
     if (dep == null) continue;
     const hour = Math.floor(dep / 3600) % 24;
-    const dominant = dominantService.get(`${meta.route}|${meta.dir}|${meta.dayType}|${hour}`);
-    if (!dominant || dominant.serviceId !== meta.serviceId) continue;
     const origin = firstStopId.get(tripId);
     const dest = lastStopId.get(tripId);
     if (!origin || !dest) continue;
     const pk = `${meta.route}|${meta.dir}|${origin}|${dest}`;
-    patternTripCount.set(pk, (patternTripCount.get(pk) || 0) + 1);
-    if (!patternHeadsign.has(pk)) patternHeadsign.set(pk, meta.headsign || '');
-    const key = `${pk}|${meta.dayType}|${hour}`;
-    if (!headwayBuckets.has(key)) headwayBuckets.set(key, []);
-    headwayBuckets.get(key).push(dep);
-    const arr = lastArrival.get(tripId);
-    if (arr != null && arr > dep) {
-      if (!durationBuckets.has(key)) durationBuckets.set(key, []);
-      durationBuckets.get(key).push((arr - dep) / 60);
+    for (const dayType of meta.dayTypes) {
+      const dominant = dominantService.get(`${meta.route}|${meta.dir}|${dayType}|${hour}`);
+      if (!dominant || dominant.serviceId !== meta.serviceId) continue;
+      patternTripCount.set(pk, (patternTripCount.get(pk) || 0) + 1);
+      if (!patternHeadsign.has(pk)) patternHeadsign.set(pk, meta.headsign || '');
+      const key = `${pk}|${dayType}|${hour}`;
+      if (!headwayBuckets.has(key)) headwayBuckets.set(key, []);
+      headwayBuckets.get(key).push(dep);
+      const arr = lastArrival.get(tripId);
+      if (arr != null && arr > dep) {
+        if (!durationBuckets.has(key)) durationBuckets.set(key, []);
+        durationBuckets.get(key).push((arr - dep) / 60);
+      }
     }
   }
 
@@ -463,6 +479,10 @@ async function main() {
     for (let i = 1; i < sorted.length; i++) gaps.push((sorted[i] - sorted[i - 1]) / 60);
     const medMin = median(gaps);
     if (medMin == null) continue;
+    // A lone gap (2-trip hour) below the trust threshold is a scheduled bunched
+    // pair, not a headway; an absolute floor catches degenerate 3+ trip clusters.
+    if (gaps.length < 2 && medMin < TWO_TRIP_MIN_HEADWAY_MIN) continue;
+    if (medMin < (MIN_HEADWAY_MIN[routeMode.get(route)] ?? MIN_HEADWAY_MIN.bus)) continue;
     const rd = `${route}|${dir}`;
     if (!patternData.has(rd)) patternData.set(rd, new Map());
     const pm = patternData.get(rd);
@@ -488,7 +508,7 @@ async function main() {
   const out = { generatedAt: Date.now(), routes: {}, lines: {} };
   for (const [rd, pm] of patternData) {
     const [route, dir] = rd.split('|');
-    const list = [];
+    let list = [];
     for (const pat of pm.values()) {
       if (Object.keys(pat.headways).length === 0) continue;
       const pk = `${route}|${dir}|${pat.origin}|${pat.dest}`;
@@ -507,6 +527,11 @@ async function main() {
     }
     if (list.length === 0) continue;
     list.sort((a, b) => b.tripCount - a.tripCount); // dominant pattern first
+    // Drop pull-out / deadhead / one-off "patterns" so matchPattern can't snap a
+    // live vehicle onto one. Keep the top pattern regardless — a direction whose
+    // every pattern is tiny is still worth a (best-effort) entry.
+    const real = list.filter((p) => p.tripCount >= MIN_PATTERN_TRIPS);
+    list = real.length ? real : list.slice(0, 1);
     const dom = list[0];
     const bucket = routeMode.get(route) === 'rail' ? out.lines : out.routes;
     if (!bucket[route]) bucket[route] = {};
@@ -545,10 +570,11 @@ async function main() {
 }
 
 module.exports = {
-  computeBusDominantOrigin,
-  BUS_DOMINANCE_THRESHOLD,
   resolveServiceDayTypes,
-  dayTypeFor,
+  referenceDates,
+  MIN_PATTERN_TRIPS,
+  TWO_TRIP_MIN_HEADWAY_MIN,
+  MIN_HEADWAY_MIN,
 };
 
 if (require.main === module) {

@@ -29,7 +29,9 @@ That's saying: California buses going north should be coming every 16 minutes; t
 
 ### Step 1 — building the expected-service index
 
-Once a week (or whenever CTA publishes a new schedule), `scripts/fetch-gtfs.js` downloads the full GTFS feed and builds a small JSON index at `data/gtfs/index.json`. For every (route, direction, hour-of-day, day-type) bucket it records:
+Once a day, `scripts/fetch-gtfs.js` downloads the full GTFS feed and builds a small JSON index at `data/gtfs/index.json`. A `service_id` is assigned to a day-type bucket by whether it actually runs on that bucket's **representative date** near the build (today for the matching day-type, this week's Sat/Sun, or the prior Friday for `weekday` on a weekend build) — via its `calendar.txt` day-of-week flags and date range plus `calendar_dates.txt` overrides. A service that straddles the boundary (a Tue–Sat owl) lands in every bucket it serves rather than being dropped, which is what the old "must be exactly Mon–Fri / Sat / Sun" rule did to single-day trippers, Friday-only trips, and late-night service coded Tue–Sat.
+
+For every (route, direction, hour-of-day, day-type) bucket the index records:
 
 - **Headway** — median minutes between trip starts. Display only.
 - **Duration** — median end-to-end run time. Display only.
@@ -43,7 +45,7 @@ active_in_hour_H += (min(arrival, H_end) - max(departure, H_start)) / 3600
 
 A 90-minute trip that runs 16:30–18:00 contributes 0.5 to hour 16, 1.0 to hour 17, and 0 to hour 18. Summed across all scheduled trips, this gives the mean number of vehicles that should be simultaneously running, hour by hour. It's the apples-to-apples comparison for snapshot counts of live vehicles.
 
-Unlike the headway and duration buckets, **active-trip counts include every revenue trip** — short-turn variants and non-dominant service overlays are not filtered out. Headway and duration apply two filters (dominant `service_id` per hour, dominant origin terminal per route+direction) so that "every ~X min" tracks rider-facing frequency without garage pullouts and short-turns collapsing the median. But for "how many buses should be on the street right now", a revenue trip counts regardless of which terminal it left from. Earlier the active counter inherited those filters and chronically underestimated multi-terminal routes (e.g. Route 79 EB at 4 PM read as 6 expected when ~17 were observed); splitting the active loop out fixed this.
+Unlike the headway and duration buckets, **active-trip counts include every revenue trip** — short-turn variants and non-dominant service overlays are not filtered out. Headway and duration are measured per pattern (origin→dest terminal pair) with a dominant-`service_id`-per-hour filter, and patterns below `MIN_PATTERN_TRIPS` (garage pull-outs, deadheads, one-offs) plus 2-trip hours whose lone gap is implausibly short are dropped — so "every ~X min" tracks rider-facing frequency without a couple of clustered pull-out departures collapsing the median. But for "how many buses should be on the street right now", a revenue trip counts regardless of which terminal it left from or how minor its pattern. Earlier the active counter inherited the headway filters and chronically underestimated multi-terminal routes (e.g. Route 79 EB at 4 PM read as 6 expected when ~17 were observed); splitting the active loop out fixed this.
 
 (An even earlier version used `duration / headway` as a stand-in for active trips. That works at steady state but breaks during ramp-up/ramp-down hours, where headway is computed from a handful of clustered trip-starts and the formula overestimates by 3-5×. Switching to the area-under-curve definition eliminated a class of false-positive "ghost" calls during morning service start.)
 
